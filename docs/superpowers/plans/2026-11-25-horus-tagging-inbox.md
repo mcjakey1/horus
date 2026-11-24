@@ -344,6 +344,10 @@
       - Plan 3's UI shows the error as a toast: "The technique list is read-only because taxonomy.json is damaged."
       - Tagging still works. A tag whose technique is missing from the seed is shown as an unknown technique and keeps its ids.
     - `Open` gains `tax_source: TaxSource`.
+  - **Opening the parent folder** (Plan 1 final fix wave): Plan 1's `create` puts a library in `<folder>/Horus Library` when the picked folder isn't empty (`library.rs`, `SUBFOLDER`).
+    - `open_library(path)` therefore first tries `path`.
+    - Only if that fails with `LibraryError::NotALibrary`, and `path/Horus Library` holds a library, does it open that instead, with the subfolder as `view.root`. `SUBFOLDER` becomes `pub`.
+    - This covers both the first-run "Open an existing library" and the Library menu.
   - **Switching libraries** needs no new command (item 2). Plan 1's `install` already writes the new root to `lastLibrary` (`commands.rs` `install`) on every open and create. So switching updates it, and **no `{ lastLibrary: null }` clear path is needed**. If the last library fails to open at start-up, Plan 1's first-run screen already handles it.
   - **Import sniffing** (Plan 1 final review minor):
     - `import::import_one` reads the first 64 bytes of the source and checks them with `image::guess_format` before `copy_and_hash`.
@@ -385,6 +389,10 @@
   - `exit_flushes_pending`: after `add_tags` and an immediate call to the exit handler's flush function, `library.json` holds the tag.
   - `exit_save_failure_keeps_app_open`: when `library.json.tmp` is a directory, the exit handler returns "prevent exit", and `retry_save` returns `Err` with the reason (Review Focus 2).
   - `open_clears_history`: after `add_tags`, then `open_library` on the same path, `undo()` returns `can_undo: false`.
+  - `open_falls_back_to_horus_library_subfolder`:
+    - `create_library(pics, false)` on a non-empty `pics` puts the library in `pics/Horus Library` (Plan 1). Then `open_library(pics)` succeeds, with `view.root == pics.join("Horus Library")`.
+    - A `pics` with no subfolder still returns the "not a Horus library" error.
+    - A `pics` that is itself a library opens `pics`, not the subfolder.
   - `damaged_taxonomy_opens`:
     - With `taxonomy.json` set to `{` and a good `taxonomy.bak.json`, `open_library` succeeds with the backup warning.
     - With both files damaged, it succeeds with the read-only warning and `taxonomyReadOnly: true`. `add_technique` then returns `Err("TaxonomyReadOnly")`, and so does a fake taxonomy-touching `Edit` sent through the shared recipe. After a tag edit and 1 s, `taxonomy.json` is still byte-identical.
@@ -673,7 +681,7 @@
   export function mountLibraryMenu(button: HTMLElement, api: Api, store: Store, toast: (m: string) => void): { destroy(): void };
   ```
 - **Switching libraries.** The "Library" menu offers:
-  - **"Open library…":** `api.pickFolder("Open a Horus library")`, then `api.openLibrary(path)`.
+  - **"Open library…":** `api.pickFolder("Open a Horus library")`, then `api.openLibrary(path)`. Picking the parent folder works too, because `open_library` falls back to its `Horus Library` subfolder (Task 5).
   - **"New library…":** `api.pickFolder("Choose a folder for the new library")`, then a one-line confirm with the checkbox "Start with the demo set". It is off here, unlike first run, because this library is a second one. Then `api.createLibrary(path, seedDemo)`.
   - On success, either action calls `store.reset(view, await api.getTaxonomy())` and shows `view.warning` as a toast if it is present.
   - On `Err`, the toast shows the message, for example "Couldn't save the current library: …" from Task 5's flush-on-switch, and the current library stays open.
