@@ -21,6 +21,7 @@ export function wireUndoKeys(doc: Document, api: Api, store: Store): () => void 
     const redo = k === "y" || (k === "z" && e.shiftKey);
     if (k !== "z" && !redo) return;
     if (isTextEntry(e.target)) return;
+    if (doc.querySelector('[role="alertdialog"]')) return; // the save dialog is up: nothing changes behind it
     e.preventDefault();
     // ponytail: a refusal (nothing to undo) leaves the store as it is; no message needed
     (redo ? api.redo() : api.undo()).then((c) => store.apply(c), () => {});

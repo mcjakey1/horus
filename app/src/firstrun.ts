@@ -9,7 +9,7 @@ import { type DropWin, wireIntake } from "./intake";
 import { wireUndoKeys } from "./keys";
 import { mountLibraryMenu } from "./library-menu";
 import { mountReference } from "./reference/view";
-import { mountSaveDialog } from "./save-dialog";
+import { mountSaveDialog, wireSaveStatus } from "./save-dialog";
 import { createStore } from "./store";
 import { mountViews } from "./views";
 
@@ -65,11 +65,12 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   });
   const menu = mountLibraryMenu(root.querySelector<HTMLElement>("#library-menu")!, api, store, notice);
   const unmountSaveDialog = mountSaveDialog(root, api);
+  const unwireSaveStatus = wireSaveStatus(root, api);
   return {
     ...view,
     store,
     destroy: () =>
-      (unwire(), unIntake(), menu.destroy(), unmountSaveDialog(), dock?.close(), inbox.destroy(), view.destroy()),
+      (unwire(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), dock?.close(), inbox.destroy(), view.destroy()),
   };
 }
 

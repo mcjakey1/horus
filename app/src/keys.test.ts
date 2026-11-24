@@ -79,6 +79,20 @@ describe("undo keys", () => {
     expect(api.undo).not.toHaveBeenCalled();
   });
 
+  it("undo_sleeps_behind_the_save_dialog (merge ruling B)", async () => {
+    const { api } = setup();
+    document.body.innerHTML = `<div role="alertdialog"><button id="retry">Try again</button></div>`;
+    expect(press(document.getElementById("retry")!, { key: "z", ctrlKey: true }).defaultPrevented).toBe(false);
+    press(document.body, { key: "y", ctrlKey: true });
+    await tick();
+    expect(api.undo).not.toHaveBeenCalled();
+    expect(api.redo).not.toHaveBeenCalled();
+    document.body.innerHTML = ""; // the dialog is gone: undo works again
+    press(document.body, { key: "z", ctrlKey: true });
+    await tick();
+    expect(api.undo).toHaveBeenCalledTimes(1);
+  });
+
   it("a refused undo (nothing to undo) changes nothing and does not throw", async () => {
     const { api, store } = setup();
     vi.mocked(api.undo).mockRejectedValueOnce("NothingToUndo");

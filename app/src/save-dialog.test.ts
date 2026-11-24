@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Api } from "./api";
-import { mountSaveDialog } from "./save-dialog";
+import type { Api, SaveStatus } from "./api";
+import { mountSaveDialog, wireSaveStatus } from "./save-dialog";
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
@@ -61,5 +61,50 @@ describe("save-failure dialog", () => {
     $<HTMLButtonElement>("[data-quit]").click();
     expect(api.exitWithoutSaving).toHaveBeenCalledTimes(1);
     expect(api.retrySave).not.toHaveBeenCalled();
+  });
+});
+
+describe("background save status (merge ruling A)", () => {
+  beforeEach(() => {
+    document.body.innerHTML = `<aside id="import-notice" hidden><div data-body></div></aside>`;
+  });
+
+  function statusApi() {
+    let fire!: (s: SaveStatus) => void;
+    const api = {
+      onSaveStatus: vi.fn(async (cb: (s: SaveStatus) => void) => {
+        fire = cb;
+        return () => {};
+      }),
+    } as unknown as Api;
+    return { api, status: (s: SaveStatus) => fire(s) };
+  }
+  const notice = () => $("#import-notice");
+
+  it("a failed background save shows its reason as text, and the next good save clears it", async () => {
+    const { api, status } = statusApi();
+    const off = wireSaveStatus(document.body, api);
+    await tick();
+    status({ ok: false, message: "library.json is locked by <OneDrive>." });
+    expect(notice().hidden).toBe(false);
+    expect(notice().textContent).toBe(
+      "Couldn't save your last changes: library.json is locked by <OneDrive>. Horus will try again with your next change, and before it closes.",
+    );
+    expect(notice().querySelector("onedrive")).toBeNull();
+    status({ ok: true });
+    expect(notice().hidden).toBe(true);
+    off();
+  });
+
+  it("a good save leaves any other notice alone", async () => {
+    const { api, status } = statusApi();
+    wireSaveStatus(document.body, api);
+    await tick();
+    notice().querySelector("[data-body]")!.innerHTML = "<p>Added 2 to the Inbox</p>";
+    notice().hidden = false;
+    status({ ok: true });
+    expect(notice().hidden).toBe(false);
+    status({ ok: false }); // no reason given
+    expect(notice().textContent).toContain("Couldn't save your last changes: an unknown error.");
   });
 });

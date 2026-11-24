@@ -3,6 +3,31 @@
 import type { Api } from "./api";
 import { esc } from "./esc";
 
+/** A failed background save is shown at once, not only at close (SPEC §9, §11); the next good save
+ * clears it. Only our own notice is cleared: an import summary shown since stays. */
+export function wireSaveStatus(root: HTMLElement, api: Api): () => void {
+  const notice = root.querySelector<HTMLElement>("#import-notice")!;
+  const body = notice.querySelector<HTMLElement>("[data-body]")!;
+  let off: (() => void) | null = null;
+  let gone = false;
+  void api
+    .onSaveStatus((s) => {
+      if (!s.ok) {
+        const reason = (s.message ?? "an unknown error").replace(/\.$/, "");
+        body.innerHTML = `<p data-save-failed>Couldn't save your last changes: ${esc(reason)}. Horus will try again with your next change, and before it closes.</p>`;
+        notice.hidden = false;
+      } else if (body.querySelector("[data-save-failed]")) {
+        body.innerHTML = "";
+        notice.hidden = true;
+      }
+    })
+    .then((u) => (gone ? u() : (off = u)));
+  return () => {
+    gone = true;
+    off?.();
+  };
+}
+
 export function mountSaveDialog(root: HTMLElement, api: Api): () => void {
   let el: HTMLElement | null = null;
   let shell: HTMLElement[] = [];
