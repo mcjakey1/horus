@@ -97,7 +97,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .lab.has-hover .box:not(.is-hot) .num { opacity: .55; }
 .lab.has-hover .box.is-hot { border-color: var(--hot); box-shadow: 0 0 0 1px rgb(0 0 0 / .35); }
 .lab.has-hover .box.is-whole.is-hot { border-color: var(--hot); }
-.num { position: absolute; top: -13px; left: -13px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 600 13px var(--mono); color: var(--on, #fff); background: var(--c); box-shadow: 0 0 0 2px var(--card); }
+.num { position: absolute; top: -13px; left: -13px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 500 13px var(--mono); color: var(--on, #fff); background: var(--c); box-shadow: 0 0 0 2px var(--card); }
 .box.is-whole .num { top: 2px; left: auto; right: -40px; }
 .lab-meta { position: absolute; left: 16px; bottom: 14px; margin: 0; padding: 5px 10px; font-size: 12px; background: var(--panel); color: var(--ink-2); letter-spacing: .02em; }
 .lab-meta span { white-space: nowrap; }
