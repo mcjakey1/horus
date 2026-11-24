@@ -1,3 +1,4 @@
+pub mod correlate;
 pub mod import;
 pub mod library;
 pub mod model;
