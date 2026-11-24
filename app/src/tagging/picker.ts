@@ -9,7 +9,15 @@ import { opInk, opLabel } from "../ops";
 import type { Store } from "../store";
 import { domainChoice, examplesFor, matchesQuery, techniquesFor } from "./model";
 
-export type PickerOpts = { refId: string; region?: Region; preset?: NewTag[]; inbox?: boolean; onDone?: () => void };
+export type PickerOpts = {
+  refId: string;
+  region?: Region;
+  preset?: NewTag[];
+  inbox?: boolean;
+  onDone?: () => void;
+  /** Every close (Esc, `close()`, its reference removed), once. */
+  onClose?: () => void;
+};
 
 // One fetch per Api (the demo set is bundled); a refusal means no demo examples.
 const demoCache = new WeakMap<Api, Promise<DemoExample[]>>();
@@ -27,6 +35,7 @@ export function mountPicker(
   opts: PickerOpts,
 ): { close(): void; el: HTMLElement } {
   const name = `pk${++uid}`;
+  const opener = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
   const el = document.createElement("section");
   el.className = "picker";
   el.dataset.ref = opts.refId;
@@ -444,7 +453,10 @@ export function mountPicker(
     if (S.closed) return;
     S.closed = true;
     unsubscribe();
+    const hadFocus = el.contains(document.activeElement);
     el.remove();
+    if (hadFocus && opener?.isConnected) opener.focus(); // back where the artist opened it from
+    opts.onClose?.();
   }
 
   renderOps();

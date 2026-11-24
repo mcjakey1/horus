@@ -44,6 +44,6 @@ describe("importer", () => {
     await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith(change));
     expect(api.importPaths).toHaveBeenCalledWith(["C:/in/x.jpg"]);
     expect(api.openLibrary).not.toHaveBeenCalled();
-    expect(document.querySelector("#import-notice")!.textContent).toContain("Added 1 reference");
+    expect(document.querySelector("#import-notice")!.textContent).toContain("Added 1 to the Inbox");
   });
 });

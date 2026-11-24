@@ -88,7 +88,7 @@ function fakeApi(): Api {
     demoExamples: vi.fn(async () => []),
     setField: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     importBytes: vi.fn(async () => imported([])),
-    imagePath: vi.fn(async () => ""),
+    imagePath: vi.fn(async (id: string) => `C:\\lib\\images\\${id}.jpg`),
     retrySave: vi.fn(async () => {}),
     exitWithoutSaving: vi.fn(async () => {}),
     onSaveStatus: vi.fn(async () => () => {}),
@@ -181,7 +181,7 @@ describe("Reference view", () => {
     expect(document.querySelector("#lib-count")?.textContent).toBe("4 references");
     const notice = document.querySelector<HTMLElement>("#import-notice")!;
     expect(notice.hidden).toBe(false);
-    expect(notice.textContent).toContain("Added 1 reference · 1 file skipped");
+    expect(notice.textContent).toContain("Added 1 to the Inbox · 1 file skipped");
     expect(notice.textContent).toContain("y.psd not a supported image type");
   });
 
@@ -354,6 +354,132 @@ describe("Reference view", () => {
     expect(pins()).toEqual(["false", "true"]);
   });
 
+  // ---------- Task 10: the minimal lightbox (SPEC §6.6) ----------
+  const keyOn = (k: string, el: Element = document.activeElement ?? document.body) =>
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+
+  it("l_opens_the_lightbox_and_v_stays_inside", () => {
+    keyOn("l", document.body);
+    expect($(".lightbox").getAttribute("aria-label")).toContain("Plate A");
+    const lbValue = () => $(".lightbox").classList.contains("is-value");
+    const before = lbValue(); // it starts from the Reference view's value state (body.value)
+    expect(before).toBe(document.body.classList.contains("value"));
+    const checked = $<HTMLInputElement>("#value").checked;
+    keyOn("v");
+    expect(lbValue()).toBe(!before);
+    expect($<HTMLInputElement>("#value").checked).toBe(checked); // the Reference view's checkbox is untouched
+    keyOn("Escape");
+    expect(document.querySelector(".lightbox")).toBeNull();
+    expect($<HTMLInputElement>("#value").checked).toBe(checked);
+  });
+
+  it("lightbox_keys_never_reach_the_view_from_body", () => {
+    keyOn("l", document.body);
+    const checked = $<HTMLInputElement>("#value").checked;
+    (document.activeElement as HTMLElement).blur(); // a click on blank lightbox space
+    keyOn("v", document.body);
+    expect($<HTMLInputElement>("#value").checked).toBe(checked);
+    (document.activeElement as HTMLElement).blur();
+    keyOn("t", document.body);
+    expect(document.querySelector(".margin .picker")).toBeNull();
+    (document.activeElement as HTMLElement).blur();
+    keyOn("Escape", document.body);
+    expect(document.querySelector(".lightbox")).toBeNull();
+  });
+
+  it("open_lightbox_button_on_the_plate", () => {
+    const btn = $<HTMLButtonElement>("#lab .lb-open");
+    expect(btn.textContent).toBe("Open lightbox");
+    btn.focus();
+    btn.click();
+    expect(document.querySelector(".lightbox")).not.toBeNull();
+    keyOn("Escape");
+    expect(document.activeElement).toBe(btn); // focus returns to the opener
+  });
+
+  it("region_drag_docks_the_picker_inside_the_lightbox", async () => {
+    keyOn("t", document.body); // a margin picker is open first
+    $<HTMLButtonElement>("#lab .lb-open").click();
+    expect(document.querySelector(".margin .picker")).toBeNull(); // it would sit behind the modal
+    const stage = $(".lb-stage");
+    stage.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect;
+    // plate 300×400 → left 175, width 450, height 600; drag 0.1,0.1 → 0.4,0.5
+    for (const [type, fx, fy] of [["pointerdown", 0.1, 0.1], ["pointermove", 0.4, 0.5], ["pointerup", 0.4, 0.5]] as const)
+      stage.dispatchEvent(new MouseEvent(type, { clientX: 175 + fx * 450, clientY: fy * 600, button: 0, bubbles: true }));
+    const picker = $(".lightbox .lb-side .picker");
+    expect(picker.dataset.ref).toBe("a");
+    expect(picker.contains(document.activeElement)).toBe(true);
+    keyOn("1"); // the first operation
+    keyOn("Enter"); // a partial tag for the region
+    await settle();
+    const [refId, tags] = vi.mocked(api.addTags).mock.calls[0];
+    expect(refId).toBe("a");
+    expect(tags[0].operationId).toBe("differentiate");
+    for (const [k, v] of Object.entries({ x: 0.1, y: 0.1, w: 0.3, h: 0.4 })) expect(tags[0].region![k as "x"]).toBeCloseTo(v, 6);
+    // the picker closed after tagging: focus is back in the lightbox, so v never reaches the Reference view
+    expect(document.querySelector(".lightbox .picker")).toBeNull();
+    expect($(".lightbox").contains(document.activeElement)).toBe(true);
+    const checked = $<HTMLInputElement>("#value").checked;
+    keyOn("v");
+    expect($<HTMLInputElement>("#value").checked).toBe(checked);
+  });
+
+  /** Opens the lightbox on "a" and drags a box, so a picker docks inside it. */
+  function dockPickerInLightbox() {
+    $<HTMLButtonElement>("#lab .lb-open").click();
+    const stage = $(".lb-stage");
+    stage.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect;
+    for (const [type, fx, fy] of [["pointerdown", 0.1, 0.1], ["pointerup", 0.4, 0.5]] as const)
+      stage.dispatchEvent(new MouseEvent(type, { clientX: 175 + fx * 450, clientY: fy * 600, button: 0, bubbles: true }));
+    return $(".lightbox .picker");
+  }
+
+  it("closing_the_lightbox_closes_its_docked_picker", () => {
+    const real = store.subscribe.bind(store);
+    const unsubs: ReturnType<typeof vi.fn>[] = [];
+    vi.spyOn(store, "subscribe").mockImplementation((fn) => {
+      const u = vi.fn(real(fn));
+      unsubs.push(u);
+      return u;
+    });
+    dockPickerInLightbox(); // subscribes the lightbox, then the picker
+    expect(unsubs).toHaveLength(2);
+    $<HTMLButtonElement>(".lightbox .lb-close").click(); // closed with the picker still docked
+    expect(document.querySelector(".lightbox")).toBeNull();
+    expect(unsubs[1]).toHaveBeenCalledTimes(1); // the picker unsubscribed: no detached picker left on the store
+    // view.ts dropped it: digits pin callouts again, and t opens a fresh margin picker
+    keyOn("t", document.body);
+    expect(document.querySelectorAll(".picker")).toHaveLength(1);
+    expect(document.querySelector(".margin .picker")).not.toBeNull();
+  });
+
+  it("showing_another_reference_closes_the_lightbox", async () => {
+    keyOn("l", document.body);
+    view.show("a"); // the same reference: it stays
+    expect(document.querySelector(".lightbox")).not.toBeNull();
+    view.show("b"); // e.g. "Show" on a duplicate in the intake notice
+    expect(document.querySelector(".lightbox")).toBeNull();
+    await settle();
+    expect($("#ref-id").textContent).toBe("b");
+  });
+
+  it("notice_over_the_lightbox_takes_focus_and_keys", () => {
+    dockPickerInLightbox();
+    const notice = $("#import-notice");
+    notice.hidden = false;
+    const dismiss = $<HTMLButtonElement>("#import-dismiss");
+    dismiss.focus();
+    expect(document.activeElement).toBe(dismiss); // the lightbox's focus guard lets a notice keep focus
+    const checked = $<HTMLInputElement>("#value").checked;
+    keyOn("v", dismiss); // nor does a key there reach the Reference view behind the modal
+    expect($<HTMLInputElement>("#value").checked).toBe(checked);
+    dismiss.click();
+    expect(notice.hidden).toBe(true); // its button works
+    expect(document.querySelector(".lightbox")).not.toBeNull();
+  });
+
   // ---------- Task 11: the AND/OR technique filter (SPEC §5a) ----------
   const rows = () => [...document.querySelectorAll<HTMLElement>("#pane-ranked .row")].map((r) => r.dataset.go);
   const chips = () => [...document.querySelectorAll<HTMLElement>("#pane-ranked .chip")].map((c) => c.textContent?.replace("×", "").trim());
@@ -419,6 +545,91 @@ describe("Reference view", () => {
     expect(document.activeElement).toBe($('.m-tab[data-pane="ranked"]'));
   });
 
+  // ---------- Task 9 carry-ins ----------
+  it("filtered_ranked_refreshes_for_a_change_outside_the_focus (Task 11 carry-in)", async () => {
+    vi.mocked(api.search).mockResolvedValue([{ kind: "technique", id: "rhythm", operationId: "sequence", count: 0 }]);
+    const q = $<HTMLInputElement>("#q");
+    q.value = "rhy";
+    q.dispatchEvent(new Event("input"));
+    await settle();
+    $('#q-results li[data-t="rhythm"]').click();
+    expect($("#pane-ranked").textContent).toContain("No reference has any of these yet.");
+    // shares nothing with the focus, but carries the filtered technique
+    store.apply({ ...none, references: [ref("u", "Plate U", [tag("u1", "sequence", "rhythm", "sequence-x")])] });
+    await settle();
+    expect($("#pane-ranked").textContent).toContain("Plate U");
+  });
+
+  it("filtered_ranked_refreshes_when_a_ranked_reference_loses_its_tag (Task 11 carry-in)", async () => {
+    vi.mocked(api.search).mockResolvedValue([{ kind: "technique", id: "rhythm", operationId: "sequence", count: 0 }]);
+    const q = $<HTMLInputElement>("#q");
+    q.value = "rhy";
+    q.dispatchEvent(new Event("input"));
+    await settle();
+    $('#q-results li[data-t="rhythm"]').click();
+    store.apply({ ...none, references: [ref("u", "Plate U", [tag("u1", "sequence", "rhythm", "sequence-x")])] });
+    await settle();
+    expect($("#pane-ranked").textContent).toContain("Plate U"); // U is now in S.ranked
+    // U loses the filtered technique: it shares nothing with the focus, but it was ranked
+    store.apply({ ...none, references: [ref("u", "Plate U", [tag("u1", "infer")])] });
+    await settle();
+    expect($("#pane-ranked").textContent).not.toContain("Plate U");
+    expect($("#pane-ranked").textContent).toContain("No reference has any of these yet.");
+  });
+
+  it("filter_by_this_moves_focus_to_the_ranked_tab (Task 11 carry-in)", () => {
+    $<HTMLButtonElement>("#pane-callouts .filter-by").click();
+    expect(document.activeElement).toBe($('.m-tab[data-pane="ranked"]'));
+  });
+
+  it("modifier_combos_are_left_to_the_browser (Task 7 carry-in)", () => {
+    const pins = () => [...document.querySelectorAll(".pin")].map((p) => p.getAttribute("aria-pressed"));
+    for (const init of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "v", bubbles: true, ...init }));
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "1", bubbles: true, ...init }));
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "t", bubbles: true, ...init }));
+    }
+    expect($<HTMLInputElement>("#value").checked).toBe(false);
+    expect(pins()).toEqual(["false", "false"]);
+    expect(document.querySelector(".margin .picker")).toBeNull();
+  });
+
+  it("alt_left_still_goes_back", async () => {
+    $<HTMLButtonElement>('#pane-callouts .thumb[data-go="b"]').click();
+    await settle();
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", altKey: true, bubbles: true }));
+    await settle();
+    expect($("#ref-id").textContent).toBe("a");
+  });
+
+  it("view_keys_sleep_while_another_view_shows", () => {
+    document.body.dataset.view = "inbox";
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "v", bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "t", bubbles: true }));
+    delete document.body.dataset.view;
+    expect($<HTMLInputElement>("#value").checked).toBe(false);
+    expect(document.querySelector(".margin .picker")).toBeNull();
+  });
+
+  it("library_switch_clears_the_back_trail (Task 7 carry-in)", async () => {
+    $<HTMLButtonElement>('#pane-callouts .thumb[data-go="b"]').click();
+    await settle();
+    expect($<HTMLButtonElement>("#back").disabled).toBe(false);
+    store.apply({ ...none, canUndo: true, canRedo: true }); // an undo trail exists before the switch
+    expect([store.canUndo, store.canRedo]).toEqual([true, true]);
+    store.reset({ ...library, root: "D:\\other" }, taxonomy);
+    await settle();
+    expect($<HTMLButtonElement>("#back").disabled).toBe(true);
+    expect([store.canUndo, store.canRedo]).toEqual([false, false]);
+  });
+
+  it("plate_is_a_drop_target_for_the_focus (Task 9)", async () => {
+    expect($("#plate").dataset.refDrop).toBe("a");
+    view.show("b");
+    await settle();
+    expect($("#plate").dataset.refDrop).toBe("b");
+  });
+
   it("filter_from_search_and_empty_copy", async () => {
     vi.mocked(api.search).mockResolvedValue([{ kind: "technique", id: "rhythm", operationId: "sequence", count: 0 }]);
     const q = $<HTMLInputElement>("#q");
@@ -457,7 +668,7 @@ describe("notices", () => {
     document.querySelector<HTMLButtonElement>('[data-import="files"]')!.click();
     await settle();
     expect(notice.hidden).toBe(false);
-    expect(notice.textContent).toContain("Added 1 reference");
+    expect(notice.textContent).toContain("Added 1 to the Inbox");
     expect(api.openLibrary).not.toHaveBeenCalled();
     view.destroy();
   });
@@ -469,6 +680,27 @@ describe("notices", () => {
     const notice = document.querySelector<HTMLElement>("#import-notice")!;
     expect(notice.hidden).toBe(false);
     expect(notice.textContent).toContain("Demo image d07 was not imported.");
+    view.destroy();
+  });
+
+  it("warning_shows_once_in_the_notice_not_the_status_bar (Plan 1 QA carry-in)", async () => {
+    const warning = "taxonomy.json could not be read";
+    const view = mountReference(document.body, fakeApi(), createStore({ ...library, warning }, taxonomy));
+    await view.ready;
+    const src = document.querySelector<HTMLElement>("#data-source")!;
+    expect([src.textContent, src.title]).toEqual(["Library: lib", "C:\\lib"]);
+    expect(document.querySelector("#import-notice [data-body]")!.textContent).toContain(warning);
+    view.destroy();
+  });
+
+  it("reset_without_warning_clears_the_warning_notice (Task 7 carry-in)", async () => {
+    const store = createStore({ ...library, warning: "taxonomy.json could not be read" }, taxonomy);
+    const view = mountReference(document.body, fakeApi(), store);
+    await view.ready;
+    const notice = document.querySelector<HTMLElement>("#import-notice")!;
+    expect(notice.hidden).toBe(false);
+    store.reset({ ...library, root: "D:\\b", warning: null }, taxonomy);
+    expect(notice.hidden).toBe(true);
     view.destroy();
   });
 
@@ -493,7 +725,7 @@ describe("notices", () => {
     });
     const el = document.createElement("div");
     el.innerHTML = out;
-    expect(el.textContent).toContain("Added 1 reference");
+    expect(el.textContent).toContain("Added 1 to the Inbox");
     expect(el.textContent).toContain("p3 <red>.png");
     expect(el.textContent).toContain("ICC profile could not be parsed; colours left unconverted");
     expect(el.querySelector("red")).toBeNull();

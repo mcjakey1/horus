@@ -4,6 +4,7 @@
 import type { Api, Reference, Scored, Settings, Tag } from "../api";
 import { esc } from "../esc";
 import { mountImport, warningHTML } from "../importer";
+import { openLightbox } from "../lightbox/view";
 import { opInk, opLabel } from "../ops";
 import { mountSearch } from "../search";
 import type { Store, StoreEvent } from "../store";
@@ -81,6 +82,7 @@ export function mountReference(
     const ref = store.refs.get(id);
     if (!ref) return;
     if (picker && picker.el.dataset.ref !== id) closePicker();
+    if (id !== S.focus) lightbox?.close(); // it shows the focus; never another reference behind it
     if (push && S.focus && S.focus !== id) S.trail.push(S.focus);
     const spec = $("#specimen")!;
     const first = !S.focus;
@@ -112,6 +114,7 @@ export function mountReference(
     const spec = $("#specimen")!;
     spec.style.setProperty("--ar", String(aspect(ref)));
     // Repaint the image only when it changed: a superseded show() or reset may have left another one.
+    $("#plate")!.dataset.refDrop = ref.id; // a drop here is "Tag like this" for this reference (Task 9)
     const src = api.assetUrl(ref.thumb1024);
     if (S.plateSrc !== src) {
       $("#plate")!.innerHTML = img(ref, true);
@@ -155,6 +158,7 @@ export function mountReference(
     S.related = [];
     S.ranked = [];
     S.plateSrc = "";
+    delete $("#plate")!.dataset.refDrop;
     clearTimeout(S.paintTimer);
     S.nav++;
     $("#specimen")!.classList.remove("is-leaving");
@@ -178,8 +182,9 @@ export function mountReference(
     const folder = store.root.split(/[\\/]/).filter(Boolean).pop() ?? store.root;
     $("#lib-count")!.textContent = `${store.refs.size} references`;
     $("#inbox-count")!.textContent = String(store.inbox().length);
-    $("#data-source")!.textContent = [`Library: ${folder}`, store.warning].filter(Boolean).join(" · ");
-    $("#data-source")!.title = [store.root, store.warning].filter(Boolean).join(" · ");
+    // The library's warning lives in #import-notice only (982f8a6), never here as well.
+    $("#data-source")!.textContent = `Library: ${folder}`;
+    $("#data-source")!.title = store.root;
     $("#find-similar")!.textContent = `Find similar: ${S.settings.findSimilar === "on" ? "on" : "off"}`;
   }
 
@@ -417,7 +422,11 @@ export function mountReference(
       return;
     }
     const choose = target.closest<HTMLElement>("[data-filter]");
-    if (choose) return applyFilter(choose.dataset.filter!);
+    if (choose) {
+      applyFilter(choose.dataset.filter!);
+      $<HTMLElement>('.m-tab[data-pane="ranked"]')?.focus(); // the callout pane just hid its button
+      return;
+    }
     const untoggle = target.closest<HTMLElement>("[data-untoggle]");
     if (untoggle) {
       const k = S.filter.techniques.indexOf(untoggle.dataset.untoggle!);
@@ -473,6 +482,10 @@ export function mountReference(
   }, { signal });
   document.addEventListener("keydown", (e) => {
     if (e.isComposing) return;
+    // Ctrl/⌘ combos (paste, copy…) belong to the browser; Alt only for Alt+← (Back).
+    if (e.ctrlKey || e.metaKey || (e.altKey && e.key !== "ArrowLeft")) return;
+    if ((document.body.dataset.view ?? "reference") !== "reference") return; // another view is showing
+    if (lightbox) return; // the lightbox is modal: a key in a notice or dialog over it never acts behind it
     // The picker, the lightbox and text fields own their keys (Plan 2 Global Constraints).
     if ((e.target as Element).closest?.(".picker, .lightbox, input, textarea, [contenteditable]")) return;
     if (e.key === "/") {
@@ -487,7 +500,8 @@ export function mountReference(
       hot(null);
       syncPins();
     } else if (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) $<HTMLButtonElement>("#back")!.click();
-    else if (e.key === "t" && !e.ctrlKey && !e.metaKey && !e.altKey) openPicker();
+    else if (e.key === "t") openPicker();
+    else if (e.key === "l" || e.key === "L") openLb();
     else if (/^[1-9]$/.test(e.key)) {
       if (pickerOpen()) return; // the picker's digits pick operations, never callouts
       const i = +e.key - 1;
@@ -513,6 +527,7 @@ export function mountReference(
 
   const notify = mountImport(root, api, {
     libraryRoot: () => store.root,
+    // B4: the import's Change goes to the store; no reopen, so undo survives.
     onChange: (c) => store.apply(c),
   }, signal);
 
@@ -532,7 +547,12 @@ export function mountReference(
     }
     closePicker();
     // Docked in the margin, for the whole image: an already-tagged reference can gain a tag too.
-    picker = mountPicker($(".margin")!, api, store, { refId: ref.id, onDone: closePicker });
+    const mine = mountPicker($(".margin")!, api, store, {
+      refId: ref.id,
+      onDone: closePicker,
+      onClose: () => void (picker === mine && (picker = null)), // never null a newer picker
+    });
+    picker = mine;
   }
   $("#lab")!.insertAdjacentHTML("beforeend", `<button type="button" class="tag-open" aria-keyshortcuts="t">Tag…</button>`);
   const tagOpen = $<HTMLButtonElement>("#lab .tag-open")!;
@@ -540,6 +560,40 @@ export function mountReference(
   signal.addEventListener("abort", () => {
     closePicker();
     tagOpen.remove();
+  });
+
+  // ---------- the minimal lightbox (Plan 2 Task 10): "Open lightbox" on the plate, or the L key ----------
+  let lightbox: { close(): void } | null = null;
+  function openLb() {
+    const ref = focusRef();
+    if (!ref || document.querySelector(".lightbox")) return;
+    closePicker(); // a margin picker would sit behind the modal
+    lightbox = openLightbox(api, store, ref.id, {
+      openPicker: (opts) => {
+        closePicker();
+        // Docked inside the modal so it can be reached and focus stays trapped.
+        // ponytail: found by class; Plan 4's lightbox chrome owns this slot.
+        const slot = document.querySelector<HTMLElement>(".lightbox .lb-side") ?? $(".margin")!;
+        const mine = mountPicker(slot, api, store, {
+          ...opts,
+          onDone: closePicker,
+          onClose: () => void (picker === mine && (picker = null)), // never null a newer picker
+        });
+        picker = mine;
+      },
+      // A picker docked inside left with the lightbox's DOM: close it so it unsubscribes.
+      onClose: () => {
+        lightbox = null;
+        if (picker && !picker.el.isConnected) closePicker();
+      },
+    });
+  }
+  $("#lab")!.insertAdjacentHTML("beforeend", `<button type="button" class="lb-open" aria-keyshortcuts="l">Open lightbox</button>`);
+  const lbOpen = $<HTMLButtonElement>("#lab .lb-open")!;
+  lbOpen.addEventListener("click", openLb, { signal });
+  signal.addEventListener("abort", () => {
+    lightbox?.close();
+    lbOpen.remove();
   });
 
   // ---------- the Store ----------
@@ -552,6 +606,13 @@ export function mountReference(
   const touchesFocus = (c: StoreEvent) => {
     const f = focusRef();
     if (c.reset || c.taxonomy || c.removed.length || !f) return true;
+    // With a filter on, a ranked or newly matching reference changes the Ranked list too.
+    const filtered = new Set(S.filter.techniques);
+    if (
+      filtered.size &&
+      c.references.some((r) => S.ranked.includes(r.id) || r.tags.some((t) => t.techniqueId && filtered.has(t.techniqueId)))
+    )
+      return true;
     const techs = new Set(f.tags.map((t) => t.techniqueId).filter(Boolean));
     const branches = new Set(f.tags.map((t) => t.branchId).filter(Boolean));
     return c.references.some(
@@ -562,8 +623,12 @@ export function mountReference(
     );
   };
   const unsubscribe = store.subscribe((c) => {
-    S.trail = S.trail.filter((id) => store.refs.has(id));
-    if (c.reset && store.warning) notify(warningHTML(store.warning));
+    // A library switch starts a fresh history; Rust clears the undo trail, the Store its flags.
+    S.trail = c.reset ? [] : S.trail.filter((id) => store.refs.has(id));
+    if (c.reset) {
+      if (store.warning) notify(warningHTML(store.warning));
+      else $<HTMLElement>("#import-notice")!.hidden = true; // the old library's notice is stale
+    }
     if (S.focus && store.refs.has(S.focus)) {
       if (touchesFocus(c)) refresh();
     }
