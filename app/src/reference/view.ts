@@ -7,6 +7,7 @@ import { mountImport, warningHTML } from "../importer";
 import { opInk, opLabel } from "../ops";
 import { mountSearch } from "../search";
 import type { Store, StoreEvent } from "../store";
+import { mountPicker } from "../tagging/picker";
 import { drawLeaders, highlight } from "./leaders";
 import { tileHTML } from "./tile";
 
@@ -67,6 +68,7 @@ export function mountReference(
   function show(id: string, { push = true, via = null as string | null } = {}) {
     const ref = store.refs.get(id);
     if (!ref) return;
+    if (picker && picker.el.dataset.ref !== id) closePicker();
     if (push && S.focus && S.focus !== id) S.trail.push(S.focus);
     const spec = $("#specimen")!;
     const first = !S.focus;
@@ -423,6 +425,7 @@ export function mountReference(
     selectPane(next.dataset.pane!);
   }, { signal });
   document.addEventListener("keydown", (e) => {
+    if (e.isComposing) return;
     // The picker, the lightbox and text fields own their keys (Plan 2 Global Constraints).
     if ((e.target as Element).closest?.(".picker, .lightbox, input, textarea, [contenteditable]")) return;
     if (e.key === "/") {
@@ -437,7 +440,9 @@ export function mountReference(
       hot(null);
       syncPins();
     } else if (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) $<HTMLButtonElement>("#back")!.click();
+    else if (e.key === "t" && !e.ctrlKey && !e.metaKey && !e.altKey) openPicker();
     else if (/^[1-9]$/.test(e.key)) {
+      if (pickerOpen()) return; // the picker's digits pick operations, never callouts
       const i = +e.key - 1;
       if (focusRef()?.tags[i]) {
         S.pinned = i;
@@ -464,6 +469,32 @@ export function mountReference(
     // Plan 1's import reopens the library; Plan 2 Task 5 replaces this with store.apply(change).
     onLibrary: (lib) => store.reset(lib, store.tax),
   }, signal);
+
+  // ---------- the technique picker (Plan 2 Task 8): "Tag…" on the plate, or the t key ----------
+  let picker: ReturnType<typeof mountPicker> | null = null;
+  const pickerOpen = () => !!picker?.el.isConnected;
+  function closePicker() {
+    picker?.close();
+    picker = null;
+  }
+  function openPicker() {
+    const ref = focusRef();
+    if (!ref) return;
+    if (pickerOpen() && picker!.el.dataset.ref === ref.id) {
+      picker!.el.querySelector<HTMLElement>('.pk-ops [tabindex="0"]')?.focus();
+      return;
+    }
+    closePicker();
+    // Docked in the margin, for the whole image: an already-tagged reference can gain a tag too.
+    picker = mountPicker($(".margin")!, api, store, { refId: ref.id, onDone: closePicker });
+  }
+  $("#lab")!.insertAdjacentHTML("beforeend", `<button type="button" class="tag-open" aria-keyshortcuts="t">Tag…</button>`);
+  const tagOpen = $<HTMLButtonElement>("#lab .tag-open")!;
+  tagOpen.addEventListener("click", openPicker, { signal });
+  signal.addEventListener("abort", () => {
+    closePicker();
+    tagOpen.remove();
+  });
 
   // ---------- the Store ----------
   const start = () => {

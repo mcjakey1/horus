@@ -3,13 +3,24 @@
 import type { Api } from "./api";
 import type { Store } from "./store";
 
+const TEXT_TYPES = new Set(["text", "search", "url", "email", "number"]);
+
+/** A field that takes typed text (and so owns its own text undo). A tick box or radio does not. */
+export function isTextEntry(el: EventTarget | null): boolean {
+  const e = (el as Element | null)?.closest?.("input, textarea, [contenteditable]");
+  if (!e) return false;
+  if (!(e instanceof HTMLInputElement)) return true;
+  return TEXT_TYPES.has(e.type); // an absent or unknown type reads as "text"
+}
+
 export function wireUndoKeys(doc: Document, api: Api, store: Store): () => void {
   const onKey = (e: KeyboardEvent) => {
+    if (e.isComposing) return; // the IME owns the keys mid-composition
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     const k = e.key.toLowerCase(); // Shift turns "z" into "Z"
     const redo = k === "y" || (k === "z" && e.shiftKey);
     if (k !== "z" && !redo) return;
-    if ((e.target as Element | null)?.closest?.("input, textarea, [contenteditable]")) return;
+    if (isTextEntry(e.target)) return;
     e.preventDefault();
     // ponytail: a refusal (nothing to undo) leaves the store as it is; no message needed
     (redo ? api.redo() : api.undo()).then((c) => store.apply(c), () => {});

@@ -32,6 +32,11 @@ function fakeApi(lastLibrary: string | null): Api {
     assetUrl: (p: string) => p,
     undo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
     redo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
+    addTags: vi.fn(),
+    updateTag: vi.fn(),
+    removeTag: vi.fn(),
+    addTechnique: vi.fn(),
+    demoExamples: vi.fn(async () => []),
   };
 }
 

@@ -227,3 +227,44 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .fr-status { margin: 0 auto 0 0; font-size: 13px; color: var(--ink-2); }
 .fr-go { height: 36px; padding: 0 22px; background: var(--ink); color: var(--shell); font-weight: 500; }
 .fr-go:disabled { background: var(--line-2); color: var(--ink-3); }
+
+/* technique picker (Plan 2 Task 8): docked in the margin, replacing the tabs while open */
+.margin:has(> .picker) > :not(.picker) { display: none; }
+.work:has(.picker) .leaders { display: none; }
+.tag-open { position: absolute; top: 14px; right: 16px; padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
+.picker { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+.pk-ops { display: flex; flex-wrap: wrap; gap: 6px; }
+.pk-op { display: grid; grid-template-columns: 10px auto; column-gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); background: var(--panel); text-align: left; transition: border-color .2s var(--ease), background .2s var(--ease); }
+.pk-op .pk-sw { width: 10px; height: 10px; border-radius: 50%; background: var(--c); grid-row: span 2; }
+.pk-op .serif { font: 500 15px/1.25 var(--serif); }
+.pk-op .mono { grid-column: 2; font: 500 11px var(--mono); letter-spacing: .03em; color: var(--ink-2); }
+.pk-op[aria-pressed="true"] { border-color: var(--c); background: var(--shell); }
+.pk-search { width: 100%; height: 32px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--shell); color: var(--ink); font: 14px var(--sans); }
+.pk-search::placeholder { color: var(--ink-3); }
+.pk-grid { display: flex; flex-direction: column; gap: 8px; }
+.pk-card { display: grid; grid-template-columns: 16px 1fr; gap: 10px; padding: 12px; border: 1px solid var(--line); background: var(--shell); cursor: pointer; transition: border-color .2s var(--ease); }
+.pk-card.is-hi { border-color: var(--c, var(--ink)); }
+.pk-tick { margin: 3px 0 0; accent-color: var(--ink); }
+.pk-body { display: grid; gap: 3px; min-width: 0; }
+.pk-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; }
+.pk-name { font: 500 17px/1.25 var(--serif); }
+.pk-domain { font-size: 12px; color: var(--ink-2); padding: 0 6px; border: 1px solid var(--line); }
+.pk-domains { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; border: 0; font-size: 12px; color: var(--ink-2); }
+.pk-icon { font-size: 12px; color: var(--ink-3); }
+.pk-desc { font-size: 13px; color: var(--ink-2); }
+.pk-exs { display: flex; gap: 8px; margin-top: 6px; }
+.pk-ex { position: relative; width: 52px; height: 52px; background: var(--card); overflow: hidden; box-shadow: inset 0 0 0 1px var(--line-2); }
+.pk-ex img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pk-demo { position: absolute; left: 0; bottom: 0; padding: 0 4px; font-size: 10px; background: var(--panel); color: var(--ink-2); }
+.pk-new { display: block; font-weight: 500; }
+.pk-new[aria-disabled="true"] { color: var(--ink-3); cursor: default; }
+.pk-form { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); background: var(--shell); font-size: 13px; }
+.pk-form label { display: grid; gap: 3px; color: var(--ink-2); }
+.pk-form input, .pk-form select { height: 30px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--panel); color: var(--ink); font: 14px var(--sans); }
+.pk-form-actions { display: flex; gap: 12px; }
+.pk-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.pk-msg { margin: 0; font-size: 13px; color: var(--ink-2); }
+.pk-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.pk-chips:empty { display: none; }
+.pk-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px; border: 1px solid var(--line-2); font-size: 13px; }
+.pk-chip button { width: 22px; height: 22px; color: var(--ink-2); }

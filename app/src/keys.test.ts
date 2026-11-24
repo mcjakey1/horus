@@ -59,6 +59,26 @@ describe("undo keys", () => {
     expect(api.redo).not.toHaveBeenCalled();
   });
 
+  it("tick_box_does_not_block_undo: only text-entry inputs keep the browser's undo", async () => {
+    const { api } = setup();
+    document.body.innerHTML = `<input id="cb" type="checkbox"><input id="rd" type="radio">`;
+    for (const t of ["text", "search", "url", "email", "number"]) document.body.insertAdjacentHTML("beforeend", `<input id="${t}" type="${t}">`);
+    for (const t of ["text", "search", "url", "email", "number"])
+      expect(press(document.getElementById(t)!, { key: "z", ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(press(document.getElementById("cb")!, { key: "z", ctrlKey: true }).defaultPrevented).toBe(true);
+    press(document.getElementById("rd")!, { key: "y", ctrlKey: true });
+    await tick();
+    expect(api.undo).toHaveBeenCalledTimes(1);
+    expect(api.redo).toHaveBeenCalledTimes(1);
+  });
+
+  it("ime_composition_is_left_alone", async () => {
+    const { api } = setup();
+    expect(press(document.body, { key: "z", ctrlKey: true, isComposing: true }).defaultPrevented).toBe(false);
+    await tick();
+    expect(api.undo).not.toHaveBeenCalled();
+  });
+
   it("a refused undo (nothing to undo) changes nothing and does not throw", async () => {
     const { api, store } = setup();
     vi.mocked(api.undo).mockRejectedValueOnce("NothingToUndo");

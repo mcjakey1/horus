@@ -74,6 +74,11 @@ function fakeApi(): Api {
     assetUrl: (path: string) => `asset://${encodeURIComponent(path)}`,
     undo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
     redo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
+    addTags: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
+    updateTag: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
+    removeTag: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
+    addTechnique: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
+    demoExamples: vi.fn(async () => []),
   };
 }
 
@@ -284,6 +289,38 @@ describe("Reference view", () => {
       expect(el.getAttribute("style")).toContain("--c:var(--ink-2)");
       expect(el.getAttribute("style")).not.toContain("--diff");
     }
+  });
+
+  it("t_opens_the_picker_for_the_focused_reference", () => {
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "t", bubbles: true }));
+    const pickers = document.querySelectorAll<HTMLElement>(".margin .picker");
+    expect(pickers).toHaveLength(1);
+    expect(pickers[0].dataset.ref).toBe("a");
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "t", bubbles: true })); // still one
+    expect(document.querySelectorAll(".margin .picker")).toHaveLength(1);
+  });
+
+  it("tag_button_on_the_plate_opens_the_picker", () => {
+    const btn = document.querySelector<HTMLButtonElement>("#lab .tag-open")!;
+    expect(btn.textContent).toBe("Tag…");
+    btn.click();
+    expect(document.querySelector<HTMLElement>(".margin .picker")?.dataset.ref).toBe("a");
+  });
+
+  it("digits_do_not_pin_while_the_picker_is_open", () => {
+    const pins = () => [...document.querySelectorAll(".pin")].map((p) => p.getAttribute("aria-pressed"));
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "t", bubbles: true }));
+    const picker = document.querySelector<HTMLElement>(".margin .picker")!;
+    picker.querySelector(".pk-ops")!.dispatchEvent(new KeyboardEvent("keydown", { key: "1", bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "1", bubbles: true }));
+    expect(pins()).toEqual(["false", "false"]);
+  });
+
+  it("picker_closes_when_the_focus_moves", async () => {
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "t", bubbles: true }));
+    view.show("b");
+    await settle();
+    expect(document.querySelector(".margin .picker")).toBeNull();
   });
 
   it("typing_in_picker_search_does_not_pin", () => {
