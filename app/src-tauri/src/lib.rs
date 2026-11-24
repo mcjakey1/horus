@@ -2,6 +2,7 @@ pub mod commands;
 pub mod correlate;
 pub mod demo;
 pub mod edit;
+pub mod history;
 pub mod import;
 pub mod library;
 pub mod model;

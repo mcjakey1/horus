@@ -189,8 +189,6 @@ pub fn apply(data: &mut LibraryData, tax: &mut Taxonomy, e: Edit) -> Result<Appl
     run(data, tax, e, true)
 }
 
-// ponytail: Task 2's History is the only caller; drop the allow once it lands.
-#[allow(dead_code)]
 /// Undo and redo: applies an inverse (or the inverse of one) with `check: false`, because it
 /// restores a state that existed, stale tags included.
 pub(crate) fn apply_inverse(
