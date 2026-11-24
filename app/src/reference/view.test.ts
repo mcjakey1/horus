@@ -362,6 +362,20 @@ describe("Reference view", () => {
     expect($<HTMLInputElement>("#value").checked).toBe(checked);
   });
 
+  it("lightbox_keys_never_reach_the_view_from_body", () => {
+    keyOn("l", document.body);
+    const checked = $<HTMLInputElement>("#value").checked;
+    (document.activeElement as HTMLElement).blur(); // a click on blank lightbox space
+    keyOn("v", document.body);
+    expect($<HTMLInputElement>("#value").checked).toBe(checked);
+    (document.activeElement as HTMLElement).blur();
+    keyOn("t", document.body);
+    expect(document.querySelector(".margin .picker")).toBeNull();
+    (document.activeElement as HTMLElement).blur();
+    keyOn("Escape", document.body);
+    expect(document.querySelector(".lightbox")).toBeNull();
+  });
+
   it("open_lightbox_button_on_the_plate", () => {
     const btn = $<HTMLButtonElement>("#lab .lb-open");
     expect(btn.textContent).toBe("Open lightbox");

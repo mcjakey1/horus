@@ -103,8 +103,49 @@ describe("openLightbox", () => {
     expect(drawn()).toEqual(before); // the marker still shows what the docked picker will save
     expect(openPicker).toHaveBeenCalledTimes(1);
     near(saved, { x: 0.1, y: 0.1, w: 0.3, h: 0.4 });
-    store.apply({ ...none, references: [{ ...R, tags: [...R.tags, tag("t3", "sequence", saved)] }] });
-    expect(marker.hidden).toBe(true); // the saved tag outlines it now
+    // a chip action or Ctrl+Z changes this reference while the picker is still docked: it will
+    // still save that region, so the marker stays (only the picker leaving clears it)
+    store.apply({ ...none, references: [{ ...R, tags: [R.tags[1]] }] });
+    expect(marker.hidden).toBe(false);
+    expect(drawn()).toEqual(before);
+  });
+
+  it("enter_mid_drag_commits_once", () => {
+    pointer("pointerdown", at(0.1, 0.1));
+    pointer("pointermove", at(0.4, 0.5));
+    key("Enter", {}, $(".lb-stage"));
+    pointer("pointerup", at(0.4, 0.5)); // the drag ended with the commit
+    expect(openPicker).toHaveBeenCalledTimes(1);
+  });
+
+  it("lost_pointer_capture_ends_the_drag", () => {
+    pointer("pointerdown", at(0.1, 0.1));
+    pointer("pointermove", at(0.4, 0.5));
+    $(".lb-stage").dispatchEvent(new Event("lostpointercapture"));
+    expect($(".lb-draft").hidden).toBe(true);
+    pointer("pointerup", at(0.4, 0.5));
+    expect(openPicker).not.toHaveBeenCalled();
+  });
+
+  it("focus_on_body_keeps_keys_in_the_modal", () => {
+    expect($(".lightbox").tabIndex).toBe(-1); // a click on blank lightbox area focuses the dialog root
+    const behind = vi.fn((e: Event) => (e.target as Element).closest?.(".lightbox") ?? e.target);
+    document.addEventListener("keydown", behind);
+    (document.activeElement as HTMLElement).blur(); // e.g. a click on empty panel space in a browser without the tabIndex
+    expect(document.activeElement).toBe(document.body);
+    key("v", {}, document.body);
+    expect($(".lightbox").classList.contains("is-value")).toBe(true); // handled by the lightbox
+    expect(document.activeElement).toBe($(".lb-stage"));
+    expect(behind.mock.calls.every(([e]) => (e.target as Element).closest?.(".lightbox"))).toBe(true); // nothing behind saw a body key
+    (document.activeElement as HTMLElement).blur();
+    const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    document.body.dispatchEvent(tab);
+    expect(tab.defaultPrevented).toBe(true); // Tab can't walk into the page behind
+    expect(document.activeElement).toBe($(".lb-stage"));
+    (document.activeElement as HTMLElement).blur();
+    key("Escape", {}, document.body);
+    expect(document.querySelector(".lightbox")).toBeNull();
+    document.removeEventListener("keydown", behind);
   });
 
   it("picker_cancel_clears_the_marker", async () => {
@@ -224,11 +265,28 @@ describe("openLightbox", () => {
       lb.close();
       lb = openLightbox(api, store, "r", { openPicker });
     };
+    // The original is preloaded off-screen; the plate swaps only once it has decoded.
+    const preloads = vi.spyOn(HTMLImageElement.prototype, "src", "set");
+    const preload = () => preloads.mock.contexts[preloads.mock.contexts.length - 1] as HTMLImageElement;
     reopen();
     expect(src()).toBe(api.assetUrl(R.thumb1024)); // the thumbnail at once
     await tick();
     expect(api.imagePath).toHaveBeenLastCalledWith("r");
+    expect(preloads).toHaveBeenLastCalledWith(api.assetUrl("C:\\lib\\images\\r.jpg"));
+    expect(src()).toBe(api.assetUrl(R.thumb1024)); // not swapped before it loads
+    preload().dispatchEvent(new Event("load"));
     expect(src()).toBe(api.assetUrl("C:\\lib\\images\\r.jpg")); // then the original
+    reopen();
+    await tick();
+    preload().dispatchEvent(new Event("error")); // e.g. a TIFF original the WebView can't decode
+    expect(src()).toBe(api.assetUrl(R.thumb1024));
+    reopen();
+    await tick();
+    const pending = preload();
+    lb.close();
+    pending.dispatchEvent(new Event("load")); // a load after close changes nothing
+    lb = openLightbox(api, store, "r", { openPicker });
+    preloads.mockRestore();
     vi.mocked(api.imagePath).mockRejectedValueOnce("not built"); // Task 5 not landed yet
     reopen();
     await tick();

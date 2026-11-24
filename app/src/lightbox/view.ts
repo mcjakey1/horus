@@ -36,6 +36,7 @@ export function openLightbox(
   el.setAttribute("role", "dialog");
   el.setAttribute("aria-modal", "true");
   el.setAttribute("aria-label", `Lightbox: ${ref.title}`);
+  el.tabIndex = -1; // a click on blank lightbox space focuses the dialog root, never <body>; not a Tab stop
   el.classList.toggle("is-value", document.body.classList.contains("value")); // starts as the artist was looking
   el.innerHTML = `
     <div class="lb-stage" tabindex="0" aria-label="${esc(ref.title)}. Drag a box, or press Enter and the arrow keys, to tag a region." aria-describedby="lb-hint">
@@ -92,6 +93,7 @@ export function openLightbox(
     if (r) place(pendingEl, r);
   }
   function commit(region: Region) {
+    from = null; // Enter mid-drag ends the drag, so its pointerup can't commit again
     showDraft(null);
     showPending(region);
     deps.openPicker({ refId, region });
@@ -117,10 +119,14 @@ export function openLightbox(
     if (r) commit(r);
     else showDraft(null);
   }, { signal });
-  stage.addEventListener("pointercancel", () => {
+  // A cancelled pointer, or capture lost mid-drag (window blur, a system gesture), ends the drag.
+  const dropDrag = () => {
+    if (!from) return; // a keyboard draft is not a drag
     from = null;
     showDraft(null);
-  }, { signal });
+  };
+  stage.addEventListener("pointercancel", dropDrag, { signal });
+  stage.addEventListener("lostpointercapture", dropDrag, { signal });
 
   // ---------- keys ----------
   function trap(e: KeyboardEvent) {
@@ -174,6 +180,15 @@ export function openLightbox(
   document.addEventListener("focusin", (e) => {
     if (!el.contains(e.target as Node)) stage.focus();
   }, { signal });
+  // A key aimed outside the modal (focus fell to <body>) never reaches the page behind: it is
+  // re-sent from the stage, so Esc, v and the undo keys still act, as the lightbox's own.
+  document.addEventListener("keydown", (e) => {
+    if (e.isComposing || el.contains(e.target as Node)) return;
+    e.stopPropagation();
+    e.preventDefault(); // Tab included: it can't walk into the page behind
+    stage.focus();
+    if (e.key !== "Tab") stage.dispatchEvent(new KeyboardEvent("keydown", e));
+  }, { capture: true, signal });
   const isPicker = (n: Node) => n instanceof Element && (n.matches(".picker") || !!n.querySelector(".picker"));
   const keepFocus = new MutationObserver((records) => {
     if (closed) return;
@@ -187,10 +202,8 @@ export function openLightbox(
 
   const unsubscribe = store.subscribe((c) => {
     if (c.reset || !store.refs.has(refId)) return close();
-    if (c.references.some((r) => r.id === refId)) {
-      showDraft(null);
-      showPending(null); // the saved tag outlines that box now
-    }
+    // The pending marker stays: a docked picker still saves that region (the picker leaving clears it).
+    if (c.references.some((r) => r.id === refId)) showDraft(null);
     if (c.taxonomy || c.references.some((r) => r.id === refId)) renderBoxes();
   });
 
@@ -205,11 +218,18 @@ export function openLightbox(
     if (opener?.isConnected) opener.focus();
   }
 
-  // The thumbnail shows at once; the original replaces it when its path arrives.
+  // The thumbnail shows at once. The original is preloaded off-screen and swapped in only once it
+  // decodes: a TIFF original (stored untranscoded) the WebView can't render keeps the thumbnail.
   img.setAttribute("src", api.assetUrl(ref.thumb1024));
   void Promise.resolve()
     .then(() => api.imagePath(refId))
-    .then((p) => void (!closed && img.setAttribute("src", api.assetUrl(p))), () => {}); // ponytail: keep the thumb
+    .then((p) => {
+      if (closed) return;
+      const url = api.assetUrl(p);
+      const pre = new Image();
+      pre.addEventListener("load", () => void (!closed && img.setAttribute("src", url)), { once: true });
+      pre.src = url; // ponytail: on error the thumbnail simply stays
+    }, () => {}); // imagePath refused (Task 5 not landed): keep the thumbnail
   document.body.append(el);
   renderBoxes();
   layout();
