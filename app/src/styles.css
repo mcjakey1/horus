@@ -187,7 +187,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .lab .box.is-whole:not(.is-hot) { border-color: transparent; }
 
 /* status-bar import buttons and the import notice */
-.text-btn { color: var(--ink); font-weight: 500; padding: 4px 2px; text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+.text-btn { color: var(--ink); font-weight: 500; padding: 4px 2px; white-space: nowrap; text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
 .text-btn:hover:not(:disabled) { text-decoration-color: currentColor; }
 .text-btn:disabled { color: var(--ink-3); }
 .notice { position: fixed; right: 20px; bottom: 48px; z-index: 30; width: min(380px, calc(100vw - 40px)); max-height: 50vh; overflow: auto; display: grid; gap: 8px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); font-size: 13px; }
