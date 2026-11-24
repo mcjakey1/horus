@@ -55,6 +55,7 @@
 - **Region thumbnails** use Plan 1's letterboxed plate with the region outlined. This is ruling a1, a recorded spec delta from SPEC §5's "cropped".
 - The scope "Show only this board" is view state. It is not saved and not undoable.
 - **In-page drags use pointer events, never the HTML5 drag-and-drop API.** `dragDropEnabled` stays at its default of `true`, because Plan 2's file intake needs native drops, and on Windows that setting stops WebView2 from firing `dragstart`, `dragover` and `drop` (`CROSS-PLAN-AUDIT.md` #2). This covers the link handle (Task 4) and board tile reordering (Task 5).
+- **Operation colour and labels come from Plan 3's `opInk` and Plan 2's `opLabel`** (`app/src/ops.ts`; Plan 3 cross-plan impact item 5). Operations are editable data (1 to 9 of them), so no fixed four-ink map and no `var(--diff)`-style token appears in this plan's code. An unknown operation draws in the neutral ink.
 - **One link per unordered pair** (Decision 2). A→B and B→A are the same pair; a second reason goes into the existing note.
 - **Export also writes `credits.txt`** (Decision 1), as plain UTF-8 without a BOM.
 - UI tokens, type and copy follow `prototype/styles.css`, `DESIGN.md` and the Plan 1 Task 8 port. No new colours.
@@ -373,11 +374,10 @@
   - `setScope(boardId)`. The status line reads "Board: <name> · N references · Show all".
   - The Reference view's Related, Ranked and search reference results keep only references for which `inScope` is true.
   - A focused reference outside the board shows the chip "Not on this board" (Review Focus 5).
-  - Plan 3's views read `inScope`; this plan doesn't touch them. **Seam for Plan 3:** its `Snapshot` (Task 2, `data.ts`) has no scope. Plan 3's `storeSource(store)` adapter (Plan 3 Task 10) should expose `inScope`, or add `scope` to `Snapshot`, for the graph views to dim or hide references outside the board. That is Plan 3's change to make.
-    - **If Plan 3 has already merged when this task runs,** this task makes the change instead (audit #10).
-    - It adds `inScope(id)` to `Snapshot` through `storeSource`.
-    - Each graph view draws out-of-scope reference nodes at dot LOD, and leaves them out of the Galaxy's edges.
-    - Each view gets one test.
+  - **Plan 3's graph views consume it, and this plan doesn't touch them** (Plan 3 cross-plan impact item 9).
+    - Plan 3's `Snapshot` already has `inScope(refId: string): boolean` (Plan 3 Task 2), and Plan 3 Task 10's `storeSource(store)` fills it from **this** `store.inScope`. The names and the signature must stay exactly `store.inScope(refId: string): boolean`.
+    - Plan 3 draws out-of-scope reference nodes at dot LOD, and they can't be selected.
+    - One test here pins the contract: `store_inscope_signature`, where `storeSource(store).get().inScope` agrees with `store.inScope` for a member and a non-member, once Plan 3 Task 10 exists.
 - **"Export board to folder…"** opens the folder picker and calls `exportBoard`. A toast then reads "Exported N to <folder>". If anything was skipped, it adds "· M skipped" with an expandable list of the reasons. "Open folder" uses the opener plugin, which keeps Plan 1's carry-forward: "tauri-plugin-opener prune-or-use".
 
 - [ ] **Step 1: Write the failing tests**
@@ -429,6 +429,9 @@
   - **Pan:** Space+drag or middle-drag. The arrow keys pan by 10% of the viewport when zoomed in.
   - **A plain drag still draws a region,** as in Plan 2.
 - **Region overlays:** every region tag is outlined. Hovering over one, or Tab focusing it, highlights it with its label, "Stand out › Rim light". The smallest region under the pointer wins. `o` toggles the overlays.
+  - The outline stroke is `opInk(store.tax, tag.operationId).base`.
+  - The label is `opLabel(...).plain`, then ` › `, then the technique name, with the operation part in `.text`.
+  - An unknown operation draws in the neutral ink, never amber.
 - `v` toggles the value view, as before.
 - When `full` is false, the corner shows "Showing a preview — this format can't be shown at full size here." (Review Focus 3).
 - The toolbar shows the zoom percentage and the source size, such as "4000 × 3000".
@@ -444,6 +447,7 @@
     - With `lightboxSource` returning `full: false`, the preview copy is visible.
     - `o` hides the overlays.
     - `1` sets the scale to 1.
+    - `overlay_ink_from_taxonomy`: a region tag under an added operation with `color: "teal"` is stroked `var(--x-teal)`. One under an id missing from the taxonomy is stroked `var(--ink-2)`. A renamed `plainLabel` shows in the hover label.
 
 - [ ] **Step 2: Run, then implement, then run again.** Run `npm test -- lightbox`. It should FAIL, then PASS, and Plan 2's lightbox tests must still pass.
 
@@ -465,6 +469,9 @@
   export type Sides = { shared: string[]; onlyA: string[]; onlyB: string[]; partialA: string[]; partialB: string[] };   // technique ids; partial = operation ids
   export function sides(a: Reference, b: Reference, sharedTechniques: string[], tax: Taxonomy): Sides;   // regions collapse; order = tax.techniques order
   export function mountCompare(root: HTMLElement, api: Api, store: Store, a: string, b: string): { swap(): void; close(): void };
+  export function makeOpenCompare(root: HTMLElement, api: Api, store: Store, opts?: { onClose?(a: string): void }): (a: string, b: string) => void;
+  // main.ts: const openCompare = makeOpenCompare(...); passed to Plan 3's mountGalaxy deps as `openCompare` —
+  // exactly Plan 3 Task 7's `openCompare?(a: string, b: string): void` (Plan 3 cross-plan impact item 10)
   ```
 - **Opening it:** Shift-click a second reference in Related, Ranked, a callout thumbnail or the Links tab, or press Shift+Enter on a focused row. Compare opens on the focused reference (A) and that one (B).
 - **Layout:**
@@ -472,7 +479,10 @@
   - The middle column, "Shared", lists `scored.sharedTechniques`.
   - Under it, "Same operation × domain" lists `scored.sharedBranches` that have no shared technique.
   - Each side lists its own unique techniques under "Only here", and then its partial tags under "Operation only".
-  - Hovering a technique outlines its region on whichever image carries it, if it is a region tag (ruling a1).
+  - Hovering a technique outlines its region on whichever image carries it, if it is a region tag (ruling a1). The outline and the technique's operation path use `opInk` and `opLabel` (Global Constraints).
+  - **Entry from the graph views:** `makeOpenCompare` returns the function Plan 3's Galaxy calls on Shift-click. Calling it closes any open Compare first, so there is only ever one, and then mounts a new one.
+    - **Esc** calls `opts.onClose(a)` when it is given. `main.ts` passes one that returns to the calling view, such as the Galaxy.
+    - Without `onClose`, Esc calls the Reference view's `show(A)`, as in the layout rules below.
   - The score shows small, with the wording "related by technique", or "not related by technique" when the score is 0.
   - If A and B are linked, their link's `why` shows at the top, marked "Linked by you". Links never change the score.
 - **Keys:** `v` toggles the value view on both images, `x` swaps the sides, and `L` opens the lightbox on the side under the pointer. Esc returns to the Reference view on A. "Link these two" opens the link editor.
@@ -485,6 +495,8 @@
     - With a taxonomy order of t3, t1, t2, `onlyA` and `onlyB` follow that order, not the tag order.
   - View:
     - Shift-click on a Related tile calls `scorePair(A, B)` and renders three columns.
+    - `open_compare_from_galaxy`: `makeOpenCompare(root, api, store)("a", "b")` calls `scorePair("a", "b")` and mounts one Compare. A second call replaces it, so there is still only one.
+    - `compare_ink_from_taxonomy`: a shared technique under an operation with `color: "rose"` renders its path in `var(--x-rose-text)`.
     - `x` swaps the titles.
     - `v` toggles the value class on both plates.
     - Esc calls the Reference view's `show(A)`.

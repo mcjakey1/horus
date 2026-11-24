@@ -215,6 +215,7 @@
   - "Recovered N images to the Inbox" offers "Add them", which adds the orphans as references through one `Edit::AddReferences`, so the step can be undone. The image files are already in place, and their hashes come from the file names.
   - "M references are missing their image file" offers "Show them", which filters the Ranked list to those references. A missing original is never deleted from `library.json`.
 - Single-instance: a second launch passes its arguments to the first copy, which focuses its window and then exits. That is why the sweep can assume it is the only writer.
+- **Taxonomy validation on open uses `taxonomy.validate()`, never `validate_seed()`** (Plan 3 cross-plan impact item 7). An edited taxonomy fails `validate_seed` by design, and `validate_seed` is `#[cfg(test)]`-only after this task anyway. Test: `edited_taxonomy_opens`, where a library whose taxonomy has an added operation, a renamed label and a new domain opens with no integrity warning.
 - **Order inside `open_library` and `create_library`.** This is the single, release-owned pipeline that Plans 2, 4 and 5 plug into (audit #12):
   1. Stop the previous library's indexer (Plan 5 `Indexer::stop`).
   2. Flush the previous library (Plan 2 Task 5). On failure, refuse the switch.
@@ -310,7 +311,8 @@
   - Under reduced motion it shows a still frame, which stays until any input.
   - "Play intro" replays it and leaves `introSeen` as it is.
 - **The look is a showcase surface:**
-  - It uses the DESIGN.md system: the Conservation Study, the Source Serif 4 wordmark, the Grey Card N5 specimen and the four operation inks, used only to name operations.
+  - It uses the DESIGN.md system: the Conservation Study, the Source Serif 4 wordmark, the Grey Card N5 specimen and the operation inks, used only to name operations.
+  - **Its copy never claims there are always four operations** (Plan 3 cross-plan impact item 8). Operations are editable, so the seed's four are described as "a starting set".
   - The visual and motion concept is **not specified here**. It comes from a design pass run with the `impeccable` skill, in its showcase register, with the user (SPEC §8 "done with you").
   - This task builds the mechanics, with a placeholder frame: the "Horus" wordmark centred on the shell.
 - **About** shows:
@@ -329,6 +331,7 @@
     - a `pointerdown` does the same.
   - With `reducedMotion: true`, no CSS animation or transition is set on the intro elements. It stays open until a key, and resolves `"skipped"`.
   - The intro DOM's text has no "Taxonomy of Visuals" or "Iris" (SPEC §8).
+  - `no_fixed_operation_count`: neither the intro's nor About's text matches `/\b(four|4) operations\b/i`.
   - First run: after the intro resolves, the first-run step 1 is shown, and `setSettings` was called with `{ introSeen: true }`. A second first-run with `introSeen` set never shows the intro.
   - About lists every font family that `checkFonts` finds, and one demo credit per manifest record.
 
@@ -345,6 +348,7 @@
 **Files:**
 - Create:
   - `app/src-tauri/icons/source/app-icon.svg` and `app-icon-1024.png`, from the design pass;
+  - `app/src/glyphs/glyphs.ts`, `app/src/glyphs/*.svg` and `app/src/glyphs/glyphs.test.ts`: the in-app glyph set (see below);
   - `app/notices/manual.md`: Plan 5's hand-written entries, which Plan 5 writes there directly: the SigLIP model (`google/siglip-base-patch16-224`, Apache-2.0) **with the Apache-2.0 NOTICE text**, ONNX Runtime (MIT) and `tokenizers` (Apache-2.0);
   - `app/THIRD_PARTY_NOTICES.md`, **generated**. This is the same file name and location as Plan 5's, so there is one notices file.
 - Modify:
@@ -352,6 +356,18 @@
   - `app/scripts/release-check.mjs`, adding `checkBundle(conf)`.
 
 **Interfaces:**
+- **The in-app glyph set (Plan 3 cross-plan impact item 6).** Plans 2 and 3 show each technique, domain and operation `icon` as its description text "until Plan 6 draws the glyphs". This task draws them.
+  - **Files:** `app/src/glyphs/glyphs.ts` and `app/src/glyphs/*.svg`. Each is a single-weight 24 px line SVG that uses `currentColor`, so it takes the operation ink or the ink of the surrounding text.
+  - **The key is the exact `icon` description string:**
+    - every icon string in the bundled `taxonomy.json`: the 48 techniques, the 6 domains and the 4 operations;
+    - Plan 3's `DOMAIN_ICONS`, including the two generic entries **"a plain square"** and **"a dot inside a ring"**;
+    - the default for new operations, **"a plain square"**.
+  - **The fallback:** `glyphFor(icon: string): string` returns the SVG for a known description. It returns "a plain square" for an unknown or empty one, so custom techniques (whose `icon` is `""`) still draw.
+  - **The look:** the glyphs are drawn in the same `impeccable` design pass as the app icon. They are not Iris's glyphs (REFERENCE-ANALYSIS §2.1, §2.2 and §4 record those to avoid).
+  - **`checkGlyphs(taxonomyJson, domainIcons)`** is added to `release-check`. It fails if any icon string in the bundled taxonomy or in `DOMAIN_ICONS` has no SVG.
+  - **Tests:**
+    - `glyph_fallback`: `glyphFor("")` and `glyphFor("no such icon")` both return the plain-square SVG.
+    - `checkGlyphs`: it fails a fixture taxonomy with one undrawn icon, and passes the real set.
 - The icon:
   - Run `npm run tauri icon src-tauri/icons/source/app-icon-1024.png`. It generates `32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.icns`, `icon.ico` and the Windows Store logos into `src-tauri/icons/`.
   - It is designed in the same `impeccable` pass as the intro, legible at 16 px, with no eye motif (recommended) and no Iris marks.

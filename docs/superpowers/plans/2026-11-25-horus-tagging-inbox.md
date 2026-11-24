@@ -48,7 +48,17 @@
 - The Inbox is derived, never stored: a reference with zero tags is in the Inbox (SPEC §3).
 - Intake never asks the artist to classify an image. An optional short note is offered and never required (SPEC §2).
 - "Undo and redo cover everything" (SPEC §6.8): every change to `library.json` or `taxonomy.json` made through the UI is one undoable step.
-- Operation buttons read exactly "Stand out", "Hold together", "Lead the eye" and "Make them think", with the reel name shown beside each (SPEC §6.1, §7).
+- **Operations and domains are data, not constants.** This follows the user's Plan 3 decision: operations can be renamed, added and deleted, and new domain types are allowed.
+  - The picker shows one button per `taxonomy.operations` entry, in taxonomy order. Each button shows its `plainLabel` (serif) and its `name` (mono). With the seed, these are "Stand out", "Hold together", "Lead the eye" and "Make them think", beside the reel names (SPEC §6.1, §7).
+  - There are 1 to 9 operations (Plan 3's `MAX_OPS = 9`). Number keys `1`–`9` map to the shown order, so every operation has a key.
+  - No Plan 2 code, test assertion or CSS may assume exactly 4 operations or the 6 seed domains. Seed ids may appear only in seed-fixture tests.
+  - **Operation colour comes from Plan 3's `opInk`** (Plan 3 Task 2, `app/src/ops.ts`):
+    - an `operation.color` from `EXTRA_INKS` maps to `var(--x-<color>…)`;
+    - otherwise a seed id maps to its DESIGN.md ink;
+    - otherwise the neutral ink is used.
+
+    **Labels come from `opLabel`,** which this plan adds to the same file.
+- **IPC naming** (`CROSS-PLAN-AUDIT.md` #1): JS `invoke` argument keys are the camelCase form of the Rust parameter names, which is Tauri v2's default (`ref_id` → `refId`, `tag_id` → `tagId`, `ref_ids` → `refIds`). The `api.contract.test.ts` suite (Task 5) pins every command's name and keys against `tauriApi`, so a wrong key fails a test instead of failing only in the running app.
 - The domain is inferred and shown as a muted chip. The app asks for the domain only when `branches_for(operation, technique)` returns more than one branch (SPEC §6.3).
 - A custom technique is saved with `custom: true` (SPEC §3).
 - Regions are `{x, y, w, h}` in 0..1 of the original image (SPEC §3).
@@ -89,7 +99,7 @@
 - Consumes `LibraryData`, `Reference` and `Tag` (Plan 1 Task 2), plus `Taxonomy`, `Technique`, `BranchTechnique` and `Taxonomy::branches_for` (Plan 1 Task 3).
 - Produces:
   ```rust
-  pub enum Field { Note, SourceUrl }          // Title editing has no UI until Plan 4; add the variant there
+  pub enum Field { Note, SourceUrl }          // no title/creator/year/credit editing in Plan 2; whether any plan adds it is open (CROSS-PLAN-AUDIT.md #23)
   pub enum Edit {
       AddTags { ref_id: String, tags: Vec<Tag> },                       // appended in order
       RemoveTags { ref_id: String, removed: Vec<(usize, Tag)> },        // original positions, ascending
@@ -247,7 +257,10 @@
     - The backup is written to `library.bak.json.tmp` and then renamed (the deferred minor at `library.rs:94`).
     - When `library.json` can't be read (locked) rather than can't be parsed, the rotation is skipped with a logged warning instead of failing silently.
     - `recovered_from_backup` is reset to `false` after a successful `save`.
-    - `image_path` becomes `pub fn image_path(&self, r: &Reference) -> Result<PathBuf, LibraryError>`. It returns the new variant `LibraryError::InvalidFile(String)` unless `r.file` matches `^[0-9a-f]{64}\.[a-z0-9]{2,5}$`.
+    - **The guard lives in the free functions, which every caller goes through** (audit #9):
+      - `pub fn image_path_in(root: &Path, file: &str) -> Result<PathBuf, LibraryError>` returns the new variant `LibraryError::InvalidFile(String)` unless `file` matches `^[0-9a-f]{64}\.[a-z0-9]{2,5}$`.
+      - `pub fn thumb_path_in(root: &Path, hash: &str, size: u32) -> Result<PathBuf, LibraryError>` does the same unless `hash` matches `^[0-9a-f]{64}$` and `size` is 256 or 1024.
+      - `Library::image_path` and `Library::thumb_path` call them and return the same `Result`. Today all four are public and unguarded (`library.rs:108-127`).
     - Update the Plan 1 callers (Task 7's thumb paths and the `import` tests) and any test fixture whose `file` is not a hash name, such as `"r1.jpg"`, to use a 64-hex name.
 
 - [ ] **Step 1: Write the failing tests**
@@ -257,7 +270,8 @@
   - `flush_failure_restores_dirty`: make `library.json.tmp` a directory, as in Plan 1's test. `flush` returns `Err`, and `due` is still true once the delay has passed.
   - `backup_written_via_tmp`: after `save`, there is no `library.bak.json.tmp`, and `library.bak.json` equals the previous contents.
   - `recovered_flag_clears_after_save`.
-  - `image_path_rejects_traversal`: `file = "../../evil.jpg"` returns `Err`.
+  - `image_path_rejects_traversal`: `file = "../../evil.jpg"` returns `Err` from both `Library::image_path` and `image_path_in`. `thumb_path_in(root, "../x", 256)` and `thumb_path_in(root, <valid hash>, 512)` return `Err`.
+  - `import_still_writes`: after the change, every existing `import::` test passes. `import` builds its paths from the hash it computed, so its paths always pass the guard.
 
 - [ ] **Step 2: Run, then implement, then run again.** Run `cargo test saver:: library::`. It should FAIL, then PASS, and all Plan 1 library tests must still pass.
 
@@ -270,19 +284,22 @@
 **Files:**
 - Modify:
   - `app/src-tauri/src/commands.rs`;
-  - `app/src-tauri/src/lib.rs`: register the new commands, start the saver thread on open or create, and handle `RunEvent::ExitRequested`;
+  - `app/src-tauri/src/lib.rs`: register the new commands, start the one app-wide saver thread in `setup` (Task 4), and handle `RunEvent::ExitRequested`;
   - `app/src/api.ts`: add types and wrappers.
 
 **Interfaces:**
-- Consumes Tasks 1–4, and from Plan 1 Task 7: the state, `LibraryView` and the reference-with-thumbs element type (called `RefView` here, in Rust only; TypeScript calls it `Reference`, as in Plan 1's `api.ts`), `import_paths` and `correlate::Index::build`.
-- The state becomes `Mutex<Option<Open>>`, where `Open { lib: Library, tax: Taxonomy, index: Index, history: History, debounce: Debounce }`.
+- Consumes Tasks 1–4, and from Plan 1 Task 7: the state, `LibraryView`, `ReferenceView` (`commands.rs:41`), `import_paths` and `correlate::Index::build`.
+  - `ReferenceView` is the real Rust name (audit #18). Its fields are private, so add `ReferenceView::new(lib: &Library, r: Reference) -> Result<ReferenceView, LibraryError>`. In TypeScript it stays `Reference`, as in Plan 1's `api.ts`.
+- **The state** (audit #8): `AppState` keeps its existing `import_gate`, `settings`, `config_dir` and `seed_taxonomy` fields. Only `open` changes, to `Mutex<Option<Open>>`, where `Open { lib: Library, tax: Taxonomy, index: Index, history: History, debounce: Debounce }`.
+  - **Both** import commands, `import_paths` and `import_bytes`, hold `import_gate` for their whole run. Imports therefore stay one at a time, as the Plan 1 ledger requires, because the temporary thumbnail names are fixed per hash.
 - Every mutating command follows the same steps:
   1. build an `Edit`;
   2. call `edit::apply`;
   3. call `history.record(inverse)`;
   4. rebuild `index` if tags or references changed;
   5. call `debounce.touch`;
-  6. return a `Change`.
+  6. call `hooks::after_change(&app, &change)`. It is a no-op in Plan 2. Plan 5 registers its index trigger there (audit #11), so every route that adds references triggers indexing: import, paste, redo and recovery;
+  7. return the `Change`.
 - Produces these commands. All of them return `Result<_, String>`, and all JSON is camelCase:
   ```
   add_tags(ref_id: String, tags: Vec<NewTag>) -> Change          // one undo step for the whole list ("Tag like this")
@@ -294,7 +311,7 @@
   redo() -> Change
   image_path(ref_id: String) -> String                           // absolute, for the lightbox
   import_paths(paths: Vec<String>, note: Option<String>, source_url: Option<String>) -> ImportResult
-  import_bytes(<raw body>) -> ImportResult                       // headers: x-name (file name), x-note?, x-source-url?
+  import_bytes(<raw body>) -> ImportResult                       // header x-meta: percent-encoded JSON {name, note?, sourceUrl?}
   retry_save() -> ()                                             // flush again after a failed exit save
   exit_without_saving() -> ()
   ```
@@ -302,14 +319,19 @@
   pub struct NewTag { pub operation_id: String, pub technique_id: Option<String>, pub branch_id: Option<String>, pub region: Option<Region> }
   pub struct NewTechnique { pub name: String, pub description: String, pub operation_id: String, pub domain_id: String }
   pub struct TagFor { pub ref_id: String, pub region: Option<Region> }   // the tag gets operation, technique and branch from the new technique
-  pub struct Change { pub references: Vec<RefView>, pub removed: Vec<String>, pub taxonomy: Option<Taxonomy>,
+  pub struct Change { pub references: Vec<ReferenceView>, pub removed: Vec<String>, pub taxonomy: Option<Taxonomy>,
                       pub created: Option<String>, pub can_undo: bool, pub can_redo: bool }
   pub struct ImportResult { pub report: ImportReport, pub change: Change }
   ```
   - Rust assigns each tag `id: new_id("t")` and `suggested: false`.
   - `open_library` and `create_library` first call `flush` on the library that is open. On `Err`, they return `Err("Couldn't save the current library: <reason>")` and leave it open.
   - `import_paths` and `import_bytes` do not block, as in Plan 1. The import runs off the lock. The new references then get `note` and `source_url`, and are appended as a single `Edit::AddReferences`, so undo removes them from the library. The image files stay in `images/`, and re-importing them dedupes back to the same hash.
-  - `import_bytes` writes the body to `<root>/.incoming/<x-name>` through a `.tmp` file, imports it and then deletes it. `.incoming/` is created on demand and is the only addition to the folder layout; it is emptied on open.
+  - **`import_bytes`** (audit #7):
+    - **Metadata header:** an HTTP header carries only ASCII, so the metadata travels as one header, `x-meta`, holding `encodeURIComponent(JSON.stringify({ name, note, sourceUrl }))`.
+    - Rust decodes it with a small `percent_decode(&str) -> Result<String, String>` helper in `commands.rs`, then `serde_json`. A malformed value is an `Err`, not a panic.
+    - **Name:** only the last path component is kept (`Path::new(&name).file_name()`). The characters `< > : " / \ | ? *` and control characters become `_`, and an empty result becomes `pasted.png`.
+    - **Write:** the body is written to `<root>/.incoming/<that name>` through a `.tmp` file, then imported (the reference title is that name's stem), then deleted.
+    - `.incoming/` is created on demand. It is the only addition to the folder layout, and it is emptied on open.
   - `ExitRequested`:
     1. Call `flush`.
     2. On `Err`, call `api.prevent_exit()` and emit `save-failed { message }`.
@@ -325,7 +347,12 @@
   - `custom_technique_then_undo_restores_taxonomy`: `add_technique` with `tag: Some` returns `taxonomy: Some`, `created: Some("halo-glow")` and the reference with the new tag. **One** `undo` removes both the tag and the technique.
   - `set_field_many_is_one_step`: `set_field([a, b, c], "note", Some("harbour"))` sets all three notes, and one `undo` clears all three.
   - `import_with_note_and_undo`: `import_paths([small.jpg], Some("rim light ref"), Some("https://example.org/a"))` stores both fields. `undo` puts the id in `removed`, and the image file still exists.
-  - `import_bytes_roundtrip`: the raw bytes of `small.jpg` with `x-name: pasted.jpg` give one reference, and `.incoming/` is empty afterwards.
+  - `import_bytes_roundtrip`: the raw bytes of `small.jpg`, with `x-meta` naming `pasted.jpg`, give one reference, and `.incoming/` is empty afterwards.
+  - `import_bytes_name_is_contained`: a `name` of `"../../evil.jpg"` or `"C:\\x\\evil.jpg"` writes nothing outside `.incoming/`, and the reference title is `"evil"`.
+  - `import_bytes_unicode_name`: `x-meta` carrying `{"name":"Étude.png"}`, percent-encoded, gives the title `"Étude"`. A malformed `x-meta` (`"%ZZ"`) returns `Err` without panicking.
+  - `percent_decode_cases`: `"%C3%89tude"` gives `"Étude"`, `"a%20b"` gives `"a b"`, and `"%E"` is an `Err`.
+  - `imports_are_serial`: an `import_bytes` started while a slow `import_paths` holds `import_gate` waits for it. A test hook records that the two never overlap.
+  - `after_change_hook_fires`: a test hook registered on `hooks::after_change` sees one call per mutating command, including undo and redo, each with the returned `Change`.
   - `debounced_save_lands`: after `add_tags`, `library.json` on disk does not hold the tag immediately. After 700 ms it does. Use a polling loop with a 2 s timeout, not a bare sleep.
   - `exit_flushes_pending`: after `add_tags` and an immediate call to the exit handler's flush function, `library.json` holds the tag.
   - `exit_save_failure_keeps_app_open`: when `library.json.tmp` is a directory, the exit handler returns "prevent exit", and `retry_save` returns `Err` with the reason (Review Focus 2).
@@ -334,7 +361,17 @@
 
 - [ ] **Step 2: Run, then implement, then run again.** Run `cargo test commands::`. It should FAIL, then PASS.
 
-- [ ] **Step 3: Extend `api.ts`.** Add `NewTag`, `NewTechnique`, `TagFor`, `Change` and `ImportResult`, and one wrapper per new command. `importPaths(paths: string[], meta?: { note?: string; sourceUrl?: string }): Promise<ImportResult>` keeps `meta` optional. Update every Plan 1 caller and fake of `importPaths` (Task 8's `view.test.ts` fake `Api`, and any import button in `main.ts`) to read `.report` from the new result. `importBytes(name: string, bytes: ArrayBuffer, meta: { note?: string; sourceUrl?: string })` calls `invoke("import_bytes", bytes, { headers })`. Also add `onSaveStatus(cb)` and `onSaveFailed(cb)`, using `listen`.
+- [ ] **Step 3: Extend `api.ts`.** Add `NewTag`, `NewTechnique`, `TagFor`, `Change` and `ImportResult`, and one wrapper per new command. `importPaths(paths: string[], meta?: { note?: string; sourceUrl?: string }): Promise<ImportResult>` keeps `meta` optional. Update every Plan 1 caller and fake of `importPaths` (Task 8's `view.test.ts` fake `Api`, and any import button in `main.ts`) to read `.report` from the new result. `importBytes(name: string, bytes: ArrayBuffer, meta: { note?: string; sourceUrl?: string })` calls `invoke("import_bytes", bytes, { headers: { "x-meta": encodeURIComponent(JSON.stringify({ name, ...meta })) } })`. Also add `onSaveStatus(cb)` and `onSaveFailed(cb)`, using `listen`.
+
+- [ ] **Step 3a: Add the IPC contract test, `app/src/api.contract.test.ts`** (audit #1).
+  - It uses `mockIPC((cmd, args) => …)` and `clearMocks` from `@tauri-apps/api/mocks`.
+  - It holds one table row per command, giving the command name and its sorted argument keys:
+    - **Plan 1:** `create_library` [`path`], `open_library` [`path`], `get_taxonomy` [], `related` [`id`], `search` [`q`], `get_settings` [], `set_settings` [`s`].
+    - **This plan:** `add_tags` [`refId`, `tags`], `update_tag` [`refId`, `tag`, `tagId`], `remove_tag` [`refId`, `tagId`], `set_field` [`field`, `refIds`, `value`], `add_technique` [`t`, `tag`], `undo` [], `redo` [], `image_path` [`refId`], `import_paths` [`note`, `paths`, `sourceUrl`], `retry_save` [], `exit_without_saving` [].
+  - For each row, it calls the matching `tauriApi` wrapper with sample values, and asserts the command name and `Object.keys(args).sort()`.
+  - **`import_bytes`:** the test spies on `invoke` from `@tauri-apps/api/core` and asserts the raw `ArrayBuffer` payload, plus an `x-meta` header that decodes back to `{ name, note, sourceUrl }`.
+  - **Later plans** (3, 4, 5 and 6) add their own rows in their own api steps. A wrapper with no row fails the test: the test enumerates `Object.keys(tauriApi)` and requires a row for every key not in `NON_IPC_KEYS`.
+  - `NON_IPC_KEYS` holds the members that make no plain `invoke` call: `assetUrl` (`convertFileSrc`), the event listeners (`onSaveStatus`, `onSaveFailed`, and later ones such as Plan 5's `onSimilarStatus`), and `importBytes`, which the raw-body test covers separately.
 
 - [ ] **Step 4: Commit.** Commit message: `feat(app): tag, field, technique, undo/redo and intake commands with debounced saving`.
 
@@ -363,6 +400,7 @@
     So "chiaroscuro lighting" finds Chiaroscuro. A short synonym such as "eyes" no longer matches a query like "eyesore".
   - **Description:** every query word longer than 3 characters appears in the description as a whole word.
   - **Operation name or plain label:** matches only when the whole name or the whole plain label appears in `q` as a whole-word phrase: `has_phrase(q, name) || has_phrase(q, label)`. So "stand out", "make it stand out" and "differentiate" expand Differentiate, while "out", "eye", "a", "make" and a half-typed "stand o" expand nothing.
+    - **This is data-driven.** It iterates `tax.operations` and reads each operation's `name` and `plain_label`. No label is hardcoded, so renamed and added operations work at once.
 
   - **Reference:** its normalised title or note contains `q`, or the `why` of a link touching it does. This is unchanged apart from normalisation.
 - `matchesQuery` in `tagging/model.ts` (Task 7) mirrors the technique rules, using `String.prototype.normalize("NFC")` and the same `normalise` steps. Task 7's shared `match-cases.json` keeps the two in agreement. The picker filters cards in TypeScript on every keystroke; the Rust `search` serves the global search box.
@@ -373,6 +411,7 @@
     - `"lead the eye"` returns only Sequence techniques.
     - `"make it stand out"` returns only Differentiate techniques.
   - `min_query_length`: `"a"` returns `[]`, and `"ab"` returns a value without panicking.
+  - `custom_operation_label`: on a fixture taxonomy with an added operation `{ id: "provoke", name: "Provoke", plainLabel: "Make it sting" }` with one branch and one technique, `"make it sting"` returns that technique with `operation_id == "provoke"`. Renaming Differentiate's `plainLabel` to `"Pop"` makes `"stand out"` expand nothing, and `"pop"` expand Differentiate.
   - `punctuation_stripped`: `"moody!"` and `"Moody,"` find Chiaroscuro, and `"pop out"` finds Pop-out.
   - `query_contains_name`: `"chiaroscuro lighting"` finds Chiaroscuro.
   - `description_words_over_3`: `"the empty space"` finds Isolation in void, because "the" is ignored and both remaining words are in its description. `"vast space"` does not find it.
@@ -395,11 +434,17 @@
 **Files:**
 - Create:
   - `app/src/store.ts`;
+  - `app/src/ops.ts`;
   - `app/src/tagging/model.ts`;
   - `app/src/tagging/match-cases.json`;
   - `app/src/keys.ts`.
+- Modify (audit #28):
+  - `app/src/reference/view.ts`: the view reads from the `Store` instead of its private `S`;
+  - `app/src/reference/view.test.ts`;
+  - `app/src/main.ts`: it loads the library and builds the `Store`.
 - Test:
   - `app/src/store.test.ts`;
+  - `app/src/ops.test.ts`;
   - `app/src/tagging/model.test.ts`;
   - `app/src/keys.test.ts`;
   - a Rust test `search::tests::shared_match_cases` in `app/src-tauri/src/search.rs`, which reads the same JSON through `include_str!("../../src/tagging/match-cases.json")`.
@@ -409,9 +454,20 @@
 - Produces:
   ```ts
   // store.ts
-  export type Store = { refs: Map<string, Reference>; tax: Taxonomy; canUndo: boolean; canRedo: boolean;
-    apply(c: Change): void; subscribe(fn: (c: Change) => void): () => void; inbox(): Reference[] };
+  export type Store = { refs: Map<string, Reference>; tax: Taxonomy; links: Link[]; canUndo: boolean; canRedo: boolean;
+    apply(c: Change): void; reset(view: LibraryView, tax: Taxonomy): void;   // reset: library switch; notifies with { reset: true }
+    subscribe(fn: (c: Change & { reset?: boolean }) => void): () => void; inbox(): Reference[] };
   export function createStore(view: LibraryView, tax: Taxonomy): Store;
+  // links: from LibraryView; Plan 2 never changes them (Plan 4 adds Change.links)
+  // ops.ts — owned by Plan 3 Task 2; same interface whichever plan lands first creates the file
+  export type Ink = { base: string; text: string; on: string };   // CSS values, e.g. "var(--seq)"
+  export const SEED_INK: Record<string, "diff" | "group" | "seq" | "infer">;
+  export function opInk(tax: Taxonomy, opId: string): Ink;
+  // op.color ∈ EXTRA_INKS -> var(--x-<color>), var(--x-<color>-text), var(--x-<color>-on);
+  // else seed id -> var(--k), var(--k-text), var(--k-on); else neutral { base: "var(--ink-2)", text: "var(--ink)", on: "var(--panel)" }
+  export function opLabel(tax: Taxonomy, opId: string): { plain: string; name: string };   // added by this plan; unknown id -> { plain: opId, name: opId }
+  // reference/view.ts (changed signature)
+  export function mountReference(root: HTMLElement, api: Api, store: Store): { show(id: string): void; destroy(): void };
   // inbox(): refs with tags.length === 0, newest addedAt first, ties by title
   // tagging/model.ts
   export function techniquesFor(tax: Taxonomy, opId: string): Technique[];          // taxonomy order, unique
@@ -422,6 +478,13 @@
   // keys.ts
   export function wireUndoKeys(doc: Document, api: Api, store: Store): () => void;
   ```
+- **The Reference view reads from the Store** (audit #28). `mountReference` no longer loads data itself, and no longer keeps a private copy of the references, links, taxonomy or settings.
+  - It keeps only view state: the focus, the trail, the pin, the hot callout, the filter and the paint timer.
+  - It reads `store.refs`, `store.tax` and `store.links`.
+  - It replaces Plan 1's hard-coded `OPS` map with `opLabel` and `opInk`.
+  - It subscribes to the store, and re-renders on any `Change` that touches the focused reference, its related references or the taxonomy.
+  - If the focused reference is removed (for example, by undoing an import), the view goes to the previous reference in the trail, else to the first reference, else to the empty state "No references yet."
+  - `main.ts` loads `openLibrary` (or the first-run result from Plan 1 Task 9) and `getTaxonomy`, calls `createStore`, then mounts the view. Opening another library calls `store.reset`.
 - `match-cases.json` is `[{ "q": string, "technique": string, "match": boolean }]`. It is the single source that keeps `matchesQuery` and the Rust `search` agreeing. The Rust test asserts that each `match: true` technique appears in `search(seed, empty, q)` and that each `match: false` technique does not.
 
 - [ ] **Step 1: Write `match-cases.json`** with at least these cases, checked against the seed:
@@ -438,6 +501,17 @@
 
 - [ ] **Step 2: Write the failing tests**
   - Store: `apply` merges the changed references, deletes `removed`, swaps in `taxonomy` when present, and updates `canUndo` and `canRedo`. `inbox()` excludes a reference with only a partial tag, because any tag at all takes a reference out of the Inbox.
+  - `ops`: if Plan 3 Task 2 has already created `ops.ts`, reuse its tests and add only the `opLabel` cases. Otherwise create it with Plan 3's tests:
+    - `opInk(seed, "group")` gives `{ base: "var(--group)", text: "var(--group-text)", on: "var(--group-on)" }`;
+    - an operation with `color: "teal"` gives `var(--x-teal)`, `var(--x-teal-text)` and `var(--x-teal-on)`;
+    - an unknown id, or an unknown `color`, gives the neutral triple and doesn't throw.
+    - `opLabel` reads `plainLabel` and `name` from the data, so a renamed operation shows its new label.
+  - Reference view, on the store (audit #28), using a fake `Api` and a real `Store`:
+    - `store_change_rerenders_focus`: `store.apply` with a `Change` that adds a tag to the focused reference raises the callout count, without any `show()` call.
+    - `taxonomy_rename_rerenders`: a `Change` whose `taxonomy` renames Chiaroscuro updates the callout title.
+    - `removed_focus_falls_back`: a `Change` whose `removed` holds the focused id moves to the previous reference in the trail.
+    - `reset_switches_library`: `store.reset` re-renders from the new data.
+    - `no_private_fetch`: `mountReference` never calls `api.openLibrary` or `api.getTaxonomy`.
   - `techniquesFor(seed, "group")` contains `color-blocking` and not `pop-out`.
   - `domainChoice(seed, "differentiate", "chiaroscuro")` gives `{ branchId: "differentiate.feature" }`. A fixture taxonomy where `t` sits under `differentiate.feature` and `differentiate.space` gives `{ ask: [both] }`.
   - The cases from `match-cases.json` are checked against `matchesQuery`, which takes the technique from the seed.
@@ -470,7 +544,10 @@
   export function mountPicker(root: HTMLElement, api: Api, store: Store, opts: PickerOpts): { close(): void; el: HTMLElement };
   ```
 - Layout and behaviour:
-  - **Four operation buttons**, in seed order. Each shows the plain label in the serif face and the reel name in mono, with keys `1`–`4`.
+  - **One operation button per `store.tax.operations` entry**, in taxonomy order (Global Constraints; Plan 3 cross-plan impact item 1). Each shows `opLabel(...).plain` in the serif face and `.name` in mono, with the swatch from `opInk(...).base`. The copy is the seed's labels by default, editable by the artist.
+    - Number keys `1`–`9` map to the buttons in order. There are at most 9 (`MAX_OPS`), so every button has a key.
+    - The row wraps, and never assumes four buttons.
+    - When `store.tax` changes while the picker is open (a rename, an addition or a deletion), the row re-renders. If the chosen operation was deleted, the choice clears and the card grid empties.
   - **After an operation is chosen**, a grid of technique cards appears. Each card shows:
     - its name;
     - `icon` as the glyph text, until Plan 6 draws the icons;
@@ -489,7 +566,7 @@
     - A suggested tag, such as a demo seed tag, shows "suggested" with a confirm control (✓), which calls `updateTag` with the same values and so sets `suggested: false`.
   - **When `preset` is given** ("Tag like this"), those techniques start ticked. Enter applies all the ticked techniques in one `addTags` call.
 - Keyboard map, active only while focus is inside the picker. The Reference view's `1`–`9` callout pinning is suspended while the picker is open:
-  - `1`–`4`: choose the operation.
+  - `1`–`9`: choose the operation in that position (only as many keys as there are operations).
   - Any printable key: focuses the search field and types.
   - ↑ and ↓ move between cards. ← and → also move between cards, **except when the picker is docked in the Inbox**: there, ← and → always belong to the Inbox (Task 9), and cards move only with ↑ and ↓.
   - **Enter:** applies the highlighted card. With nothing highlighted, it applies a partial tag carrying only the operation.
@@ -498,7 +575,11 @@
   - Tab: moves between the operations row, the search field, the grid and the domain chip.
 
 - [ ] **Step 1: Write the failing tests**
-  - Four buttons render with the exact labels "Stand out", "Hold together", "Lead the eye" and "Make them think". Pressing `2` selects Group.
+  - With the seed, the buttons render with the labels "Stand out", "Hold together", "Lead the eye" and "Make them think", in that order. Pressing `2` selects Group.
+  - `dynamic_operations`: on a fixture taxonomy with 5 operations, 5 buttons render, pressing `5` selects the fifth, and `6` does nothing. With 9 operations (`MAX_OPS`), `9` selects the ninth. With 1 operation, a single button renders and the row never assumes four.
+  - `renamed_operation_label`: applying a `Change` whose taxonomy renames `group`'s `plainLabel` to "Bundle" updates that button's text, with no remount.
+  - `deleted_operation_clears_choice`: with Group chosen, a `Change` whose taxonomy no longer has `group` clears the choice and the card grid, and doesn't throw.
+  - `custom_domain_listed`: in a fixture where `differentiate` has a branch to a new domain `"texture"`, the "+ New technique" domain select lists it.
   - After `1`, typing `moody` leaves exactly one visible card, Chiaroscuro. Enter calls `addTags` with `[{operationId: "differentiate", techniqueId: "chiaroscuro", branchId: "differentiate.feature"}]`.
   - With the fixture taxonomy where `t` has two Differentiate branches, choosing `t` shows two radio options, and Enter does not call `addTags` until one is picked.
   - Pressing `3` and then Enter with no card highlighted calls `addTags` with `[{operationId: "sequence"}]`: a partial tag.
@@ -519,7 +600,8 @@
 **Files:**
 - Create:
   - `app/src/inbox/view.ts`;
-  - `app/src/intake.ts`.
+  - `app/src/intake.ts`;
+  - `app/src/grid/windowed.ts`: the windowed tile grid, which Plan 4's Boards view reuses (audit #16).
 - Modify:
   - `app/index.html`: enable the Inbox tab;
   - `app/src/main.ts`: wire intake and the views.
@@ -532,13 +614,17 @@
 - Produces:
   ```ts
   export function mountInbox(root: HTMLElement, api: Api, store: Store): { focus(i: number): void; destroy(): void };
+  // grid/windowed.ts — renders only the rows in view (± overscan), with fixed-size tiles
+  export function mountWindowedGrid<T>(root: HTMLElement, opts: { items: T[]; tile: number; gap: number;
+    render(item: T, i: number): HTMLElement; overscanRows?: number /* default 2 */ }):
+    { update(items: T[]): void; scrollTo(i: number): void; destroy(): void };
   export type IntakeDeps = { api: Api; store: Store; openPicker(opts: PickerOpts): void; toast(msg: string): void };
   export function wireIntake(win: { onDragDropEvent: Function }, doc: Document, deps: IntakeDeps): () => void;
   export function dupRows(report: ImportReport, store: Store, meta: { note?: string; sourceUrl?: string }): DupRow[];
   export type DupRow = { existingId: string; title: string; action: "show" | "merge"; fills: ("note" | "sourceUrl")[] };
   ```
 - **Inbox:**
-  - It is a grid of `store.inbox()` thumbnails (`thumb256`, at their true aspect ratio). The tab badge shows the live count.
+  - It is a grid of `store.inbox()` thumbnails (`thumb256`, at their true aspect ratio, letterboxed on a fixed-size tile), rendered through `mountWindowedGrid`. Its images use `loading="lazy"` and `decoding="async"`, so a hoard of 2,000 items stays smooth (SPEC §9). `focus(i)` calls `scrollTo(i)`. The tab badge shows the live count.
   - Selecting an item docks the picker beside it.
   - Once an item gets its first tag, it **stays in the grid, marked "tagged"**, until the artist moves to another item. Only then is it dropped from the derived list (Review Focus 3).
   - ← and → move to the previous or next item, wherever focus is, except inside a text input. After Enter applies a tag, focus stays in the picker, so the next → moves on.
@@ -555,6 +641,7 @@
 - [ ] **Step 1: Write the failing tests**
   - Inbox:
     - 3 untagged and 1 partially tagged reference render as 3 tiles, and the badge shows 3.
+    - `windowed_grid_bounds_dom`: 2,000 items in an 800×600 container, with `clientWidth` and `clientHeight` stubbed, create at most 200 `<img>` elements. `scrollTo(1500)` renders tile 1500 and leaves tile 0 unrendered.
     - Applying a tag to tile 1 through the fake api keeps 3 tiles, with tile 1 marked tagged. Pressing → gives 2 tiles.
     - Pressing → on the last item shows "Inbox is empty…", and calling `focus` out of range does not throw.
     - With the picker docked and focus on a technique card, → moves to the next Inbox item and ↓ moves to the next card. With focus in the picker's search field, → moves the text caret only.
@@ -654,7 +741,7 @@
   3. With the keyboard only, tag 5 items in the Inbox: `1` or `2`, type, Enter, then →. Each one takes under 10 seconds.
   4. In the Reference view, drop a new image onto a reference's plate. The picker opens with that reference's techniques ticked.
   5. In the lightbox, drag a box and tag it. The region's outline appears on the Reference view tile.
-  6. Add the custom technique "Halo glow" from the picker. `taxonomy.json` on disk shows it with `"custom": true` within 1 second. Then Ctrl+Z twice removes the tag and then the technique, and 1 second later `taxonomy.json` no longer has it.
+  6. Add the custom technique "Halo glow" from the picker. `taxonomy.json` on disk shows it with `"custom": true` within 1 second. Then **one** Ctrl+Z removes both the tag and the technique, because they were one step, and 1 second later `taxonomy.json` no longer has it.
   7. Paste an image from a browser. `sourceUrl` is filled when the browser supplied the `<img>` HTML.
   8. Tag something and quit within 0.5 s. On relaunch, the tag is there.
 - [ ] **Step 3: Commit.** Commit message: `test: Plan 2 end-to-end check notes in app/README.md`.
@@ -665,3 +752,20 @@
 
 1. **Duplicate merge:** fill empty fields only. The app keeps the one existing reference and copies across any note or source URL from the new drop into fields that are still empty. Existing values are never overwritten, and there are never two references for one image.
 2. **Undo scope:** as described. Undo keeps the last 200 steps in memory, and clears them when you switch libraries or restart. Undoing an import removes the references but keeps their image files in the library folder.
+3. **From the Plan 3 decisions (2026-11-25):** operations can be renamed, added and deleted, and new domain types are allowed.
+   - Plan 2 therefore treats operations and domains as data: a dynamic picker row with keys `1`–`9`, data-driven search labels, and `opLabel` and `opInk` with a neutral fallback ink.
+   - The op ink rules for new operations may be refined by Plan 3's cross-plan list. `opInk` is the single place to change.
+
+## Amendments (2026-11-25, from CROSS-PLAN-AUDIT.md)
+
+These audit rows are owned by Plan 2 and applied above:
+- **#1:** the IPC camelCase convention and `api.contract.test.ts` (Global Constraints, Task 5).
+- **#7:** the `import_bytes` name is contained, and the metadata travels percent-encoded in `x-meta`.
+- **#8:** `import_gate` is kept, and both imports are serial.
+- **#9:** the guard is in `image_path_in` and `thumb_path_in` (Task 4).
+- **#11:** the `after_change` hook in the command recipe.
+- **#16:** the windowed grid (Task 9).
+- **#18:** the `ReferenceView` name and its constructor.
+- **#23:** the `Field` comment is neutral.
+- **#28:** the Reference view is fed by the `Store` (Task 7). Plan 3's cross-plan impact item 3 says that if Plan 2 Task 7 lands first, it makes the data part against the `Store`. That is what Task 7 does. `opInk` replaces the view's `OP_KEY`, so an unknown operation is neutral, not amber.
+- **Plan 3 cross-plan impact item 1:** the dynamic operation picker, with 1 to 9 operations and keys `1`–`9` (Task 8, Global Constraints).
