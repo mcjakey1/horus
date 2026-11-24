@@ -1,5 +1,5 @@
 //! Seed taxonomy: Operation -> Domain (a Branch) -> Technique, as a DAG.
-//! `validate` ports every check in `taxonomy/check_taxonomy.py`.
+//! `validate` checks structure; `validate_seed` adds the rest of `taxonomy/check_taxonomy.py`.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -78,8 +78,7 @@ pub struct BranchTechnique {
     pub extra: Map<String, Value>,
 }
 
-// ponytail: the seed-pinned constants below mirror check_taxonomy.py verbatim; they will
-// reject a user-edited taxonomy, so Plan 6 (saving) must relax them.
+// Seed-pinned constants, mirrored verbatim from check_taxonomy.py; used only by `validate_seed`.
 const NAMES_41: [&str; 41] = [
     "Chiaroscuro",
     "Pop-out",
@@ -175,7 +174,8 @@ impl Taxonomy {
         serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
     }
 
-    /// Same rules as `taxonomy/check_taxonomy.py`; collects every problem instead of stopping.
+    /// Structural integrity only: unique ids, references resolve, every technique has a
+    /// branch, no duplicate links. Safe for user-edited taxonomies (Task 7).
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errs = Vec::new();
         let ops: HashMap<&str, &Operation> =
@@ -227,6 +227,49 @@ impl Taxonomy {
                 ));
             }
         }
+
+        // references resolve
+        for b in &self.branches {
+            if !ops.contains_key(b.operation_id.as_str()) {
+                errs.push(format!("{}: unknown operationId {}", b.id, b.operation_id));
+            }
+            if !doms.contains_key(b.domain_id.as_str()) {
+                errs.push(format!("{}: unknown domainId {}", b.id, b.domain_id));
+            }
+        }
+        for l in links {
+            let at = format!("link {} -> {}", l.branch_id, l.technique_id);
+            if !brs.contains_key(l.branch_id.as_str()) {
+                errs.push(format!("{at}: unknown branchId {}", l.branch_id));
+            }
+            if !techs.contains_key(l.technique_id.as_str()) {
+                errs.push(format!("{at}: unknown techniqueId {}", l.technique_id));
+            }
+        }
+
+        // coverage
+        let parented: HashSet<&str> = links.iter().map(|l| l.technique_id.as_str()).collect();
+        for t in &self.techniques {
+            if !parented.contains(t.id.as_str()) {
+                errs.push(format!("{}: technique without a branch", t.id));
+            }
+        }
+        if errs.is_empty() { Ok(()) } else { Err(errs) }
+    }
+
+    /// `validate` plus the seed-pinned rules of `taxonomy/check_taxonomy.py`. Only for the
+    /// shipped seed; a user's taxonomy may legitimately break these.
+    pub fn validate_seed(&self) -> Result<(), Vec<String>> {
+        let mut errs = self.validate().err().unwrap_or_default();
+        let ops: HashMap<&str, &Operation> =
+            self.operations.iter().map(|o| (o.id.as_str(), o)).collect();
+        let doms: HashMap<&str, &Domain> =
+            self.domains.iter().map(|d| (d.id.as_str(), d)).collect();
+        let brs: HashMap<&str, &Branch> =
+            self.branches.iter().map(|b| (b.id.as_str(), b)).collect();
+        let techs: HashMap<&str, &Technique> =
+            self.techniques.iter().map(|t| (t.id.as_str(), t)).collect();
+        let links = &self.branch_techniques;
 
         // names
         let op_names: Vec<&str> = self.operations.iter().map(|o| o.name.as_str()).collect();
@@ -283,14 +326,8 @@ impl Taxonomy {
             }
         }
 
-        // references resolve, branches allowed
+        // branches allowed
         for b in &self.branches {
-            if !ops.contains_key(b.operation_id.as_str()) {
-                errs.push(format!("{}: unknown operationId {}", b.id, b.operation_id));
-            }
-            if !doms.contains_key(b.domain_id.as_str()) {
-                errs.push(format!("{}: unknown domainId {}", b.id, b.domain_id));
-            }
             let allowed = ALLOWED.iter().find(|(op, _)| *op == b.operation_id);
             if !allowed.is_some_and(|(_, d)| d.contains(&b.domain_id.as_str())) {
                 errs.push(format!("{}: domain not allowed: {}", b.id, b.domain_id));
@@ -298,12 +335,6 @@ impl Taxonomy {
         }
         for l in links {
             let at = format!("link {} -> {}", l.branch_id, l.technique_id);
-            if !brs.contains_key(l.branch_id.as_str()) {
-                errs.push(format!("{at}: unknown branchId {}", l.branch_id));
-            }
-            if !techs.contains_key(l.technique_id.as_str()) {
-                errs.push(format!("{at}: unknown techniqueId {}", l.technique_id));
-            }
             if l.source != "observed" && l.source != "drafted" {
                 errs.push(format!(
                     "{at}: source must be observed or drafted, got {:?}",
@@ -316,19 +347,14 @@ impl Taxonomy {
         }
 
         // coverage
-        let parented: HashSet<&str> = links.iter().map(|l| l.technique_id.as_str()).collect();
-        for t in &self.techniques {
-            if !parented.contains(t.id.as_str()) {
-                errs.push(format!("{}: technique without a branch", t.id));
-            }
-        }
         let used: HashSet<&str> = links.iter().map(|l| l.branch_id.as_str()).collect();
         for b in &self.branches {
             if !used.contains(b.id.as_str()) {
                 errs.push(format!("{}: empty branch", b.id));
             }
         }
-        // SPEC §6.3: a technique sits under at most one domain per operation.
+        // Seed policy only: the seed keeps domain prompts at zero (one branch per operation
+        // per technique). `validate` allows more, and the tag picker asks (SPEC §6.3).
         let mut op_tech: HashMap<(&str, &str), usize> = HashMap::new();
         for l in links {
             if let Some(b) = brs.get(l.branch_id.as_str()) {
@@ -445,7 +471,7 @@ mod tests {
     #[test]
     fn seed_validates() {
         let t = seed();
-        assert_eq!(t.validate(), Ok(()));
+        assert_eq!(t.validate_seed(), Ok(()));
         assert_eq!(t.techniques.len(), 48);
         assert_eq!(t.branches.len(), 18);
         assert_eq!(t.branch_techniques.len(), 55);
@@ -498,13 +524,15 @@ mod tests {
     fn branches_for_dag() {
         let mut t = seed();
         assert!(!t.branches_for("differentiate", "chiaroscuro").is_empty());
-        // The seed never puts a technique under two branches of one operation
-        // (validate forbids it), so build that case in memory.
+        // The seed has no technique under two branches of one operation, so build one.
+        // SPEC §6.3 allows it: the structural validator must accept it.
         assert!(t.branches.iter().any(|b| b.id == "differentiate.space"));
         let mut link = t.branch_techniques[0].clone();
         link.branch_id = "differentiate.space".into();
         link.technique_id = "chiaroscuro".into();
+        link.source = "drafted".into();
         t.branch_techniques.push(link);
+        assert_eq!(t.validate(), Ok(()));
         let mut ids: Vec<&str> = t
             .branches_for("differentiate", "chiaroscuro")
             .iter()
@@ -512,5 +540,27 @@ mod tests {
             .collect();
         ids.sort();
         assert_eq!(ids, ["differentiate.feature", "differentiate.space"]);
+    }
+
+    #[test]
+    fn validate_is_structural_only() {
+        // User edits that break seed-pinned rules must still pass `validate`.
+        let mut t = seed();
+        t.operations[0].color = Some("#ff0000".into());
+        t.operations[0].name = "Stand apart".into();
+        t.techniques[0].name = "Renamed".into();
+        t.techniques[0].examples.push(Value::from("img-1"));
+        assert_eq!(t.validate(), Ok(()));
+        assert!(t.validate_seed().is_err());
+    }
+
+    #[test]
+    fn bundled_seed_matches_repo() {
+        let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../taxonomy/taxonomy.json");
+        let read = |p: &Path| std::fs::read_to_string(p).unwrap().replace("\r\n", "\n");
+        assert!(
+            read(&seed_path()) == read(&repo),
+            "resources/taxonomy.json drifted from taxonomy/taxonomy.json; copy it again"
+        );
     }
 }
