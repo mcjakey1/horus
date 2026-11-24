@@ -1409,6 +1409,12 @@ mod tests {
         );
         // Hidden, not dropped: the next save (an import) keeps the entry.
         e.import("p3_red.png").unwrap();
+        // Still hidden after an edit's reindex (ruling 8), and never sent in a Change.
+        let rel = related(e.handle(), good.clone()).unwrap();
+        assert!(rel.iter().all(|x| x.id != "bad"), "{rel:?}");
+        let patch = serde_json::from_value(serde_json::json!({"note": "n"})).unwrap();
+        let c = set_field(e.handle(), vec!["bad".into()], patch).unwrap();
+        assert!(c.references.is_empty(), "{c:?}");
         let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         let refs = saved["references"].as_array().unwrap();
         assert_eq!(refs.len(), 3);
@@ -1507,6 +1513,20 @@ mod tests {
         saved(e)["references"][0]["tags"]
             .as_array()
             .map_or(0, Vec::len)
+    }
+
+    /// Waits for the saver to take the pending save, without touching library.json meanwhile:
+    /// on Windows an open read handle makes the save's rename fail.
+    fn wait_saved(e: &Env) {
+        let state = st(e);
+        poll("the debounced save never ran", || {
+            lock(&state.open)
+                .as_ref()
+                .unwrap()
+                .debounce
+                .deadline()
+                .is_none()
+        });
     }
 
     fn poll(what: &str, mut ok: impl FnMut() -> bool) {
@@ -1791,14 +1811,29 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 9);
     }
 
+    /// Ruling 5: an id both changed and removed is sent as removed only.
+    #[test]
+    fn removed_wins_in_change() {
+        let (e, id) = with_small();
+        let state = st(&e);
+        let open = lock(&state.open);
+        let touched = Touched {
+            ref_ids: vec![id.clone()],
+            removed_ref_ids: vec![id.clone()],
+            taxonomy: false,
+        };
+        let c = change(open.as_ref().unwrap(), &touched, None);
+        assert!(c.references.is_empty());
+        assert_eq!(c.removed, [id]);
+    }
+
     #[test]
     fn debounced_save_lands() {
         let (e, id) = with_small();
         add_tags(e.handle(), id, vec![chiaroscuro()]).unwrap();
         assert_eq!(saved_tag_count(&e), 0, "not saved at once");
-        poll("the debounced save never landed", || {
-            saved_tag_count(&e) == 1
-        });
+        wait_saved(&e);
+        assert_eq!(saved_tag_count(&e), 1);
     }
 
     /// Ruling 1: after a failed flush the saver waits for the next edit; it never spins.
@@ -1853,6 +1888,7 @@ mod tests {
             reason.starts_with("Could not read or write the library"),
             "{reason}"
         );
+        eprintln!("close reason: {reason}");
         assert_eq!(retry_save(e.handle()), Err(reason));
         // "Quit without saving" sets this flag; its app.exit(0) is not run in a test.
         st(&e).skip_close_flush.store(true, Ordering::SeqCst);
@@ -1929,9 +1965,10 @@ mod tests {
             Ok((Edit::Batch(vec![untagged, fake]), None))
         });
         assert_eq!(sent.unwrap_err(), "TaxonomyReadOnly");
-        // Tagging still works, and taxonomy.json is never written.
+        // Tagging still works, and taxonomy.json is never written. A flush saves the taxonomy
+        // before the library, so once the tag is on disk any taxonomy write would be too.
         add_tags(e.handle(), id, vec![chiaroscuro()]).unwrap();
-        std::thread::sleep(Duration::from_millis(1000));
+        wait_saved(&e);
         assert_eq!(saved_tag_count(&e), 1);
         assert_eq!(fs::read(&tax_path).unwrap(), b"{");
     }
@@ -1993,6 +2030,7 @@ mod tests {
         fs::create_dir(Path::new(&e.lib).join("library.json.tmp")).unwrap();
         add_tags(e.handle(), id, vec![chiaroscuro()]).unwrap();
         let err = open_library(e.handle(), b).unwrap_err();
+        eprintln!("switch refusal: {err}");
         assert!(
             err.starts_with("Couldn't save the current library: "),
             "{err}"
