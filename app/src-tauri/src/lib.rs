@@ -14,7 +14,6 @@ use tauri::path::BaseDirectory;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let config_dir = app.path().app_config_dir()?;
@@ -40,4 +39,26 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn csp_is_strict_except_styles() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let csp = conf["app"]["security"]["csp"]
+            .as_str()
+            .expect("csp is a string");
+        let directive = |name: &str| {
+            csp.split(';')
+                .map(str::trim)
+                .find(|d| d.split_whitespace().next() == Some(name))
+                .unwrap_or_else(|| panic!("no {name}"))
+                .to_string()
+        };
+        assert!(!csp.contains("unsafe-eval"));
+        assert!(!directive("script-src").contains("unsafe-inline"));
+        assert_eq!(directive("default-src"), "default-src 'self'");
+    }
 }
