@@ -1,0 +1,768 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-24T00:00:00Z",
+  "title": "Design System: Horus",
+  "extensions": {
+    "colorMeta": {
+      "shell": {
+        "role": "neutral",
+        "displayName": "Bench Shell",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "shell-dark": {
+        "role": "neutral",
+        "displayName": "Bench Shell (dark)",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "panel-dark": {
+        "role": "neutral",
+        "displayName": "Panel (dark)",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "hairline-dark": {
+        "role": "neutral",
+        "displayName": "Hairline (dark)",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "hairline-strong": {
+        "role": "neutral",
+        "displayName": "Strong Hairline",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "hairline-strong-dark": {
+        "role": "neutral",
+        "displayName": "Strong Hairline (dark)",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "ink-dark": {
+        "role": "neutral",
+        "displayName": "Ink (dark)",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "Secondary Ink",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "ink-secondary-dark": {
+        "role": "neutral",
+        "displayName": "Secondary Ink (dark)",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "ink-tertiary": {
+        "role": "neutral",
+        "displayName": "Tertiary Ink",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "ink-tertiary-dark": {
+        "role": "neutral",
+        "displayName": "Tertiary Ink (dark)",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "grey-card-n5": {
+        "role": "neutral",
+        "displayName": "Grey Card N5",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "card-ink": {
+        "role": "neutral",
+        "displayName": "Card Ink",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      },
+      "differentiate-amber": {
+        "role": "primary",
+        "displayName": "Differentiate Amber",
+        "tonalRamp": [
+          "#3D2A00",
+          "#5E4100",
+          "#7D5600",
+          "#9C6B00",
+          "#B87F00",
+          "#E0A42A",
+          "#E8B54A",
+          "#F6E3B8"
+        ]
+      },
+      "differentiate-amber-text": {
+        "role": "primary",
+        "displayName": "Differentiate Amber Text",
+        "tonalRamp": [
+          "#3D2A00",
+          "#5E4100",
+          "#7D5600",
+          "#9C6B00",
+          "#B87F00",
+          "#E0A42A",
+          "#E8B54A",
+          "#F6E3B8"
+        ]
+      },
+      "differentiate-amber-on": {
+        "role": "primary",
+        "displayName": "Differentiate Amber On",
+        "tonalRamp": [
+          "#3D2A00",
+          "#5E4100",
+          "#7D5600",
+          "#9C6B00",
+          "#B87F00",
+          "#E0A42A",
+          "#E8B54A",
+          "#F6E3B8"
+        ]
+      },
+      "differentiate-amber-dark": {
+        "role": "primary",
+        "displayName": "Differentiate Amber (dark)",
+        "tonalRamp": [
+          "#3D2A00",
+          "#5E4100",
+          "#7D5600",
+          "#9C6B00",
+          "#B87F00",
+          "#E0A42A",
+          "#E8B54A",
+          "#F6E3B8"
+        ]
+      },
+      "differentiate-amber-text-dark": {
+        "role": "primary",
+        "displayName": "Differentiate Amber Text (dark)",
+        "tonalRamp": [
+          "#3D2A00",
+          "#5E4100",
+          "#7D5600",
+          "#9C6B00",
+          "#B87F00",
+          "#E0A42A",
+          "#E8B54A",
+          "#F6E3B8"
+        ]
+      },
+      "group-green": {
+        "role": "primary",
+        "displayName": "Group Green",
+        "tonalRamp": [
+          "#0B3522",
+          "#104F33",
+          "#156B43",
+          "#1A7D50",
+          "#1E8E5A",
+          "#3DB07A",
+          "#5CC592",
+          "#CBEBDA"
+        ]
+      },
+      "group-green-text": {
+        "role": "primary",
+        "displayName": "Group Green Text",
+        "tonalRamp": [
+          "#0B3522",
+          "#104F33",
+          "#156B43",
+          "#1A7D50",
+          "#1E8E5A",
+          "#3DB07A",
+          "#5CC592",
+          "#CBEBDA"
+        ]
+      },
+      "group-green-on": {
+        "role": "primary",
+        "displayName": "Group Green On",
+        "tonalRamp": [
+          "#0B3522",
+          "#104F33",
+          "#156B43",
+          "#1A7D50",
+          "#1E8E5A",
+          "#3DB07A",
+          "#5CC592",
+          "#CBEBDA"
+        ]
+      },
+      "group-green-dark": {
+        "role": "primary",
+        "displayName": "Group Green (dark)",
+        "tonalRamp": [
+          "#0B3522",
+          "#104F33",
+          "#156B43",
+          "#1A7D50",
+          "#1E8E5A",
+          "#3DB07A",
+          "#5CC592",
+          "#CBEBDA"
+        ]
+      },
+      "group-green-text-dark": {
+        "role": "primary",
+        "displayName": "Group Green Text (dark)",
+        "tonalRamp": [
+          "#0B3522",
+          "#104F33",
+          "#156B43",
+          "#1A7D50",
+          "#1E8E5A",
+          "#3DB07A",
+          "#5CC592",
+          "#CBEBDA"
+        ]
+      },
+      "sequence-blue": {
+        "role": "primary",
+        "displayName": "Sequence Blue",
+        "tonalRamp": [
+          "#0F2752",
+          "#163B7D",
+          "#1D4FA8",
+          "#2563D0",
+          "#5B8DEB",
+          "#8AAEF2",
+          "#B6CCF6",
+          "#E2EAFB"
+        ]
+      },
+      "sequence-blue-text": {
+        "role": "primary",
+        "displayName": "Sequence Blue Text",
+        "tonalRamp": [
+          "#0F2752",
+          "#163B7D",
+          "#1D4FA8",
+          "#2563D0",
+          "#5B8DEB",
+          "#8AAEF2",
+          "#B6CCF6",
+          "#E2EAFB"
+        ]
+      },
+      "sequence-blue-on": {
+        "role": "primary",
+        "displayName": "Sequence Blue On",
+        "tonalRamp": [
+          "#0F2752",
+          "#163B7D",
+          "#1D4FA8",
+          "#2563D0",
+          "#5B8DEB",
+          "#8AAEF2",
+          "#B6CCF6",
+          "#E2EAFB"
+        ]
+      },
+      "sequence-blue-dark": {
+        "role": "primary",
+        "displayName": "Sequence Blue (dark)",
+        "tonalRamp": [
+          "#0F2752",
+          "#163B7D",
+          "#1D4FA8",
+          "#2563D0",
+          "#5B8DEB",
+          "#8AAEF2",
+          "#B6CCF6",
+          "#E2EAFB"
+        ]
+      },
+      "sequence-blue-text-dark": {
+        "role": "primary",
+        "displayName": "Sequence Blue Text (dark)",
+        "tonalRamp": [
+          "#0F2752",
+          "#163B7D",
+          "#1D4FA8",
+          "#2563D0",
+          "#5B8DEB",
+          "#8AAEF2",
+          "#B6CCF6",
+          "#E2EAFB"
+        ]
+      },
+      "infer-vermilion": {
+        "role": "primary",
+        "displayName": "Infer Vermilion",
+        "tonalRamp": [
+          "#4A160B",
+          "#741F10",
+          "#A8341C",
+          "#D2462A",
+          "#EC6A4E",
+          "#F28A72",
+          "#F7B6A6",
+          "#FCE3DC"
+        ]
+      },
+      "infer-vermilion-text": {
+        "role": "primary",
+        "displayName": "Infer Vermilion Text",
+        "tonalRamp": [
+          "#4A160B",
+          "#741F10",
+          "#A8341C",
+          "#D2462A",
+          "#EC6A4E",
+          "#F28A72",
+          "#F7B6A6",
+          "#FCE3DC"
+        ]
+      },
+      "infer-vermilion-on": {
+        "role": "primary",
+        "displayName": "Infer Vermilion On",
+        "tonalRamp": [
+          "#4A160B",
+          "#741F10",
+          "#A8341C",
+          "#D2462A",
+          "#EC6A4E",
+          "#F28A72",
+          "#F7B6A6",
+          "#FCE3DC"
+        ]
+      },
+      "infer-vermilion-dark": {
+        "role": "primary",
+        "displayName": "Infer Vermilion (dark)",
+        "tonalRamp": [
+          "#4A160B",
+          "#741F10",
+          "#A8341C",
+          "#D2462A",
+          "#EC6A4E",
+          "#F28A72",
+          "#F7B6A6",
+          "#FCE3DC"
+        ]
+      },
+      "infer-vermilion-text-dark": {
+        "role": "primary",
+        "displayName": "Infer Vermilion Text (dark)",
+        "tonalRamp": [
+          "#4A160B",
+          "#741F10",
+          "#A8341C",
+          "#D2462A",
+          "#EC6A4E",
+          "#F28A72",
+          "#F7B6A6",
+          "#FCE3DC"
+        ]
+      },
+      "operation-on-dark": {
+        "role": "neutral",
+        "displayName": "Badge Numeral (dark)",
+        "tonalRamp": [
+          "#151515",
+          "#2E2E2E",
+          "#545452",
+          "#6E6E6C",
+          "#777776",
+          "#9A9A98",
+          "#D9D9D7",
+          "#F3F3F2"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "Horus wordmark in the top bar only."
+      },
+      "record": {
+        "displayName": "Record",
+        "purpose": "Record header values (operation, technique, italic reference)."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Technique name on a callout card."
+      },
+      "item": {
+        "displayName": "Item",
+        "purpose": "Reference titles in rows, links and search results."
+      },
+      "note": {
+        "displayName": "Note",
+        "purpose": "Italic artist 'why' note on a drawn link."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Interface text, tabs and controls."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Paths, sublines, pane notes, status bar."
+      },
+      "readout": {
+        "displayName": "Readout",
+        "purpose": "Reference id and mono record values."
+      },
+      "score": {
+        "displayName": "Score",
+        "purpose": "Correlation scores and counts, tabular."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Tag states and the pinned marker."
+      }
+    },
+    "shadows": [
+      {
+        "name": "plate-lift",
+        "value": "0 1px 2px rgb(0 0 0 / .25), 0 14px 34px rgb(0 0 0 / .22)",
+        "purpose": "Specimen plate resting on the grey card."
+      },
+      {
+        "name": "menu-lift",
+        "value": "0 12px 28px rgb(0 0 0 / .14)",
+        "purpose": "Search results dropdown."
+      },
+      {
+        "name": "badge-halo",
+        "value": "0 0 0 2px #777776",
+        "purpose": "Separates a numbered badge from the art."
+      },
+      {
+        "name": "hot-ring",
+        "value": "0 0 0 1px rgb(0 0 0 / .35)",
+        "purpose": "Keeps an operation-coloured outline legible over any image (.45 on thumbnail regions)."
+      },
+      {
+        "name": "tab-indicator",
+        "value": "inset 0 -2px 0 var(--ink)",
+        "purpose": "Active view and margin tab."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(.16, 1, .3, 1)",
+        "purpose": "The single expo-out curve for every transition."
+      },
+      {
+        "name": "hover",
+        "value": "0.2s",
+        "purpose": "Border and colour changes on boxes, cards and leaders."
+      },
+      {
+        "name": "record-fill",
+        "value": "0.25s, staggered 90ms per cell",
+        "purpose": "Record header values fade up 4px when the path changes."
+      },
+      {
+        "name": "specimen-swap",
+        "value": "0.35s, scale .985",
+        "purpose": "Re-centring on another reference."
+      },
+      {
+        "name": "leader-draw",
+        "value": "0.55s stroke-dashoffset",
+        "purpose": "Curved leader draws from badge to callout on hover or pin (desktop only)."
+      },
+      {
+        "name": "row-flash",
+        "value": "0.6s",
+        "purpose": "12% Sequence Blue flash on a newly ranked row, fading out."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0s",
+        "purpose": "prefers-reduced-motion: reduce sets every transition and animation to 0s."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "laptop",
+        "value": "1100px",
+        "purpose": "Margin 300px, cell padding 14px, record values step down."
+      },
+      {
+        "name": "mobile",
+        "value": "760px",
+        "purpose": "Single column, 2x2 record header, leader lines hidden."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "View tabs",
+      "kind": "nav",
+      "refersTo": "view-tab",
+      "description": "Full-height text tabs in the top bar; the active tab gets an inset 2px ink underline.",
+      "html": "<nav class=\"ds-root ds-tabs\"><button class=\"ds-tab is-on\">Reference</button><button class=\"ds-tab\">Tree</button><button class=\"ds-tab\" disabled>Inbox <span class=\"ds-count\">2</span></button></nav>",
+      "css": ".ds-root{--shell:#F3F3F2;--panel:#FAFAF9;--line:#D9D9D7;--line-2:#C4C4C2;--ink:#161616;--ink-2:#545452;--ink-3:#6E6E6C;--card:#777776;--card-ink:#F4F4F3;--focus:#2563D0;--serif:'Source Serif 4','Iowan Old Style',Georgia,serif;--mono:'Red Hat Mono',ui-monospace,'Cascadia Mono',monospace;--sans:system-ui,-apple-system,'Segoe UI Variable Text','Segoe UI','Helvetica Neue',sans-serif;--ease:cubic-bezier(.16,1,.3,1);}.ds-tabs{display:flex;gap:2px;height:52px;background:var(--panel);border-bottom:1px solid var(--line);padding:0 20px}.ds-tab{padding:0 12px;height:100%;background:none;border:0;cursor:pointer;font:500 14px/1.45 var(--sans);color:var(--ink-2);box-shadow:inset 0 -2px 0 transparent}.ds-tab:hover{color:var(--ink)}.ds-tab.is-on{color:var(--ink);box-shadow:inset 0 -2px 0 var(--ink)}.ds-tab:disabled{color:var(--ink-3);cursor:default}.ds-tab:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-count{font:500 12px var(--mono);margin-left:4px}"
+    },
+    {
+      "name": "Search field",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "Idea search: 32px tall, strong hairline, 2px radius, shell fill.",
+      "html": "<div class=\"ds-root\"><input class=\"ds-search\" type=\"search\" placeholder=\"Search by idea\"></div>",
+      "css": ".ds-root{--shell:#F3F3F2;--panel:#FAFAF9;--line:#D9D9D7;--line-2:#C4C4C2;--ink:#161616;--ink-2:#545452;--ink-3:#6E6E6C;--card:#777776;--card-ink:#F4F4F3;--focus:#2563D0;--serif:'Source Serif 4','Iowan Old Style',Georgia,serif;--mono:'Red Hat Mono',ui-monospace,'Cascadia Mono',monospace;--sans:system-ui,-apple-system,'Segoe UI Variable Text','Segoe UI','Helvetica Neue',sans-serif;--ease:cubic-bezier(.16,1,.3,1);}.ds-search{width:320px;height:32px;padding:0 12px;border:1px solid var(--line-2);border-radius:2px;background:var(--shell);color:var(--ink);font:14px var(--sans)}.ds-search::placeholder{color:var(--ink-3)}.ds-search:focus-visible{outline:2px solid var(--focus);outline-offset:2px}"
+    },
+    {
+      "name": "Record header",
+      "kind": "nav",
+      "refersTo": "record-cell",
+      "description": "The growing breadcrumb: four hairline-divided cells, numbered mono keys over serif values, the operation value in its -text ink.",
+      "html": "<section class=\"ds-root ds-record\"><div class=\"ds-cell\"><span class=\"ds-k\">01 Operation</span><span class=\"ds-v ds-serif\" style=\"color:#7D5600\">Differentiate</span></div><div class=\"ds-cell\"><span class=\"ds-k\">02 Domain</span><span class=\"ds-v\">Feature</span></div><div class=\"ds-cell\"><span class=\"ds-k\">03 Technique</span><span class=\"ds-v ds-serif\">Silhouette</span></div><div class=\"ds-cell\"><span class=\"ds-k\">04 Reference</span><span class=\"ds-v ds-serif\" style=\"font-style:italic\">Figure in Fog</span></div></section>",
+      "css": ".ds-root{--shell:#F3F3F2;--panel:#FAFAF9;--line:#D9D9D7;--line-2:#C4C4C2;--ink:#161616;--ink-2:#545452;--ink-3:#6E6E6C;--card:#777776;--card-ink:#F4F4F3;--focus:#2563D0;--serif:'Source Serif 4','Iowan Old Style',Georgia,serif;--mono:'Red Hat Mono',ui-monospace,'Cascadia Mono',monospace;--sans:system-ui,-apple-system,'Segoe UI Variable Text','Segoe UI','Helvetica Neue',sans-serif;--ease:cubic-bezier(.16,1,.3,1);}.ds-record{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.6fr);min-height:68px;background:var(--panel);border-bottom:1px solid var(--line);color:var(--ink)}.ds-cell{display:flex;flex-direction:column;justify-content:center;gap:3px;padding:10px 20px;border-left:1px solid var(--line)}.ds-cell:first-child{border-left:0}.ds-k{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}.ds-v{font:18px/1.2 var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .25s var(--ease),transform .25s var(--ease)}.ds-v.ds-serif{font:500 21px/1.2 var(--serif)}"
+    },
+    {
+      "name": "Numbered callout badge",
+      "kind": "chip",
+      "refersTo": "callout-badge-differentiate",
+      "description": "26px circle in operation ink with an -on numeral and a 2px grey-card halo.",
+      "html": "<div class=\"ds-root ds-card-demo\"><span class=\"ds-num\" style=\"--c:#B87F00;--on:#161616\">1</span><span class=\"ds-num\" style=\"--c:#1E8E5A;--on:#161616\">2</span><span class=\"ds-num\" style=\"--c:#2563D0;--on:#FFFFFF\">3</span><span class=\"ds-num\" style=\"--c:#D2462A;--on:#FFFFFF\">4</span></div>",
+      "css": ".ds-root{--shell:#F3F3F2;--panel:#FAFAF9;--line:#D9D9D7;--line-2:#C4C4C2;--ink:#161616;--ink-2:#545452;--ink-3:#6E6E6C;--card:#777776;--card-ink:#F4F4F3;--focus:#2563D0;--serif:'Source Serif 4','Iowan Old Style',Georgia,serif;--mono:'Red Hat Mono',ui-monospace,'Cascadia Mono',monospace;--sans:system-ui,-apple-system,'Segoe UI Variable Text','Segoe UI','Helvetica Neue',sans-serif;--ease:cubic-bezier(.16,1,.3,1);}.ds-card-demo{display:flex;gap:14px;padding:20px;background:var(--card)}.ds-num{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:500 13px var(--mono);color:var(--on);background:var(--c);box-shadow:0 0 0 2px var(--card)}"
+    },
+    {
+      "name": "Region boxes",
+      "kind": "custom",
+      "refersTo": "specimen-card",
+      "description": "Tag state in the stroke: solid is full, dashed is partial, dotted is region. The hot box takes its operation ink and a dark 1px ring.",
+      "html": "<div class=\"ds-root ds-lab\"><div class=\"ds-box\">full</div><div class=\"ds-box\" data-state=\"partial\">partial</div><div class=\"ds-box\" data-state=\"region\">region</div><div class=\"ds-box is-hot\" style=\"--hot:#B87F00\">hot</div></div>",
+      "css": ".ds-root{--shell:#F3F3F2;--panel:#FAFAF9;--line:#D9D9D7;--line-2:#C4C4C2;--ink:#161616;--ink-2:#545452;--ink-3:#6E6E6C;--card:#777776;--card-ink:#F4F4F3;--focus:#2563D0;--serif:'Source Serif 4','Iowan Old Style',Georgia,serif;--mono:'Red Hat Mono',ui-monospace,'Cascadia Mono',monospace;--sans:system-ui,-apple-system,'Segoe UI Variable Text','Segoe UI','Helvetica Neue',sans-serif;--ease:cubic-bezier(.16,1,.3,1);}.ds-lab{display:flex;gap:16px;padding:24px;background:var(--card)}.ds-box{width:72px;height:72px;display:grid;place-items:end start;padding:4px;font:500 11px var(--mono);color:var(--card-ink);border:1.5px solid color-mix(in srgb,var(--card-ink) 70%,transparent);transition:border-color .2s,box-shadow .2s}.ds-box[data-state=partial]{border-style:dashed}.ds-box[data-state=region]{border-style:dotted;border-width:2px}.ds-box.is-hot,.ds-box:hover{border-color:var(--hot,#B87F00);box-shadow:0 0 0 1px rgb(0 0 0/.35)}"
+    },
+    {
+      "name": "Callout card",
+      "kind": "card",
+      "refersTo": "callout-card",
+      "description": "Square shell-filled card: badge column, serif technique title with mono state, operation path, related thumbnails. Hot border in operation ink.",
+      "html": "<article class=\"ds-root ds-call\" style=\"--hot:#B87F00;--c:#B87F00;--on:#161616;--op-text:#7D5600\"><span class=\"ds-n\">1</span><div><h3 class=\"ds-h\">Silhouette <span class=\"ds-state\">full tag</span></h3><div class=\"ds-path\"><b>Differentiate</b> · Feature · Stand out</div><div class=\"ds-thumbs\"><button class=\"ds-thumb\"><span class=\"ds-t\"></span><span class=\"ds-sc\">0.23</span></button><button class=\"ds-thumb\"><span class=\"ds-t\"></span><span class=\"ds-sc\">0.19</span></button></div></div></article>",
+      "css": ".ds-root{--shell:#F3F3F2;--panel:#FAFAF9;--line:#D9D9D7;--line-2:#C4C4C2;--ink:#161616;--ink-2:#545452;--ink-3:#6E6E6C;--card:#777776;--card-ink:#F4F4F3;--focus:#2563D0;--serif:'Source Serif 4','Iowan Old Style',Georgia,serif;--mono:'Red Hat Mono',ui-monospace,'Cascadia Mono',monospace;--sans:system-ui,-apple-system,'Segoe UI Variable Text','Segoe UI','Helvetica Neue',sans-serif;--ease:cubic-bezier(.16,1,.3,1);}.ds-call{display:grid;grid-template-columns:26px 1fr;gap:12px;padding:12px;width:286px;border:1px solid var(--line);background:var(--shell);color:var(--ink);font:14px/1.45 var(--sans);transition:border-color .2s}.ds-call:hover{border-color:var(--hot)}.ds-n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:500 13px var(--mono);background:var(--c);color:var(--on)}.ds-h{margin:0;font:500 17px/1.25 var(--serif);display:flex;align-items:baseline;gap:8px}.ds-state{font:500 11px var(--mono);letter-spacing:.03em;color:var(--ink-2)}.ds-path{font-size:12px;color:var(--ink-2);margin-top:2px}.ds-path b{color:var(--op-text);font-weight:600}.ds-thumbs{display:flex;gap:8px;margin-top:10px}.ds-thumb{padding:0;background:none;border:0;cursor:pointer;text-align:left}.ds-t{display:block;width:64px;height:64px;background:var(--card);box-shadow:inset 0 0 0 1px var(--line-2)}.ds-thumb:hover .ds-t,.ds-thumb:focus-visible .ds-t{outline:2px solid var(--hot);outline-offset:1px}.ds-sc{display:block;font:500 12px var(--mono);color:var(--ink-2);margin-top:3px}"
+    },
+    {
+      "name": "Ranked row",
+      "kind": "card",
+      "refersTo": "related-thumbnail",
+      "description": "Hairline-separated row: 52px thumb on grey card, serif title, caption subline, mono score.",
+      "html": "<button class=\"ds-root ds-row\"><span class=\"ds-rt\"></span><span><b>Window at Night</b><small>Silhouette · Differentiate</small></span><span class=\"ds-rsc\">0.19</span></button>",
+      "css": ".ds-root{--shell:#F3F3F2;--panel:#FAFAF9;--line:#D9D9D7;--line-2:#C4C4C2;--ink:#161616;--ink-2:#545452;--ink-3:#6E6E6C;--card:#777776;--card-ink:#F4F4F3;--focus:#2563D0;--serif:'Source Serif 4','Iowan Old Style',Georgia,serif;--mono:'Red Hat Mono',ui-monospace,'Cascadia Mono',monospace;--sans:system-ui,-apple-system,'Segoe UI Variable Text','Segoe UI','Helvetica Neue',sans-serif;--ease:cubic-bezier(.16,1,.3,1);}.ds-row{display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:center;width:300px;padding:8px 4px;background:var(--panel);border:0;border-bottom:1px solid var(--line);text-align:left;cursor:pointer;color:var(--ink);font:14px/1.45 var(--sans)}.ds-rt{width:52px;height:52px;background:var(--card)}.ds-row b{display:block;font:500 15px/1.25 var(--serif)}.ds-row small{display:block;font-size:12px;color:var(--ink-2)}.ds-rsc{font:500 14px var(--mono);font-variant-numeric:tabular-nums}.ds-row:hover b{text-decoration:underline;text-underline-offset:3px}.ds-row:focus-visible{outline:2px solid var(--focus);outline-offset:2px}"
+    },
+    {
+      "name": "Status bar",
+      "kind": "nav",
+      "refersTo": "status-bar",
+      "description": "Panel strip: mono library count, value toggle, Find similar state, separated by strong-hairline ticks.",
+      "html": "<footer class=\"ds-root ds-status\"><span class=\"ds-mono\">11 references</span><span class=\"ds-sep\"></span><label class=\"ds-toggle\"><input type=\"checkbox\"> Value view</label><span class=\"ds-sep\"></span><span class=\"ds-muted\">Find similar: off</span></footer>",
+      "css": ".ds-root{--shell:#F3F3F2;--panel:#FAFAF9;--line:#D9D9D7;--line-2:#C4C4C2;--ink:#161616;--ink-2:#545452;--ink-3:#6E6E6C;--card:#777776;--card-ink:#F4F4F3;--focus:#2563D0;--serif:'Source Serif 4','Iowan Old Style',Georgia,serif;--mono:'Red Hat Mono',ui-monospace,'Cascadia Mono',monospace;--sans:system-ui,-apple-system,'Segoe UI Variable Text','Segoe UI','Helvetica Neue',sans-serif;--ease:cubic-bezier(.16,1,.3,1);}.ds-status{display:flex;align-items:center;gap:14px;height:36px;padding:0 20px;border-top:1px solid var(--line);background:var(--panel);color:var(--ink);font:13px var(--sans)}.ds-mono{font-family:var(--mono);font-variant-numeric:tabular-nums}.ds-sep{width:1px;height:16px;background:var(--line-2)}.ds-toggle{display:flex;align-items:center;gap:6px;cursor:pointer}.ds-toggle input{accent-color:var(--ink)}.ds-toggle input:focus-visible{outline:2px solid var(--focus);outline-offset:2px}.ds-muted{color:var(--ink-2)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Conservation Study",
+    "overview": "Every reference is examined the way a conservator examines a painting. The image sits on a constant mid-grey card, numbered callouts mark where each technique lives, and a record header above it reads like a catalogue entry: operation, domain, technique, reference. The chrome around the card is a true-neutral desk (no warm or cool cast) built from hairline rules and flat panels, so nothing in the interface tints the art.\n\nThe system is dense but quiet. Colour belongs only to the four operations, and it appears only where an operation is named: a callout's number, its region box when hot, its leader line, and the operation's name in the path. Everything else is ink on paper. A serif carries the things a conservator would write by hand (titles, records, technique names), a mono carries the things an instrument would print (ids, scores, states, the card readout), and the platform's own UI face handles controls.\n\nMotion explains rather than decorates. At rest no line crosses the art. Hovering or pinning a callout lights its region box, draws a curved leader out to the related references, and fills the record header with that path.",
+    "keyCharacteristics": [
+      "True-neutral shell in both themes. The specimen always sits on the same N5 grey card.",
+      "Four operation inks, used only to name an operation.",
+      "Serif for records, mono for instrument readings, system UI for controls.",
+      "Square data containers, circular markers and curved connectors.",
+      "Region boxes encode tag state in their line style.",
+      "The record header keeps the path you arrived on."
+    ],
+    "rules": [
+      {
+        "name": "The Constant Card Rule",
+        "body": "The specimen and every thumbnail sit on Grey Card N5 in both light and dark. Theme switching changes the desk, never the ground the art is judged against.",
+        "section": "colors"
+      },
+      {
+        "name": "The Operation-Only Chroma Rule",
+        "body": "Chromatic colour in the chrome means an operation. Never use an operation ink for decoration, status or emphasis that is not about that operation. Sequence Blue's role as the focus and selection colour is the single sanctioned exception.",
+        "section": "colors"
+      },
+      {
+        "name": "The Hand and Instrument Rule",
+        "body": "Serif for anything a person names (techniques, references, records, notes). Mono for anything that is measured or identified (ids, scores, counts, states, the card readout). The UI face for controls only. Never set a score in serif or a technique name in mono.",
+        "section": "typography"
+      },
+      {
+        "name": "The Lifted-Only-If-Physical Rule",
+        "body": "Panels, cards and rows are flat and separated by hairlines. A shadow means an object is sitting on top of another surface (a plate, a menu). It never expresses importance.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Line Says the State Rule",
+        "body": "Tag completeness is read from the stroke, not from colour or a badge: solid is full, dashed is partial, dotted is region. Keep this mapping wherever tags are drawn.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do keep the specimen and thumbnails on Grey Card N5 in both themes.",
+      "Do colour only what names an operation, using the base ink for fills and strokes, `-text` for type on the panel, and `-on` for numerals in badges.",
+      "Do encode tag state in the region box stroke: solid for full, dashed for partial, dotted for region.",
+      "Do keep the art clear at rest. Draw leader lines only on hover or pin.",
+      "Do keep the arrival path in the record header at rest, and keep the Back trail.",
+      "Do set names in Source Serif 4 and measurements in Red Hat Mono with tabular numerals.",
+      "Do separate surfaces with hairlines (1px) before reaching for a shadow.",
+      "Do honour `prefers-reduced-motion` by dropping every transition and animation to 0s."
+    ],
+    "donts": [
+      "Don't tint the shell or panels warm or cool. The neutrals stay true grey so the ground never colours the art.",
+      "Don't round data containers. Radius belongs to markers (circles) and the 2px field only.",
+      "Don't use an operation ink as a generic accent, status colour or brand colour.",
+      "Don't shadow flat panels, cards or rows to signal importance.",
+      "Don't reuse the uppercase numbered record keys as headings or section labels elsewhere.",
+      "Don't treat the synthetic placeholder plates as brand imagery. The images are always the user's references."
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 # third-party reference material: never commit or ship
-reference/
+/reference/
 REFERENCE-ANALYSIS.md
 .impeccable/mocks/
 .impeccable/review/

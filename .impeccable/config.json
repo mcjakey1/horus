@@ -111,6 +111,42 @@
         ],
         "createdAt": "2026-11-24T15:20:10.079Z",
         "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/assigned.html"
+        ],
+        "createdAt": "2026-11-24T15:52:21.668Z",
+        "reason": "Claude: throwaway decision-round sketch for a direction not chosen or superseded; it never ships and predates DESIGN.md"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/model-pick.html"
+        ],
+        "createdAt": "2026-11-24T15:52:22.031Z",
+        "reason": "Claude: throwaway decision-round sketch for a direction not chosen or superseded; it never ships and predates DESIGN.md"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-transit.html"
+        ],
+        "createdAt": "2026-11-24T15:52:22.340Z",
+        "reason": "Claude: throwaway decision-round sketch for a direction not chosen or superseded; it never ships and predates DESIGN.md"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/canon.html"
+        ],
+        "createdAt": "2026-11-24T15:52:22.662Z",
+        "reason": "Claude: throwaway decision-round sketch for a direction not chosen or superseded; it never ships and predates DESIGN.md"
       }
     ]
   }
