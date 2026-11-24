@@ -264,6 +264,27 @@ describe("technique picker", () => {
     expect(first).toBe(cards(el)[0]);
   });
 
+  it("clicking_a_tick_box_ticks_its_own_card", () => {
+    const { el, api } = mount();
+    key(row(el), "1");
+    key(row(el), "ArrowDown"); // the first card is highlighted
+    el.querySelectorAll<HTMLInputElement>(".pk-card[data-tech] .pk-tick")[1].click();
+    expect([...el.querySelectorAll<HTMLElement>(".pk-card.is-ticked")].map((c) => c.dataset.tech)).toEqual([cards(el)[1]]);
+    key(row(el), "Enter");
+    expect(sent(api)[0][1].map((t) => t.techniqueId)).toEqual([cards(el)[1]]);
+  });
+
+  it("ticks_drop_when_their_technique_leaves_the_taxonomy", () => {
+    const preset = twoDiff();
+    const { el, api, store } = mount({ preset });
+    store.apply({
+      ...none,
+      taxonomy: { ...seed, branchTechniques: seed.branchTechniques.filter((l) => l.techniqueId !== preset[0].techniqueId) },
+    });
+    key(row(el), "Enter");
+    expect(sent(api)).toEqual([["r", [preset[1]]]]);
+  });
+
   it("arrows_left_right_belong_to_the_inbox_when_docked_there", () => {
     let { el } = mount();
     key(row(el), "1");

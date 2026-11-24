@@ -250,10 +250,9 @@ export function mountPicker(
     if (grid.contains(document.activeElement)) grid.querySelector<HTMLElement>(".pk-card.is-hi")?.focus();
   }
 
-  function toggleTick() {
-    const card = grid.querySelector<HTMLElement>(".pk-card.is-hi[data-tech]");
-    if (!card) return;
-    const id = card.dataset.tech!;
+  /** Space ticks the highlighted card; a tick-box click names its own card. */
+  function toggleTick(id = grid.querySelector<HTMLElement>(".pk-card.is-hi[data-tech]")?.dataset.tech) {
+    if (!id) return;
     const i = tickOf(id);
     if (i >= 0) S.ticks.splice(i, 1);
     else {
@@ -397,7 +396,7 @@ export function mountPicker(
     if (card.classList.contains("pk-new")) return openForm();
     S.nav = true;
     S.hi = [...grid.querySelectorAll(".pk-card")].indexOf(card);
-    if (t.classList.contains("pk-tick")) toggleTick();
+    if (t.classList.contains("pk-tick")) toggleTick(card.dataset.tech);
     else renderCards();
   });
 
@@ -406,7 +405,13 @@ export function mountPicker(
     if (!store.refs.has(opts.refId)) return close();
     if (c.taxonomy) {
       if (S.op && !hasOp(S.op)) S.op = null;
-      S.ticks = S.ticks.filter((t) => hasOp(t.operationId));
+      // A tick whose operation, technique or branch is gone would be refused by Rust.
+      S.ticks = S.ticks.filter(
+        (t) =>
+          hasOp(t.operationId) &&
+          (!t.techniqueId ||
+            store.tax.branchTechniques.some((l) => l.branchId === t.branchId && l.techniqueId === t.techniqueId)),
+      );
       renderOps();
     }
     renderCards();
