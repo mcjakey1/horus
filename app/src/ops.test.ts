@@ -23,6 +23,12 @@ describe("ops", () => {
     expect(opInk(withOp("differentiate", "rose"), "differentiate").base).toBe("var(--x-rose)");
     expect(opInk(seed, "provoke")).toEqual(NEUTRAL);
     expect(opInk(withOp("provoke", "chartreuse"), "provoke")).toEqual(NEUTRAL);
+    // an unrecognised colour on a seed id falls through to the seed ink (Task 7 brief)
+    expect(opInk(withOp("differentiate", "chartreuse"), "differentiate")).toEqual({
+      base: "var(--diff)",
+      text: "var(--diff-text)",
+      on: "var(--diff-on)",
+    });
     expect(opInk(withOp("constructor", null), "constructor")).toEqual(NEUTRAL);
   });
 

@@ -18,11 +18,11 @@ export const EXTRA_INKS = ["teal", "olive", "rose", "indigo", "umber"] as const;
 const NEUTRAL: Ink = { base: "var(--ink-2)", text: "var(--ink)", on: "var(--panel)" };
 const ink = (k: string): Ink => ({ base: `var(--${k})`, text: `var(--${k}-text)`, on: `var(--${k}-on)` });
 
-/** `color` ∈ EXTRA_INKS first, then (no colour) the seed ink by id, else neutral. */
+/** `color` ∈ EXTRA_INKS first, then the seed ink by id, else neutral. */
 export function opInk(tax: Taxonomy, opId: string): Ink {
   const op = tax.operations.find((o) => o.id === opId);
   if (!op) return NEUTRAL;
-  if (op.color) return (EXTRA_INKS as readonly string[]).includes(op.color) ? ink(`x-${op.color}`) : NEUTRAL;
+  if (op.color && (EXTRA_INKS as readonly string[]).includes(op.color)) return ink(`x-${op.color}`);
   return Object.prototype.hasOwnProperty.call(SEED_INK, op.id) ? ink(SEED_INK[op.id]) : NEUTRAL;
 }
 

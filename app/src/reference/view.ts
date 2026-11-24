@@ -6,7 +6,7 @@ import { esc } from "../esc";
 import { mountImport, warningHTML } from "../importer";
 import { opInk, opLabel } from "../ops";
 import { mountSearch } from "../search";
-import type { Store } from "../store";
+import type { Store, StoreEvent } from "../store";
 import { drawLeaders, highlight } from "./leaders";
 import { tileHTML } from "./tile";
 
@@ -35,6 +35,7 @@ export function mountReference(
     ranked: [] as string[],
     filter: null as string | null,
     paintTimer: 0 as ReturnType<typeof setTimeout> | 0,
+    plateSrc: "", // what #plate shows, so any paint can tell whether it is stale
     nav: 0, // drops stale paints
   };
 
@@ -82,7 +83,7 @@ export function mountReference(
       const list = await related;
       if (mine !== S.nav) return;
       S.related = list;
-      paintFocus(ref, true);
+      paintFocus(ref);
     };
     if (first) void paint();
     else {
@@ -93,10 +94,15 @@ export function mountReference(
     renderStatus();
   }
 
-  function paintFocus(ref: Reference, plate: boolean) {
+  function paintFocus(ref: Reference) {
     const spec = $("#specimen")!;
     spec.style.setProperty("--ar", String(aspect(ref)));
-    if (plate) $("#plate")!.innerHTML = img(ref, true);
+    // Repaint the image only when it changed: a superseded show() or reset may have left another one.
+    const src = api.assetUrl(ref.thumb1024);
+    if (S.plateSrc !== src) {
+      $("#plate")!.innerHTML = img(ref, true);
+      S.plateSrc = src;
+    }
     renderBoxes(ref);
     renderCallouts(ref);
     renderRanked(ref);
@@ -108,7 +114,7 @@ export function mountReference(
   }
 
   /** Re-render the focus in place after a Change: the pin, filter and trail stay. */
-  function refresh(plate = false) {
+  function refresh() {
     const ref = focusRef();
     if (!ref) return;
     S.arrival = ref.tags.find((t) => t.id === S.arrival?.id) ?? arrivalOf(ref, null);
@@ -123,9 +129,7 @@ export function mountReference(
         const now = focusRef();
         if (mine !== S.nav || !now) return;
         S.related = list;
-        // A Change never edits the image itself; after a reset the same id (a shared hash
-        // in another library) has another thumbnail path, so the plate is repainted.
-        paintFocus(now, plate);
+        paintFocus(now);
         syncPins();
         if (S.pinned != null) hot(S.pinned);
       });
@@ -135,6 +139,7 @@ export function mountReference(
     S.focus = S.pinned = S.hot = S.arrival = S.filter = null;
     S.related = [];
     S.ranked = [];
+    S.plateSrc = "";
     clearTimeout(S.paintTimer);
     S.nav++;
     $("#specimen")!.classList.remove("is-leaving");
@@ -465,10 +470,26 @@ export function mountReference(
     const refs = allRefs();
     return refs.find((r) => r.tags.length >= 3) ?? refs.find((r) => r.tags.length) ?? refs[0];
   };
+  /** The brief's re-render scope: the focus, its related references, or the taxonomy. A changed
+   * reference sharing a technique or branch with the focus may have just become related. */
+  const touchesFocus = (c: StoreEvent) => {
+    const f = focusRef();
+    if (c.reset || c.taxonomy || c.removed.length || !f) return true;
+    const techs = new Set(f.tags.map((t) => t.techniqueId).filter(Boolean));
+    const branches = new Set(f.tags.map((t) => t.branchId).filter(Boolean));
+    return c.references.some(
+      (r) =>
+        r.id === f.id ||
+        S.related.some((x) => x.id === r.id) ||
+        r.tags.some((t) => techs.has(t.techniqueId) || branches.has(t.branchId)),
+    );
+  };
   const unsubscribe = store.subscribe((c) => {
     S.trail = S.trail.filter((id) => store.refs.has(id));
     if (c.reset && store.warning) notify(warningHTML(store.warning));
-    if (S.focus && store.refs.has(S.focus)) refresh(c.reset);
+    if (S.focus && store.refs.has(S.focus)) {
+      if (touchesFocus(c)) refresh();
+    }
     else {
       // The focus was removed: back along the trail, then the first reference, then empty.
       const id = c.reset ? start()?.id : (S.trail.pop() ?? store.refs.keys().next().value);

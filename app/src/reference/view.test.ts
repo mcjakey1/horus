@@ -228,6 +228,49 @@ describe("Reference view", () => {
     expect($("#plate img").getAttribute("src")).toBe(`asset://${encodeURIComponent("D:\\Third\\z.jpg")}`);
   });
 
+  const plateSrc = () => $("#plate img")?.getAttribute("src");
+  const src = (r: Reference) => api.assetUrl(r.thumb1024);
+
+  it("change_during_show_paints_the_new_plate", async () => {
+    view.show("b");
+    store.apply({ ...none, references: [{ ...B, title: "Plate B2" }] }); // inside show()'s paint delay
+    await settle();
+    expect($("#ref-id").textContent).toBe("b");
+    expect(plateSrc()).toBe(src(B));
+  });
+
+  it("change_after_reset_keeps_the_new_library_plate", async () => {
+    const A3 = { ...A, thumb1024: "D:\\Third\\a.jpg" };
+    store.reset({ ...library, root: "D:\\Third", references: [A3, B, C] }, taxonomy);
+    store.apply({ ...none, references: [{ ...A3, title: "Plate A3" }] }); // supersedes the reset's refresh
+    await settle();
+    expect(plateSrc()).toBe(src(A3));
+  });
+
+  it("change_at_mount_still_paints_the_plate", async () => {
+    view.destroy();
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+    store = createStore(library, taxonomy);
+    view = mountReference(document.body, api, store);
+    store.apply({ ...none, references: [{ ...A, title: "Plate A2" }] }); // before the first related() returns
+    await settle();
+    expect(plateSrc()).toBe(src(A));
+  });
+
+  it("unrelated_change_does_not_refresh", async () => {
+    const calls = vi.mocked(api.related).mock.calls.length;
+    $("#pane-callouts .call").dataset.mark = "kept";
+    store.apply({ ...none, references: [ref("u", "Plate U", [tag("u1", "infer")])] });
+    await settle();
+    expect(vi.mocked(api.related).mock.calls.length).toBe(calls);
+    expect($("#pane-callouts .call").dataset.mark).toBe("kept");
+    expect($("#lib-count").textContent).toBe("4 references"); // the status line still updates
+    // a reference that now shares a technique with the focus does refresh
+    store.apply({ ...none, references: [ref("s", "Plate S", [tag("s1", "differentiate", "silhouette", "differentiate-feature")])] });
+    await settle();
+    expect(vi.mocked(api.related).mock.calls.length).toBe(calls + 1);
+  });
+
   it("no_private_fetch", () => {
     expect(api.openLibrary).not.toHaveBeenCalled();
     expect(api.getTaxonomy).not.toHaveBeenCalled();
