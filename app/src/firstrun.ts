@@ -5,6 +5,7 @@ import type { Api, LibraryView } from "./api";
 import { esc } from "./esc";
 import { wireUndoKeys } from "./keys";
 import { mountReference } from "./reference/view";
+import { mountSaveDialog } from "./save-dialog";
 import { createStore } from "./store";
 
 /** SPEC §5a, verbatim. */
@@ -29,7 +30,8 @@ export async function boot(root: HTMLElement, api: Api) {
   const store = createStore(lib, await api.getTaxonomy());
   const unwire = wireUndoKeys(document, api, store);
   const view = mountReference(root, api, store);
-  return { ...view, store, destroy: () => (unwire(), view.destroy()) };
+  const unmountSaveDialog = mountSaveDialog(root, api);
+  return { ...view, store, destroy: () => (unwire(), unmountSaveDialog(), view.destroy()) };
 }
 
 /** Resolves once a library is created or opened. */

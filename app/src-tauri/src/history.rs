@@ -20,8 +20,7 @@ impl History {
     }
 
     /// A new edit's inverse. Clears redo; drops the oldest past `HISTORY_CAP`.
-    // ponytail: a no-op (e.g. an empty `AddTags`) is recorded as a step; the brief is silent.
-    // Skip it here or in the commands if an undo that does nothing shows up as a bug.
+    // The commands never record a no-op (an empty `AddTags`, an unchanged field); Task 5 ruling 6.
     pub fn record(&mut self, inverse: Edit) {
         self.redo.clear();
         self.undo.push(inverse);
@@ -199,6 +198,46 @@ mod tests {
         assert_eq!(h.undo(&mut data, &mut tax), Ok(None));
         assert_eq!(h.redo(&mut data, &mut tax), Ok(None));
         assert_eq!(data, snapshot);
+    }
+
+    /// Pins History to `apply_inverse`: undo restores a tag whose technique has since left the
+    /// taxonomy, which a checked `apply` would refuse.
+    #[test]
+    fn undo_restores_tag_with_removed_technique() {
+        let (mut data, mut tax) = fixture();
+        let link = tax.branch_techniques[0].clone();
+        let branch = tax
+            .branches
+            .iter()
+            .find(|b| b.id == link.branch_id)
+            .unwrap();
+        let before = Tag {
+            id: "a".into(),
+            operation_id: branch.operation_id.clone(),
+            technique_id: Some(link.technique_id.clone()),
+            branch_id: Some(link.branch_id.clone()),
+            region: None,
+            suggested: true,
+        };
+        data.references[0].tags.push(before.clone());
+        let after = Tag {
+            technique_id: None,
+            branch_id: None,
+            suggested: false,
+            ..before.clone()
+        };
+        let mut h = History::new();
+        let replace = Edit::ReplaceTag {
+            ref_id: "r1".into(),
+            before: before.clone(),
+            after,
+        };
+        h.record(apply(&mut data, &mut tax, replace).unwrap().inverse);
+        tax.techniques.retain(|t| t.id != link.technique_id);
+        tax.branch_techniques
+            .retain(|l| l.technique_id != link.technique_id);
+        assert!(matches!(h.undo(&mut data, &mut tax), Ok(Some(_))));
+        assert_eq!(data.references[0].tags, [before]);
     }
 
     #[test]

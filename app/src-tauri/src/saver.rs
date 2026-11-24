@@ -1,8 +1,10 @@
 //! Debounced saves (SPEC §6.8, Plan 2 decision B3). Tag and technique edits mark the library
-//! or the taxonomy dirty; the saver thread (Plan 2 Task 5) writes them after a quiet spell.
+//! or the taxonomy dirty; the saver thread (`commands::start_saver`) writes them after a quiet
+//! spell.
 //! Imports save at once and call `clear_library`.
 
-use crate::library::Library;
+use crate::commands::library_error;
+use crate::library::{Library, LibraryError};
 use crate::taxonomy::Taxonomy;
 use std::time::{Duration, Instant};
 
@@ -68,8 +70,10 @@ impl Debounce {
     }
 }
 
-/// Saves what is dirty. Never writes taxonomy.json when `!tax_writable` (the read-only seed
-/// fallback). On `Err` the unsaved parts stay dirty, and `d` waits for the next edit.
+/// Saves what is dirty: taxonomy.json first, so a failed library.json save can only leave an
+/// unused technique behind, never tags naming a technique the file lacks. Never writes
+/// taxonomy.json when `!tax_writable` (the read-only seed fallback). On `Err` the unsaved parts
+/// stay dirty, and `d` waits for the next edit. Errors are worded as `library_error` words them.
 pub fn flush(
     lib: &mut Library,
     tax: &Taxonomy,
@@ -77,20 +81,20 @@ pub fn flush(
     d: &mut Debounce,
 ) -> Result<(), String> {
     let (library, taxonomy) = d.take();
-    if library {
-        if let Err(e) = lib.save() {
-            d.restore(true, taxonomy);
-            return Err(format!("library.json could not be saved ({e})"));
-        }
-        // library.json is good again, so the "opened from the backup" warning no longer applies.
-        lib.recovered_from_backup = false;
-    }
     if taxonomy
         && tax_writable
         && let Err(e) = tax.save(&lib.root.join("taxonomy.json"))
     {
-        d.restore(false, true);
-        return Err(format!("taxonomy.json could not be saved ({e})"));
+        d.restore(library, true);
+        return Err(library_error(LibraryError::Io(e)));
+    }
+    if library {
+        if let Err(e) = lib.save() {
+            d.restore(true, false);
+            return Err(library_error(e));
+        }
+        // library.json is good again, so the "opened from the backup" warning no longer applies.
+        lib.recovered_from_backup = false;
     }
     Ok(())
 }
@@ -207,8 +211,31 @@ mod tests {
         let mut d = Debounce::new(500 * MS);
         d.touch(t0, true, true);
         let err = flush(&mut lib, &changed(&tax), true, &mut d).unwrap_err();
-        assert!(err.contains("library.json"), "{err}");
+        // Plain words, as `library_error` words them (Task 5 ruling 4).
+        assert!(
+            err.starts_with("Could not read or write the library") && !err.contains("I/O error"),
+            "{err}"
+        );
         assert!(!d.due(t0 + 10_000 * MS)); // held until the next touch
+        // taxonomy.json was saved first (ruling 3), so only the library stays dirty.
+        assert_eq!(d.take(), (true, false));
+    }
+
+    #[test]
+    fn taxonomy_saves_before_library() {
+        let (dir, mut lib, tax) = open();
+        let lib_path = dir.path().join("library.json");
+        let before = fs::read(&lib_path).unwrap();
+        fs::create_dir(dir.path().join("taxonomy.json.tmp")).unwrap();
+        let mut d = Debounce::new(500 * MS);
+        d.touch(Instant::now(), true, true);
+        let err = flush(&mut lib, &changed(&tax), true, &mut d).unwrap_err();
+        assert!(
+            err.starts_with("Could not read or write the library"),
+            "{err}"
+        );
+        // No tags on disk that point at a technique taxonomy.json lacks.
+        assert_eq!(fs::read(&lib_path).unwrap(), before);
         assert_eq!(d.take(), (true, true));
     }
 

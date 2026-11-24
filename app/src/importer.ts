@@ -1,11 +1,11 @@
-// "Import images…" / "Import folder…" in the status bar: pick, import, reopen the library so
-// the view sees the new references, then show what happened. Drag-and-drop is Plan 2.
-import type { Api, ImportReport, LibraryView, Skip } from "./api";
+// "Import images…" / "Import folder…" in the status bar: pick, import, hand the returned
+// `Change` to the view, then show what happened. No reopen (B4), so the import stays undoable.
+import type { Api, Change, ImportReport, Skip } from "./api";
 import { esc } from "./esc";
 
 export type ImportHooks = {
   libraryRoot(): string | null;
-  onLibrary(lib: LibraryView): void;
+  onChange(c: Change): void;
 };
 
 const fileName = (p: string) => p.split(/[\\/]/).pop() || p;
@@ -14,8 +14,10 @@ function reason(s: Skip): string {
   switch (s.kind) {
     case "tooLarge":
       return "larger than 500 MB";
+    case "insideLibrary":
+      return "already inside the library folder";
     case "unsupported":
-      return s.detail === "inside the library" ? "already inside the library folder" : "not a supported image type";
+      return "not a supported image type";
     case "unreadable":
       return `could not be read (${s.detail})`;
     case "writeFailed":
@@ -56,17 +58,15 @@ export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, sig
   };
 
   async function run(pick: () => Promise<string[]>) {
-    const lib = hooks.libraryRoot();
-    if (!lib) return;
+    if (!hooks.libraryRoot()) return;
     const paths = await pick();
     if (!paths.length) return;
     buttons.forEach((b) => (b.disabled = true));
     say(`<p>Importing…</p>`);
     try {
-      const report = await api.importPaths(paths);
-      const fresh = await api.openLibrary(lib);
-      hooks.onLibrary(fresh);
-      say(summaryHTML(report) + warningHTML(fresh.warning));
+      const result = await api.importPaths(paths);
+      hooks.onChange(result.change);
+      say(summaryHTML(result.report)); // the import's own warnings are in the summary
     } catch (err) {
       say(`<p>The import did not finish: ${esc(String(err))}</p>`);
     } finally {

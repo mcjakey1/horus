@@ -22,7 +22,10 @@ function fakeApi(lastLibrary: string | null): Api {
     }),
     getTaxonomy: vi.fn(async () => ({ operations: [], domains: [], branches: [], techniques: [], branchTechniques: [] })),
     related: vi.fn(async () => []),
-    importPaths: vi.fn(async () => ({ added: [], duplicates: [], skipped: [] })),
+    importPaths: vi.fn(async () => ({
+      report: { added: [], duplicates: [], skipped: [] },
+      change: { references: [], removed: [], canUndo: false, canRedo: false },
+    })),
     search: vi.fn(async () => []),
     getSettings: vi.fn(async () => ({ lastLibrary, theme: "light" as const, findSimilar: "unset" as const })),
     setSettings: vi.fn(async () => {}),
@@ -37,6 +40,13 @@ function fakeApi(lastLibrary: string | null): Api {
     removeTag: vi.fn(),
     addTechnique: vi.fn(),
     demoExamples: vi.fn(async () => []),
+    setField: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
+    importBytes: vi.fn(async () => ({ report: { added: [], duplicates: [], skipped: [] }, change: { references: [], removed: [], canUndo: false, canRedo: false } })),
+    imagePath: vi.fn(async () => ""),
+    retrySave: vi.fn(async () => {}),
+    exitWithoutSaving: vi.fn(async () => {}),
+    onSaveStatus: vi.fn(async () => () => {}),
+    onSaveFailed: vi.fn(async () => () => {}),
   };
 }
 

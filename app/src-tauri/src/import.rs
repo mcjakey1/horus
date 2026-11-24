@@ -18,11 +18,13 @@ use walkdir::WalkDir;
 
 pub const MAX_BYTES: u64 = 500 * 1024 * 1024;
 
-/// Over IPC: `{"kind": "tooLarge", "detail": 123}`.
+/// Over IPC: `{"kind": "tooLarge", "detail": 123}`; `{"kind": "insideLibrary"}`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
 pub enum Skip {
     Unsupported(String),
+    /// The path is the library itself or inside it.
+    InsideLibrary,
     Unreadable(String),
     TooLarge(u64),
     WriteFailed(String),
@@ -70,8 +72,7 @@ pub fn import_paths(
     };
     for path in paths {
         if inside(path) {
-            let why = Skip::Unsupported("inside the library".into());
-            out.report.skipped.push((path.clone(), why));
+            out.report.skipped.push((path.clone(), Skip::InsideLibrary));
             continue;
         }
         // Only folders need the check: a file can only be inside the library via a pruned one.
@@ -138,6 +139,10 @@ fn import_one(
     if len == 0 {
         return skip(report, Skip::Unreadable("empty file".into()));
     }
+    // Sniff before the copy, so a video or a PSD costs 64 bytes, not a copy into the library.
+    if let Err(why) = sniff(src) {
+        return skip(report, why);
+    }
     let (tmp, hash) = match copy_and_hash(src, &images_dir(root)) {
         Ok(v) => v,
         Err(why) => return skip(report, why),
@@ -155,6 +160,19 @@ fn import_one(
             out.references.push(r);
         }
         Err(why) => skip(report, why),
+    }
+}
+
+/// Only the formats whose decoders `Cargo.toml` enables. Up to 64 bytes: a tiny GIF is shorter.
+fn sniff(src: &Path) -> Result<(), Skip> {
+    use image::ImageFormat::{Gif, Jpeg, Png, Tiff, WebP};
+    let mut head = vec![];
+    fs::File::open(src)
+        .and_then(|f| f.take(64).read_to_end(&mut head))
+        .map_err(|e| Skip::Unreadable(e.to_string()))?;
+    match image::guess_format(&head) {
+        Ok(Jpeg | Png | WebP | Tiff | Gif) => Ok(()),
+        _ => Err(Skip::Unsupported("unrecognised file type".into())),
     }
 }
 
@@ -683,10 +701,59 @@ mod tests {
         let thumb = thumb_path_in(&lib, &first.references[0].hash, 256).unwrap();
         let direct = import(&lib, std::slice::from_ref(&thumb));
         assert!(direct.references.is_empty());
-        assert!(matches!(
-            direct.report.skipped.as_slice(),
-            [(p, Skip::Unsupported(_))] if p == &thumb
-        ));
+        assert_eq!(
+            direct.report.skipped,
+            vec![(thumb.clone(), Skip::InsideLibrary)]
+        );
+    }
+
+    #[test]
+    fn inside_library_variant() {
+        let dir = tempfile::tempdir().unwrap();
+        import(dir.path(), &[fixture("small.jpg")]);
+        let images = dir.path().join("images");
+        let out = import(dir.path(), std::slice::from_ref(&images));
+        assert_eq!(out.report.skipped, vec![(images, Skip::InsideLibrary)]);
+        assert_eq!(
+            serde_json::to_value(Skip::InsideLibrary).unwrap(),
+            serde_json::json!({"kind": "insideLibrary"})
+        );
+    }
+
+    #[test]
+    fn sniff_skips_without_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        // A minimal BMP header: a real image type, but no decoder for it is built in.
+        let bmp = outside.path().join("tiny.bmp");
+        let mut bytes = b"BM".to_vec();
+        bytes.resize(70, 0);
+        fs::write(&bmp, bytes).unwrap();
+        let out = import(dir.path(), &[fixture("fake.psd"), bmp.clone()]);
+        assert!(out.references.is_empty());
+        assert!(
+            matches!(
+                out.report.skipped.as_slice(),
+                [(a, Skip::Unsupported(_)), (b, Skip::Unsupported(_))]
+                    if a == &fixture("fake.psd") && b == &bmp
+            ),
+            "{:?}",
+            out.report.skipped
+        );
+        // Sniffed before the copy: not even a temp file was made.
+        let images = dir.path().join("images");
+        assert!(!images.exists() || fs::read_dir(&images).unwrap().next().is_none());
+    }
+
+    #[test]
+    fn sniff_accepts_an_image_shorter_than_the_sniff() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let gif = outside.path().join("dot.gif");
+        image::RgbImage::new(1, 1).save(&gif).unwrap();
+        assert!(fs::metadata(&gif).unwrap().len() < 64);
+        let out = import(dir.path(), &[gif]);
+        assert_eq!(out.references.len(), 1, "{:?}", out.report.skipped);
     }
 
     #[test]

@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 const DATA: &str = "library.json";
 const BACKUP: &str = "library.bak.json";
 const TMP: &str = "library.json.tmp";
-const SUBFOLDER: &str = "Horus Library";
+/// Where `create` puts the library when the chosen folder already holds other files.
+pub const SUBFOLDER: &str = "Horus Library";
 /// The `library.json` format this build writes; `open` refuses anything newer.
 const VERSION: u32 = 1;
 

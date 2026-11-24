@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import html from "../../index.html?raw";
-import type { Api, Hit, LibraryView, Reference, Scored, Tag, Taxonomy } from "../api";
+import type { Api, Hit, ImportReport, ImportResult, LibraryView, Reference, Scored, Tag, Taxonomy } from "../api";
 import { summaryHTML } from "../importer";
 import { createStore, type Store } from "../store";
 import { mountReference } from "./view";
@@ -71,7 +71,7 @@ function fakeApi(): Api {
     openLibrary: vi.fn(async () => library),
     getTaxonomy: vi.fn(async () => taxonomy),
     related: vi.fn(async (id: string) => scored[id] ?? []),
-    importPaths: vi.fn(async () => ({ added: [], duplicates: [], skipped: [] })),
+    importPaths: vi.fn(async () => imported([])),
     search: vi.fn(async () => []),
     getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "unset" as const })),
     setSettings: vi.fn(async () => {}),
@@ -86,6 +86,21 @@ function fakeApi(): Api {
     removeTag: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     addTechnique: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     demoExamples: vi.fn(async () => []),
+    setField: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
+    importBytes: vi.fn(async () => imported([])),
+    imagePath: vi.fn(async () => ""),
+    retrySave: vi.fn(async () => {}),
+    exitWithoutSaving: vi.fn(async () => {}),
+    onSaveStatus: vi.fn(async () => () => {}),
+    onSaveFailed: vi.fn(async () => () => {}),
+  };
+}
+
+/** An import's result: `added` references, applied through the store (no reopen, B4). */
+function imported(added: Reference[], skipped: ImportReport["skipped"] = []): ImportResult {
+  return {
+    report: { added: added.map((r) => r.id), duplicates: [], skipped },
+    change: { references: added, removed: [], canUndo: added.length > 0, canRedo: false },
   };
 }
 
@@ -151,21 +166,18 @@ describe("Reference view", () => {
     expect(document.querySelector<HTMLInputElement>("#value")!.checked).toBe(true);
   });
 
-  it("Import images calls importPaths, then reopens the library and summarises", async () => {
+  it("Import images calls importPaths, applies its change and summarises (no reopen)", async () => {
     vi.mocked(api.pickImages).mockResolvedValueOnce(["C:/in/x.jpg", "C:/in/y.psd"]);
-    vi.mocked(api.importPaths).mockResolvedValueOnce({
-      added: ["d"],
-      duplicates: [],
-      skipped: [["C:/in/y.psd", { kind: "unsupported", detail: "unrecognised file type" }]],
-    });
     const D = ref("d", "Plate D", []);
-    vi.mocked(api.openLibrary).mockResolvedValueOnce({ ...library, references: [A, B, C, D] });
+    vi.mocked(api.importPaths).mockResolvedValueOnce(
+      imported([D], [["C:/in/y.psd", { kind: "unsupported", detail: "unrecognised file type" }]]),
+    );
     document.querySelector<HTMLButtonElement>('[data-import="files"]')!.click();
     await settle();
     expect(api.importPaths).toHaveBeenCalledWith(["C:/in/x.jpg", "C:/in/y.psd"]);
-    expect(api.openLibrary).toHaveBeenLastCalledWith("C:\\lib");
-    const imported = vi.mocked(api.importPaths).mock.invocationCallOrder[0];
-    expect(Math.max(...vi.mocked(api.openLibrary).mock.invocationCallOrder)).toBeGreaterThan(imported);
+    expect(api.openLibrary).not.toHaveBeenCalled();
+    expect(store.refs.has("d")).toBe(true);
+    expect(store.canUndo).toBe(true); // the import is an undo step
     expect(document.querySelector("#lib-count")?.textContent).toBe("4 references");
     const notice = document.querySelector<HTMLElement>("#import-notice")!;
     expect(notice.hidden).toBe(false);
@@ -429,7 +441,6 @@ describe("notices", () => {
   it("open_warning_is_shown_in_notice", async () => {
     const api = fakeApi();
     const warning = "library.json could not be read, so Horus opened its backup <b>library.bak.json</b>.";
-    vi.mocked(api.openLibrary).mockResolvedValue({ ...library, warning }); // the import's reopen (Plan 1, until Task 5)
     const view = mountReference(document.body, api, createStore({ ...library, warning }, taxonomy));
     await view.ready;
     const notice = document.querySelector<HTMLElement>("#import-notice")!;
@@ -440,14 +451,14 @@ describe("notices", () => {
     document.querySelector<HTMLButtonElement>("#import-dismiss")!.click();
     expect(notice.hidden).toBe(true);
 
-    // Every reopen shows it again: after an import, next to the import summary.
+    // An import no longer reopens the library (B4): the notice shows its own summary.
     vi.mocked(api.pickImages).mockResolvedValueOnce(["C:/in/x.jpg"]);
-    vi.mocked(api.importPaths).mockResolvedValueOnce({ added: ["d"], duplicates: [], skipped: [] });
+    vi.mocked(api.importPaths).mockResolvedValueOnce(imported([ref("d", "Plate D", [])]));
     document.querySelector<HTMLButtonElement>('[data-import="files"]')!.click();
     await settle();
     expect(notice.hidden).toBe(false);
     expect(notice.textContent).toContain("Added 1 reference");
-    expect(notice.textContent).toContain(warning);
+    expect(api.openLibrary).not.toHaveBeenCalled();
     view.destroy();
   });
 
