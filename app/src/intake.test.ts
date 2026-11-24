@@ -105,6 +105,18 @@ describe("intake", () => {
     expect(openPicker).toHaveBeenCalledWith({ refId: "n1", preset: presetFrom(R1) });
   });
 
+  it("a drop whose point hits a region box inside the specimen still finds its reference (Task 12 item 4)", async () => {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `<figure id="specimen" data-ref-drop="r1"><div id="plate2"></div><div id="boxes"><div class="box is-whole"></div></div></figure>`,
+    );
+    vi.mocked(document.elementFromPoint).mockReturnValue(document.querySelector("#boxes .box"));
+    vi.mocked(api.importPaths).mockResolvedValueOnce(result({ added: ["n1"] }, [ref("n1")]));
+    dropAt(10, 10, ["C:/in/a.jpg"]);
+    await flush();
+    expect(openPicker).toHaveBeenCalledWith({ refId: "n1", preset: presetFrom(R1) });
+  });
+
   it("enter, over and leave are not drops", async () => {
     drop({ payload: { type: "over", position: { x: 1, y: 1 } } });
     drop({ payload: { type: "leave" } });

@@ -134,6 +134,24 @@ describe("Inbox", () => {
     expect(cur()).toBe("b");
   });
 
+  it("the keyboard flow 1, type, Enter, → advances to the next item (Task 12 item 3)", async () => {
+    const { inbox, api } = setup([ref("a"), ref("b"), ref("c")]);
+    inbox.focus(0);
+    key(picker()!.querySelector(".pk-ops")!, "1");
+    const search = picker()!.querySelector<HTMLInputElement>(".pk-search")!;
+    search.focus();
+    search.value = "moody";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    key(search, "Enter");
+    expect(api.addTags).toHaveBeenCalledTimes(1);
+    await new Promise((r) => setTimeout(r, 0)); // the tag lands
+    expect(picker()!.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(search); // off the text field, so → is the Inbox's again
+    key(document.activeElement!, "ArrowRight");
+    expect(cur()).toBe("b");
+    expect(picker()!.dataset.ref).toBe("b");
+  });
+
   it("modified arrows and arrows on a domain radio are not Inbox moves", () => {
     const { inbox } = setup([ref("a"), ref("b")]);
     inbox.focus(0);

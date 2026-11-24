@@ -192,6 +192,9 @@ export function mountPicker(
         S.form = false;
         slot.innerHTML = "";
         setQuery("");
+        // In the Inbox the next key is usually →: take focus off the search so it reaches the Inbox.
+        if (opts.inbox && el.contains(document.activeElement))
+          opsEl.querySelector<HTMLElement>('[tabindex="0"]')?.focus();
         opts.onDone?.();
       },
       (err) => {

@@ -113,8 +113,10 @@ export function mountReference(
   function paintFocus(ref: Reference) {
     const spec = $("#specimen")!;
     spec.style.setProperty("--ar", String(aspect(ref)));
+    // A drop here is "Tag like this" for this reference (Task 9). On #specimen, not #plate: the
+    // region boxes lie over the plate, so the drop's hit-test lands on a .box (Task 12 item 4).
+    spec.dataset.refDrop = ref.id;
     // Repaint the image only when it changed: a superseded show() or reset may have left another one.
-    $("#plate")!.dataset.refDrop = ref.id; // a drop here is "Tag like this" for this reference (Task 9)
     const src = api.assetUrl(ref.thumb1024);
     if (S.plateSrc !== src) {
       $("#plate")!.innerHTML = img(ref, true);
@@ -158,7 +160,7 @@ export function mountReference(
     S.related = [];
     S.ranked = [];
     S.plateSrc = "";
-    delete $("#plate")!.dataset.refDrop;
+    delete $("#specimen")!.dataset.refDrop;
     clearTimeout(S.paintTimer);
     S.nav++;
     $("#specimen")!.classList.remove("is-leaving");

@@ -138,8 +138,9 @@ describe("boot wiring (Task 9)", () => {
 
     // Back on the Reference view, an image is dropped onto r1's plate.
     $<HTMLButtonElement>('[data-view-tab="reference"]').click();
-    expect($("#plate").dataset.refDrop).toBe("r1");
-    document.elementFromPoint = vi.fn(() => $("#plate"));
+    // As in the real app: the drop point hits r1's whole-image region box, which lies over the plate.
+    const box = $("#boxes .box");
+    document.elementFromPoint = vi.fn(() => box);
     drop({ payload: { type: "drop", paths: ["C:/in/x.jpg"], position: { x: 1, y: 1 } } as unknown as DragDropEvent });
     for (let i = 0; i < 4; i++) await tick();
 

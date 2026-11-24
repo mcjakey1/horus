@@ -623,11 +623,14 @@ describe("Reference view", () => {
     expect([store.canUndo, store.canRedo]).toEqual([false, false]);
   });
 
-  it("plate_is_a_drop_target_for_the_focus (Task 9)", async () => {
-    expect($("#plate").dataset.refDrop).toBe("a");
+  it("specimen_is_the_drop_target_so_region_boxes_do_not_hide_it (Task 12 item 4)", async () => {
+    // #boxes lies over #plate (inset: 0), so the hit-test lands on a .box: the target must contain both.
+    expect($("#specimen").dataset.refDrop).toBe("a");
+    const box = $("#boxes .box");
+    expect(box.closest<HTMLElement>("[data-ref-drop]")?.dataset.refDrop).toBe("a");
     view.show("b");
     await settle();
-    expect($("#plate").dataset.refDrop).toBe("b");
+    expect($("#specimen").dataset.refDrop).toBe("b");
   });
 
   it("filter_from_search_and_empty_copy", async () => {
