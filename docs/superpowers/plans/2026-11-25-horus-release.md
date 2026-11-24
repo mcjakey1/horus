@@ -52,8 +52,8 @@
   - Shipped strings, artwork and the intro never use "Iris", "A Taxonomy of Visuals" or "Modern Art Direction", the reel's yellow-green title lockup, the floating breadcrumb card or the red `01 OPERATION` numbering.
   - **Recommended:** the app icon and intro avoid an eye motif. Iris is eye-themed, and AGY flagged that Horus is eye-adjacent (SPEC header).
 - **Third-party material never ships:** `reference/`, `REFERENCE-ANALYSIS.md`, `.impeccable/mocks/`, `.impeccable/review/` and `.impeccable/questions/` (PRODUCT.md, Plan 1 Global Constraints).
-- **The library folder layout is Plan 1's, plus `.incoming/` and `taxonomy.bak.json` (Plan 2) and `embeddings.bin` (Plan 5).**
-  - The integrity work only reads it, removes `*.tmp` files (including those in `.incoming/`), and adds references through `edit::apply`.
+- **The library folder layout is Plan 1's, plus `taxonomy.bak.json` (Plan 2) and `embeddings.bin` (Plan 5).** Plan 2 stages pasted images in an OS temp dir outside the library, so there is no `.incoming/`.
+  - The integrity work only reads it, removes `*.tmp` files, and adds references through `edit::apply`.
   - It ignores `embeddings.bin`.
   - It never deletes or rewrites `taxonomy.bak.json`. That file is only validated (Task 2).
 - **The intro** plays once on first launch, can be replayed from a menu, and any key or click skips it (SPEC §5). It is never longer than 6 seconds, and it shows as a still frame under `prefers-reduced-motion: reduce` (DESIGN.md Motion, SPEC §11 anti-goal).
@@ -205,7 +205,7 @@
       pub orphans: Vec<PathBuf>,              // images/<hash>.<ext> that no reference points to
       pub taxonomy_backup_invalid: bool,      // taxonomy.bak.json present but Taxonomy::load or validate() fails; reported, never deleted
   }
-  pub fn sweep_tmp(root: &Path) -> Vec<PathBuf>;                 // root, images/, thumbs/256/, thumbs/1024/, .incoming/: names ending ".tmp" or starting ".tmp"
+  pub fn sweep_tmp(root: &Path) -> Vec<PathBuf>;                 // root, images/, thumbs/256/, thumbs/1024/: names ending ".tmp" or starting ".tmp"
   pub fn check(lib: &Library) -> IntegrityReport;               // existence checks only, no hashing; rebuilds missing thumbs from the original;
                                                                 // if taxonomy.bak.json exists, loads it and runs validate() (Plan 2 Task 3 rotation)
   pub fn verify_hashes(lib: &Library, cancel: &AtomicBool) -> Vec<String>;   // on demand from the menu; ids whose BLAKE3 ≠ hash
