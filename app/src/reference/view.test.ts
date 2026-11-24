@@ -222,6 +222,10 @@ describe("Reference view", () => {
     expect($("#data-source").textContent).toBe("Library: Second");
     expect($("#ref-id").textContent).toBe("z");
     expect($("#import-notice").hidden).toBe(true); // no warning, no empty notice
+    // the same reference id in another library (a shared hash) repaints with that library's files
+    store.reset({ ...library, root: "D:\\Third", references: [{ ...ref("z", "Plate Z", []), thumb1024: "D:\\Third\\z.jpg" }] }, taxonomy);
+    await settle();
+    expect($("#plate img").getAttribute("src")).toBe(`asset://${encodeURIComponent("D:\\Third\\z.jpg")}`);
   });
 
   it("no_private_fetch", () => {

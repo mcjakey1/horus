@@ -27,8 +27,9 @@ export async function boot(root: HTMLElement, api: Api) {
   }
   lib ??= await firstRun(root, api, { error, askFindSimilar: (settings?.findSimilar ?? "unset") === "unset" });
   const store = createStore(lib, await api.getTaxonomy());
-  wireUndoKeys(document, api, store);
-  return Object.assign(mountReference(root, api, store), { store });
+  const unwire = wireUndoKeys(document, api, store);
+  const view = mountReference(root, api, store);
+  return { ...view, store, destroy: () => (unwire(), view.destroy()) };
 }
 
 /** Resolves once a library is created or opened. */

@@ -108,7 +108,7 @@ export function mountReference(
   }
 
   /** Re-render the focus in place after a Change: the pin, filter and trail stay. */
-  function refresh() {
+  function refresh(plate = false) {
     const ref = focusRef();
     if (!ref) return;
     S.arrival = ref.tags.find((t) => t.id === S.arrival?.id) ?? arrivalOf(ref, null);
@@ -123,8 +123,9 @@ export function mountReference(
         const now = focusRef();
         if (mine !== S.nav || !now) return;
         S.related = list;
-        // ponytail: the plate image is kept; a Change never edits the image itself
-        paintFocus(now, false);
+        // A Change never edits the image itself; after a reset the same id (a shared hash
+        // in another library) has another thumbnail path, so the plate is repainted.
+        paintFocus(now, plate);
         syncPins();
         if (S.pinned != null) hot(S.pinned);
       });
@@ -467,7 +468,7 @@ export function mountReference(
   const unsubscribe = store.subscribe((c) => {
     S.trail = S.trail.filter((id) => store.refs.has(id));
     if (c.reset && store.warning) notify(warningHTML(store.warning));
-    if (S.focus && store.refs.has(S.focus)) refresh();
+    if (S.focus && store.refs.has(S.focus)) refresh(c.reset);
     else {
       // The focus was removed: back along the trail, then the first reference, then empty.
       const id = c.reset ? start()?.id : (S.trail.pop() ?? store.refs.keys().next().value);
