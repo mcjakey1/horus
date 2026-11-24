@@ -200,7 +200,7 @@ The RAM guidance is our estimate and gets checked when the feature is built.
 
 ## 6. Tagging: fast for someone who has never heard of "chiaroscuro"
 
-1. **Start with the operation, in plain words.** Four buttons: *Stand out* (Differentiate) · *Hold together* (Group) · *Lead the eye* (Sequence) · *Make them think* (Infer). Picking one narrows about 41 techniques down to about 10.
+1. **Start with the operation, in plain words.** There is one button per operation, built from the taxonomy. The seed has four: *Stand out* (Differentiate) · *Hold together* (Group) · *Lead the eye* (Sequence) · *Make them think* (Infer). Operations are fully editable (Plan 3 decision, 2026-11-25), so artists can rename, add or delete them, from 1 to about 9, and number keys follow the order shown. Picking one narrows the techniques to that operation's.
 2. **A visual picker.** Each technique card shows:
    - its diagram icon;
    - one or two examples from the artist's own library, or from the demo set;
@@ -232,7 +232,7 @@ The RAM guidance is our estimate and gets checked when the feature is built.
 
 **So, per your answer, we use the reel's names as the seed:**
 
-- All 4 operations: Differentiate, Group, Sequence, Infer.
+- All 4 operations: Differentiate, Group, Sequence, Infer. These are the seed. Artists can later rename, add or delete operations, and add new domain types (Plan 3 decision, 2026-11-25).
 - The 6 domains: Feature, Grouping, Space, Social, Semantic, Cultural.
 - All 41 technique names.
 
