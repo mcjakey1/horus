@@ -161,7 +161,6 @@ fn read_taxonomy(path: &Path) -> Result<Option<Taxonomy>, String> {
     Ok(serde_json::from_value(value).ok())
 }
 
-/// Atomic write: a temp file in `dir`, fsynced, then renamed over `path`.
 // Seed-pinned constants, mirrored verbatim from check_taxonomy.py; used only by `validate_seed`.
 const NAMES_41: [&str; 41] = [
     "Chiaroscuro",

@@ -136,21 +136,29 @@ fn install<R: Runtime>(
     if let Err(e) = update_settings(&st, last) {
         warnings.push(e);
     }
+    // A hash Horus did not write (a hand-edited library.json) would point outside thumbs/.
+    // Hide that reference from the window, but keep it in lib.data so no save drops it.
+    let references: Vec<ReferenceView> = lib
+        .data
+        .references
+        .iter()
+        .filter_map(|r| {
+            Some(ReferenceView {
+                reference: r.clone(),
+                thumb256: thumb_path_in(&lib.root, &r.hash, 256).ok()?,
+                thumb1024: thumb_path_in(&lib.root, &r.hash, 1024).ok()?,
+            })
+        })
+        .collect();
+    let hidden = lib.data.references.len() - references.len();
+    if hidden > 0 {
+        warnings.push(format!(
+            "{hidden} references in library.json have an image name Horus did not write, so they are hidden."
+        ));
+    }
     let view = LibraryView {
         root: lib.root.clone(),
-        references: lib
-            .data
-            .references
-            .iter()
-            .map(|r| {
-                Ok(ReferenceView {
-                    reference: r.clone(),
-                    thumb256: thumb_path_in(&lib.root, &r.hash, 256)?,
-                    thumb1024: thumb_path_in(&lib.root, &r.hash, 1024)?,
-                })
-            })
-            .collect::<Result<_, LibraryError>>()
-            .map_err(library_error)?,
+        references,
         links: lib.data.links.clone(),
         warning: (!warnings.is_empty()).then(|| warnings.join(" ")),
         seed_warnings,
@@ -671,6 +679,41 @@ mod tests {
         assert_eq!(a.duplicates.len() + b.duplicates.len(), 1);
         let view = open_library(e.handle(), e.lib.clone()).unwrap();
         assert_eq!(view.references.len(), 1);
+    }
+
+    #[test]
+    fn bad_hash_is_hidden_not_fatal() {
+        let e = created();
+        e.import("small.jpg").unwrap();
+        // A hand-edited library.json: one more reference whose hash would point outside thumbs/.
+        let path = Path::new(&e.lib).join("library.json");
+        let mut json: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let mut bad = json["references"][0].clone();
+        bad["id"] = "bad".into();
+        bad["hash"] = "../../evil".into();
+        json["references"].as_array_mut().unwrap().push(bad);
+        fs::write(&path, serde_json::to_vec(&json).unwrap()).unwrap();
+
+        let view = open_library(e.handle(), e.lib.clone()).unwrap();
+        assert_eq!(view.references.len(), 1);
+        assert_ne!(view.references[0].reference.id, "bad");
+        let warning = view.warning.unwrap();
+        assert!(
+            warning.contains(
+                "1 references in library.json have an image name Horus did not write, so they are hidden."
+            ),
+            "{warning}"
+        );
+        // Hidden, not dropped: the next save (an import) keeps the entry.
+        e.import("p3_red.png").unwrap();
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let refs = saved["references"].as_array().unwrap();
+        assert_eq!(refs.len(), 3);
+        assert!(
+            refs.iter()
+                .any(|r| r["id"] == "bad" && r["hash"] == "../../evil")
+        );
     }
 
     #[test]
