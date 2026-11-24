@@ -22,7 +22,9 @@ function fakeApi(lastLibrary: string | null): Api {
     }),
     getTaxonomy: vi.fn(async () => ({ operations: [], domains: [], branches: [], techniques: [], branchTechniques: [] })),
     related: vi.fn(async () => []),
-    importPaths: vi.fn(async () => ({ added: [], duplicates: [], skipped: [] })),
+    importPaths: vi.fn(async () => ({ report: { added: [], duplicates: [], skipped: [] }, change: { references: [], removed: [], canUndo: false, canRedo: false } })),
+    importBytes: vi.fn(async () => ({ report: { added: [], duplicates: [], skipped: [] }, change: { references: [], removed: [], canUndo: false, canRedo: false } })),
+    setField: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     search: vi.fn(async () => []),
     getSettings: vi.fn(async () => ({ lastLibrary, theme: "light" as const, findSimilar: "unset" as const })),
     setSettings: vi.fn(async () => {}),
@@ -79,6 +81,11 @@ describe("first run", () => {
     expect(view.store.root).toBe(lib.root);
     expect(api.getTaxonomy).toHaveBeenCalledTimes(1);
     expect(api.openLibrary).not.toHaveBeenCalled();
+    // Task 9: boot wires the Inbox, the view toggle and the Library menu
+    expect(document.querySelector("#inbox .inbox-head")).not.toBeNull();
+    expect(document.body.dataset.view).toBe("reference");
+    expect(document.querySelector("#library-menu + .lib-menu")).not.toBeNull();
+    view.destroy();
   });
 
   it("shows first run with a readable message when lastLibrary fails to open", async () => {

@@ -89,7 +89,13 @@ export type Scored = { id: string; score: number; sharedTechniques: string[]; sh
 /** Why a file was skipped; `detail` is a message, or the byte size for `tooLarge`. */
 export type Skip =
   | { kind: "unsupported" | "unreadable" | "writeFailed"; detail: string }
-  | { kind: "tooLarge"; detail: number };
+  | { kind: "tooLarge"; detail: number }
+  | { kind: "insideLibrary" };
+
+/** Optional intake metadata (SPEC §2): never required; a sourceUrl is text, never fetched (SPEC §9). */
+export type ImportMeta = { note?: string; sourceUrl?: string };
+/** A field patch: an absent key keeps the value, `null` clears it. */
+export type FieldPatch = { note?: string | null; sourceUrl?: string | null };
 
 export type ImportReport = {
   added: string[];
@@ -97,6 +103,8 @@ export type ImportReport = {
   skipped: [string, Skip][];
   warnings?: [string, string][];
 };
+/** Plan 2 Task 5: an import is one undoable step; `change` goes straight to the Store (B4). */
+export type ImportResult = { report: ImportReport; change: Change };
 
 /** Task 6 `search`: tagged camelCase union; ≤ 8 technique hits by count, then ≤ 4 reference hits. */
 export type Hit =
@@ -115,7 +123,11 @@ export interface Api {
   openLibrary(path: string): Promise<LibraryView>;
   getTaxonomy(): Promise<Taxonomy>;
   related(id: string): Promise<Scored[]>;
-  importPaths(paths: string[]): Promise<ImportReport>;
+  importPaths(paths: string[], meta?: ImportMeta): Promise<ImportResult>;
+  /** A pasted image; Rust stages it in an OS temp dir outside the library (B1). */
+  importBytes(name: string, bytes: Uint8Array, meta?: ImportMeta): Promise<ImportResult>;
+  /** One undo step for every id and field. */
+  setField(refIds: string[], patch: FieldPatch): Promise<Change>;
   search(q: string): Promise<Hit[]>;
   getSettings(): Promise<Settings>;
   /** A patch: only the fields sent change (Rust merges into the stored settings). */
@@ -148,7 +160,10 @@ export const tauriApi: Api = {
   openLibrary: (path) => invoke("open_library", { path }),
   getTaxonomy: () => invoke("get_taxonomy"),
   related: (id) => invoke("related", { id }),
-  importPaths: (paths) => invoke("import_paths", { paths }),
+  importPaths: (paths, meta) => invoke("import_paths", { paths, note: meta?.note ?? null, sourceUrl: meta?.sourceUrl ?? null }),
+  importBytes: (name, bytes, meta) =>
+    invoke("import_bytes", bytes, { headers: { "x-meta": encodeURIComponent(JSON.stringify({ name, ...meta })) } }),
+  setField: (refIds, patch) => invoke("set_field", { refIds, patch }),
   search: (q) => invoke("search", { q }),
   getSettings: () => invoke("get_settings"),
   setSettings: (s) => invoke("set_settings", { s }),

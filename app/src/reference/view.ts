@@ -523,8 +523,8 @@ export function mountReference(
 
   const notify = mountImport(root, api, {
     libraryRoot: () => store.root,
-    // Plan 1's import reopens the library; Plan 2 Task 5 replaces this with store.apply(change).
-    onLibrary: (lib) => store.reset(lib, store.tax),
+    // B4: the import's Change goes to the store; no reopen, so undo survives.
+    onChange: (c) => store.apply(c),
   }, signal);
 
   // ---------- the technique picker (Plan 2 Task 8): "Tag…" on the plate, or the t key ----------

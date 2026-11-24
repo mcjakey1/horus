@@ -71,7 +71,9 @@ function fakeApi(): Api {
     openLibrary: vi.fn(async () => library),
     getTaxonomy: vi.fn(async () => taxonomy),
     related: vi.fn(async (id: string) => scored[id] ?? []),
-    importPaths: vi.fn(async () => ({ added: [], duplicates: [], skipped: [] })),
+    importPaths: vi.fn(async () => ({ report: { added: [], duplicates: [], skipped: [] }, change: { references: [], removed: [], canUndo: false, canRedo: false } })),
+    importBytes: vi.fn(async () => ({ report: { added: [], duplicates: [], skipped: [] }, change: { references: [], removed: [], canUndo: false, canRedo: false } })),
+    setField: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     search: vi.fn(async () => []),
     getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "unset" as const })),
     setSettings: vi.fn(async () => {}),
@@ -151,25 +153,22 @@ describe("Reference view", () => {
     expect(document.querySelector<HTMLInputElement>("#value")!.checked).toBe(true);
   });
 
-  it("Import images calls importPaths, then reopens the library and summarises", async () => {
+  it("Import images calls importPaths and applies its Change to the store, with no reopen (B4)", async () => {
     vi.mocked(api.pickImages).mockResolvedValueOnce(["C:/in/x.jpg", "C:/in/y.psd"]);
-    vi.mocked(api.importPaths).mockResolvedValueOnce({
-      added: ["d"],
-      duplicates: [],
-      skipped: [["C:/in/y.psd", { kind: "unsupported", detail: "unrecognised file type" }]],
-    });
     const D = ref("d", "Plate D", []);
-    vi.mocked(api.openLibrary).mockResolvedValueOnce({ ...library, references: [A, B, C, D] });
+    vi.mocked(api.importPaths).mockResolvedValueOnce({
+      report: { added: ["d"], duplicates: [], skipped: [["C:/in/y.psd", { kind: "unsupported", detail: "unrecognised file type" }]] },
+      change: { references: [D], removed: [], canUndo: true, canRedo: false },
+    });
     document.querySelector<HTMLButtonElement>('[data-import="files"]')!.click();
     await settle();
     expect(api.importPaths).toHaveBeenCalledWith(["C:/in/x.jpg", "C:/in/y.psd"]);
-    expect(api.openLibrary).toHaveBeenLastCalledWith("C:\\lib");
-    const imported = vi.mocked(api.importPaths).mock.invocationCallOrder[0];
-    expect(Math.max(...vi.mocked(api.openLibrary).mock.invocationCallOrder)).toBeGreaterThan(imported);
+    expect(api.openLibrary).not.toHaveBeenCalled();
+    expect(store.canUndo).toBe(true); // the import stays undoable
     expect(document.querySelector("#lib-count")?.textContent).toBe("4 references");
     const notice = document.querySelector<HTMLElement>("#import-notice")!;
     expect(notice.hidden).toBe(false);
-    expect(notice.textContent).toContain("Added 1 reference · 1 file skipped");
+    expect(notice.textContent).toContain("Added 1 to the Inbox · 1 file skipped");
     expect(notice.textContent).toContain("y.psd not a supported image type");
   });
 
@@ -506,14 +505,17 @@ describe("notices", () => {
     document.querySelector<HTMLButtonElement>("#import-dismiss")!.click();
     expect(notice.hidden).toBe(true);
 
-    // Every reopen shows it again: after an import, next to the import summary.
+    // An import no longer reopens the library (B4), so its summary stands alone.
     vi.mocked(api.pickImages).mockResolvedValueOnce(["C:/in/x.jpg"]);
-    vi.mocked(api.importPaths).mockResolvedValueOnce({ added: ["d"], duplicates: [], skipped: [] });
+    vi.mocked(api.importPaths).mockResolvedValueOnce({
+      report: { added: ["d"], duplicates: [], skipped: [] },
+      change: { references: [ref("d", "Plate D", [])], removed: [], canUndo: true, canRedo: false },
+    });
     document.querySelector<HTMLButtonElement>('[data-import="files"]')!.click();
     await settle();
     expect(notice.hidden).toBe(false);
-    expect(notice.textContent).toContain("Added 1 reference");
-    expect(notice.textContent).toContain(warning);
+    expect(notice.textContent).toContain("Added 1 to the Inbox");
+    expect(api.openLibrary).not.toHaveBeenCalled();
     view.destroy();
   });
 
@@ -569,7 +571,7 @@ describe("notices", () => {
     });
     const el = document.createElement("div");
     el.innerHTML = out;
-    expect(el.textContent).toContain("Added 1 reference");
+    expect(el.textContent).toContain("Added 1 to the Inbox");
     expect(el.textContent).toContain("p3 <red>.png");
     expect(el.textContent).toContain("ICC profile could not be parsed; colours left unconverted");
     expect(el.querySelector("red")).toBeNull();
