@@ -59,7 +59,7 @@
   - Source Serif 4 and Red Hat Mono, self-hosted in `src/fonts/`;
   - the system UI stack for UI text;
   - the operation inks and the N5 grey card.
-- The UI uses plain-English operation labels: "Stand out", "Hold together", "Lead the eye" and "Make them think".
+- The UI uses each operation's plain-English label from the taxonomy. The seed's labels are "Stand out", "Hold together", "Lead the eye" and "Make them think". Operations are editable from Plan 3 on, so no code may assume exactly four.
 
 ## Review Focus
 
