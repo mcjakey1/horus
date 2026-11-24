@@ -59,7 +59,7 @@
   - Source Serif 4 and Red Hat Mono, self-hosted in `src/fonts/`;
   - the system UI stack for UI text;
   - the operation inks and the N5 grey card.
-- The UI uses plain-English operation labels: "Stand out", "Hold together", "Lead the eye" and "Make them think".
+- The UI uses each operation's plain-English label from the taxonomy. The seed's labels are "Stand out", "Hold together", "Lead the eye" and "Make them think". Operations are editable from Plan 3 on, so no code may assume exactly four.
 
 ## Review Focus
 
@@ -195,9 +195,10 @@
   ```rust
   pub struct Taxonomy { pub operations: Vec<Operation>, pub domains: Vec<Domain>,
       pub branches: Vec<Branch>, pub techniques: Vec<Technique>, pub branch_techniques: Vec<BranchTechnique> }
-  // field names exactly as in taxonomy/taxonomy.json (camelCase): Operation{id,name,plainLabel,icon,description},
-  // Technique{id,name,icon,description,synonyms,citation,custom}, Branch{id,operationId,domainId},
+  // field names exactly as in taxonomy/taxonomy.json (camelCase): Operation{id,name,plainLabel,color,icon,description},
+  // Technique{id,name,icon,description,synonyms,citation,examples,custom}, Branch{id,operationId,domainId},
   // BranchTechnique{branchId,techniqueId,source,rationale}
+  // Every struct also carries `#[serde(flatten)] extra: serde_json::Map<String, Value>`, so unknown fields survive a load/save round-trip (Plan 6 saves the taxonomy).
   impl Taxonomy {
       pub fn load(path: &Path) -> Result<Taxonomy, String>;
       pub fn validate(&self) -> Result<(), Vec<String>>;          // same rules as taxonomy/check_taxonomy.py
@@ -208,6 +209,7 @@
 - [ ] **Step 1: Write the failing tests**
   - `seed_validates`: load the bundled seed. `validate()` is `Ok`, there are 48 techniques, 18 branches and 55 branch–technique links, and the observed path `differentiate.feature` → `complementary-pairing` is present.
   - `validate_catches_dangling`: a technique link to a branch id that doesn't exist returns an `Err` naming that id.
+  - `roundtrip_preserves_fields`: load the seed, serialise it, and parse it again. The result equals the original as `serde_json::Value`, including `color`, `examples` and any unknown key.
   - `branches_for_dag`: `branches_for("differentiate", "chiaroscuro")` returns at least one branch. A technique that sits under two branches of the same operation returns both, so the tag picker must ask (SPEC §6.3).
 
 - [ ] **Step 2: Run, then implement, then run again**
@@ -238,10 +240,14 @@
   pub enum Skip { Unsupported(String), Unreadable(String), TooLarge(u64) }
   pub struct ImportReport { pub added: Vec<String>, pub duplicates: Vec<(PathBuf, String)>, pub skipped: Vec<(PathBuf, Skip)> }
   pub const MAX_BYTES: u64 = 500 * 1024 * 1024;
-  pub fn import_paths(lib: &mut Library, paths: &[PathBuf]) -> ImportReport;   // files or folders (recursive via walkdir)
+  pub struct ImportOutcome { pub references: Vec<Reference>, pub report: ImportReport }
+  pub fn import_paths(root: &Path, known_hashes: &HashMap<String, String>, paths: &[PathBuf]) -> ImportOutcome;
+  // files or folders (recursive via walkdir)
   ```
-  - `duplicates` holds pairs of the source path and the id of the existing reference.
-  - The caller then runs `lib.save()`. The import does not save.
+  - `known_hashes` maps a hash to an existing reference id.
+  - `duplicates` holds pairs of the source path and the id of the existing reference, or of the earlier file in the same batch.
+  - `import_paths` copies files and writes thumbnails under `root`, but never touches `LibraryData`. The caller holds no lock while it runs. Afterwards the caller appends `references` to the library under the lock and saves. This keeps intake from blocking the UI (SPEC §9).
+  - ICC: if a profile can't be parsed or transformed, which `qcms` does to many ICC v4 profiles, the thumbnail is made without conversion. The import still succeeds, and the reason goes into `report.warnings: Vec<(PathBuf, String)>`.
 
 - [ ] **Step 1: Write the failing tests**
   - `imports_and_thumbs`: after importing `small.jpg`, there is one reference with `width == 64` and `height == 48`. `images/<hash>.jpg` exists. `thumbs/256/<hash>.jpg` exists, and its longest side is at most 256; images smaller than the thumbnail size are never upscaled.
@@ -253,6 +259,7 @@
     - A valid file in the same batch is still added.
   - `too_large_is_skipped_without_reading`: use a sparse file with `set_len(MAX_BYTES + 1)`. It gives `TooLarge`.
   - `icc_converted_to_srgb`: the 256 thumbnail of `p3_red.png` has a centre pixel whose red channel is within 3 of 255, with G and B both above 0, because P3 red is clipped and converted into sRGB. Without the conversion it would read as `(255, 0, 0)`. The original in `images/` stays byte-identical to the source.
+  - `bad_icc_falls_back`: an image whose embedded profile is corrupt bytes still imports, and its warning is recorded in `report.warnings`.
   - `folder_import_recurses_unicode`: importing a folder `Été/sub/` that contains `small.jpg` gives one reference.
 
 - [ ] **Step 2: Run, then implement, then run again**
@@ -371,6 +378,8 @@
   ```
   - `Settings` is `{ last_library: Option<String>, theme: "system"|"light"|"dark", find_similar: "unset"|"on"|"off" }`. It is stored at `app_config_dir()/settings.json` with an atomic write. The default for `find_similar` is `"unset"`, which marks that the first-run question has not been answered (Plan 5).
 - State: `Mutex<Option<(Library, Taxonomy, correlate::Index)>>`. The index is rebuilt after every import.
+  - `import_paths` runs as an async command on `tauri::async_runtime::spawn_blocking`. It reads `root` and the known hashes under the lock, releases the lock, imports, then takes the lock again only to append, save and rebuild the index.
+  - Each reference in `LibraryView` carries `thumb256` and `thumb1024`: absolute paths built in Rust with `Path::join`. The UI never builds paths by string concatenation, because Windows separators and characters such as `%` and `#` would break.
 - Asset protocol: enable `assetProtocol` and add the opened library root to its scope at runtime with `app.asset_protocol_scope().allow_directory(root, true)`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -405,7 +414,7 @@
 
 **Interfaces:**
 - Consumes the commands in Task 7.
-- `convertFileSrc(lib.root + "/thumbs/1024/" + hash + ".jpg")` supplies image URLs.
+- `convertFileSrc(ref.thumb1024)` supplies image URLs, from the absolute path Task 7 provides. Never concatenate path strings.
 - Produces:
   - `tileBox(aspect: number, tile: number, region?: Region): { plate: Box; outline?: Box }`, where `Box = { left: number; top: number; width: number; height: number }`, in pixels;
   - `mountReference(root: HTMLElement, api: Api): { show(id: string): void }`.

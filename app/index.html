@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Horus</title>
+<script type="module" src="/src/main.ts"></script>
+</head>
+<body>
+<header class="top">
+  <span class="brand">Horus</span>
+  <nav class="tabs" aria-label="Views">
+    <button class="tab is-on" aria-current="page">Reference</button>
+    <button class="tab" disabled title="Not built yet">Tree</button>
+    <button class="tab" disabled title="Not built yet">Galaxy</button>
+    <button class="tab" disabled title="Not built yet">Radial</button>
+    <button class="tab" disabled title="Not built yet">Inbox <span class="count" id="inbox-count">0</span></button>
+    <button class="tab" disabled title="Not built yet">Boards</button>
+  </nav>
+  <div class="search">
+    <label class="sr-only" for="q">Search by idea</label>
+    <input id="q" type="search" role="combobox" aria-autocomplete="list" autocomplete="off" placeholder="Search by idea — “stand out”, “moody”, “backlit”…" aria-controls="q-results" aria-expanded="false">
+    <ul id="q-results" class="q-results" role="listbox" hidden></ul>
+  </div>
+  <button class="icon-btn" id="theme" aria-label="Switch to dark theme" title="Theme">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 3.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg>
+  </button>
+</header>
+
+<section class="record" aria-label="Path">
+  <div class="cell" data-level="op"><span class="k">01 Operation</span><span class="v serif" data-v></span></div>
+  <div class="cell" data-level="domain"><span class="k">02 Domain</span><span class="v" data-v></span></div>
+  <div class="cell" data-level="tech"><span class="k">03 Technique</span><span class="v serif" data-v></span></div>
+  <div class="cell" data-level="ref"><span class="k">04 Reference <span class="ref-id mono" id="ref-id"></span></span><span class="v serif italic" data-v></span></div>
+  <button class="back" id="back" disabled aria-label="Back to previous reference">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+    <span id="back-label">Back</span>
+  </button>
+</section>
+
+<main class="work">
+  <section class="lab" id="lab" aria-label="Specimen">
+    <figure class="specimen" id="specimen">
+      <div class="plate" id="plate"></div>
+      <div class="boxes" id="boxes"></div>
+    </figure>
+    <p class="lab-meta mono" id="lab-meta"></p>
+  </section>
+  <svg class="leaders" id="leaders" aria-hidden="true"></svg>
+  <aside class="margin" aria-label="Connections">
+    <div class="m-tabs" role="tablist">
+      <button role="tab" class="m-tab is-on" id="tab-callouts" aria-controls="pane-callouts" aria-selected="true" data-pane="callouts">Callouts</button>
+      <button role="tab" class="m-tab" id="tab-ranked" aria-controls="pane-ranked" aria-selected="false" tabindex="-1" data-pane="ranked">Ranked</button>
+      <button role="tab" class="m-tab" id="tab-links" aria-controls="pane-links" aria-selected="false" tabindex="-1" data-pane="links">Links <span class="count" id="links-count"></span></button>
+    </div>
+    <div class="pane" id="pane-callouts" role="tabpanel" aria-labelledby="tab-callouts"></div>
+    <div class="pane" id="pane-ranked" role="tabpanel" aria-labelledby="tab-ranked" hidden></div>
+    <div class="pane" id="pane-links" role="tabpanel" aria-labelledby="tab-links" hidden></div>
+  </aside>
+</main>
+
+<footer class="status">
+  <span class="mono" id="lib-count"></span>
+  <span class="sep"></span>
+  <button class="text-btn" data-import="files">Import images…</button>
+  <button class="text-btn" data-import="folder">Import folder…</button>
+  <span class="sep"></span>
+  <label class="toggle"><input type="checkbox" id="value"> <span>Value view</span></label>
+  <span class="sep"></span>
+  <span class="muted" id="find-similar">Find similar: off</span>
+  <span class="grow"></span>
+  <span class="muted source" id="data-source"></span>
+</footer>
+
+<aside class="notice" id="import-notice" role="status" aria-label="Import" hidden>
+  <div data-body></div>
+  <button class="text-btn" id="import-dismiss">Dismiss</button>
+</aside>
+</body>
+</html>

@@ -1,0 +1,47 @@
+[package]
+name = "horus"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "horus_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tempfile = "3"
+blake3 = "1.8.7"
+walkdir = "2.5.1"
+qcms = "0.3.0"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "tiff", "gif"] }
+tauri-plugin-dialog = "2"
+sysinfo = { version = "0.40.4", default-features = false, features = ["system"] }
+
+[dev-dependencies]
+tauri = { version = "2", features = ["protocol-asset", "test"] }
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+# No panic = "abort": imports catch a decoder panic per file (import.rs).
+strip = true
+
+# ponytail: the image pipeline (generic `image` code is compiled into this crate) is ~8x
+# slower unoptimised, which made the debug demo seed take ~40 s. opt-level 1 brings it under 10 s.
+[profile.dev]
+opt-level = 1
