@@ -5,7 +5,14 @@ import type { Api, LibraryView } from "./api";
 import { boot, FIND_SIMILAR_COPY } from "./firstrun";
 
 // The library may land in a "Horus Library" subfolder of the picked folder.
-const lib: LibraryView = { root: "C:\\Références\\Horus Library", references: [], links: [], warning: null, seedWarnings: [] };
+const lib: LibraryView = {
+  root: "C:\\Références\\Horus Library",
+  references: [],
+  links: [],
+  warning: null,
+  seedWarnings: [],
+  taxonomyReadOnly: false,
+};
 
 function fakeApi(lastLibrary: string | null): Api {
   return {
@@ -23,6 +30,8 @@ function fakeApi(lastLibrary: string | null): Api {
     pickFolder: vi.fn(async () => "C:\\Références"),
     pickImages: vi.fn(async () => []),
     assetUrl: (p: string) => p,
+    undo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
+    redo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
   };
 }
 
@@ -61,6 +70,10 @@ describe("first run", () => {
     expect($("#data-source").textContent).toBe("Library: Horus Library");
     expect($("#data-source").title).toBe("C:\\Références\\Horus Library");
     expect(api.setSettings).not.toHaveBeenCalledWith(expect.objectContaining({ lastLibrary: expect.anything() }));
+    // B7: boot() builds the Store from the opened library and mounts the view on it
+    expect(view.store.root).toBe(lib.root);
+    expect(api.getTaxonomy).toHaveBeenCalledTimes(1);
+    expect(api.openLibrary).not.toHaveBeenCalled();
   });
 
   it("shows first run with a readable message when lastLibrary fails to open", async () => {

@@ -1,0 +1,28 @@
+{
+  "_about": "Shared by tagging/model.test.ts (matchesQuery) and search.rs (shared_match_cases). Each case runs against the seed taxonomy plus extraTechniques, which the Rust test links under differentiate.feature. The Devanagari case only passes when vowel signs (U+093E) count as letters: Rust's char::is_alphanumeric, JS \\p{Alphabetic}, not \\p{L}.",
+  "extraTechniques": [
+    {
+      "id": "chhaya-fixture",
+      "name": "Chhaya",
+      "icon": "",
+      "description": "गहरी छाया",
+      "synonyms": [],
+      "citation": null,
+      "examples": [],
+      "custom": true
+    }
+  ],
+  "cases": [
+    { "q": "moody", "technique": "chiaroscuro", "match": true },
+    { "q": "spotlight", "technique": "chiaroscuro", "match": true },
+    { "q": "a very moody scene", "technique": "chiaroscuro", "match": true },
+    { "q": "empty space", "technique": "isolation-in-void", "match": true },
+    { "q": "moody", "technique": "rim-light", "match": false },
+    { "q": "backlit", "technique": "rim-light", "match": true },
+    { "q": "chiaroscuro lighting", "technique": "chiaroscuro", "match": true },
+    { "q": "moody!", "technique": "chiaroscuro", "match": true },
+    { "q": "pop out", "technique": "pop-out", "match": true },
+    { "q": "eyesore", "technique": "face-schema", "match": false },
+    { "q": "छाया", "technique": "chhaya-fixture", "match": true }
+  ]
+}

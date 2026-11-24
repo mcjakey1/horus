@@ -530,4 +530,31 @@ mod tests {
             Some("differentiate")
         );
     }
+
+    /// The same cases as `tagging/model.test.ts` runs through `matchesQuery`, so the picker
+    /// filter and this search agree. Extra fixture techniques sit under `differentiate.feature`.
+    #[test]
+    fn shared_match_cases() {
+        let file: serde_json::Value =
+            serde_json::from_str(include_str!("../../src/tagging/match-cases.json")).unwrap();
+        let mut tax = seed();
+        for t in file["extraTechniques"].as_array().unwrap() {
+            let t: crate::taxonomy::Technique = serde_json::from_value(t.clone()).unwrap();
+            tax.branch_techniques.push(
+                serde_json::from_value(serde_json::json!({"branchId": "differentiate.feature",
+                    "techniqueId": t.id, "source": "user", "rationale": "fixture"}))
+                .unwrap(),
+            );
+            tax.techniques.push(t);
+        }
+        for c in file["cases"].as_array().unwrap() {
+            let (q, id) = (c["q"].as_str().unwrap(), c["technique"].as_str().unwrap());
+            let hits = search(&tax, &empty(), q);
+            assert_eq!(
+                technique_ids(&hits).contains(&id),
+                c["match"].as_bool().unwrap(),
+                "{q:?} -> {id}"
+            );
+        }
+    }
 }

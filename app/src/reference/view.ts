@@ -1,38 +1,30 @@
 // The Reference view, ported 1:1 from prototype/app.js (show / render*). Correlation comes from
-// the Rust `related` command; names come from the library's taxonomy (tags carry ids only).
-import type { Api, LibraryView, Link, Reference, Scored, Settings, Tag, Taxonomy } from "../api";
+// the Rust `related` command. The references, links and taxonomy come from the Store (tags
+// carry ids only); the view keeps only its own state: focus, trail, pin, filter.
+import type { Api, Reference, Scored, Settings, Tag } from "../api";
+import { esc } from "../esc";
 import { mountImport, warningHTML } from "../importer";
+import { opInk, opLabel } from "../ops";
 import { mountSearch } from "../search";
+import type { Store } from "../store";
 import { drawLeaders, highlight } from "./leaders";
 import { tileHTML } from "./tile";
 
-const OP_KEY: Record<string, string> = { differentiate: "diff", group: "group", sequence: "seq", infer: "infer" };
-const key = (opId: string) => OP_KEY[opId] ?? "diff";
-const opColor = (opId: string) => `var(--${key(opId)})`;
-const opText = (opId: string) => `var(--${key(opId)}-text)`;
-const opOn = (opId: string) => `var(--${key(opId)}-on)`;
-const esc = (s: unknown = "") =>
-  String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const fmt = (n: number) => n.toFixed(2);
 const stateLabel = { full: "full tag", partial: "partial", region: "region" } as const;
 const stateOf = (t: Tag): keyof typeof stateLabel => (t.region ? "region" : t.techniqueId ? "full" : "partial");
 const PAINT_DELAY = 180; // matches .specimen.is-leaving transition
 
-/** `initial`: a library already opened (first run); otherwise the view opens `lastLibrary`. */
+/** `ready` resolves once the settings (theme, Find similar status) are in; the library is painted at mount. */
 export function mountReference(
   root: HTMLElement,
   api: Api,
-  initial?: LibraryView,
+  store: Store,
 ): { show(id: string): void; ready: Promise<void>; destroy(): void } {
   const life = new AbortController();
   const signal = life.signal;
   const $ = <T extends Element = HTMLElement>(s: string) => root.querySelector<T>(s);
   const S = {
-    root: null as string | null,
-    refs: [] as Reference[],
-    byId: new Map<string, Reference>(),
-    links: [] as Link[],
-    tax: null as Taxonomy | null,
     settings: { lastLibrary: null, theme: "system", findSimilar: "unset" } as Settings,
     focus: null as string | null,
     trail: [] as string[],
@@ -42,33 +34,37 @@ export function mountReference(
     related: [] as Scored[],
     ranked: [] as string[],
     filter: null as string | null,
-    source: "",
-    sourceTitle: "",
     paintTimer: 0 as ReturnType<typeof setTimeout> | 0,
-    nav: 0, // drops stale show() calls
+    nav: 0, // drops stale paints
   };
 
   // ---------- taxonomy lookups (tags carry ids) ----------
-  const opOf = (id: string) => S.tax?.operations.find((o) => o.id === id);
-  const opName = (id: string) => opOf(id)?.name ?? id;
-  const opPlain = (id: string) => opOf(id)?.plainLabel ?? "";
-  const techName = (id?: string) => (id ? (S.tax?.techniques.find((t) => t.id === id)?.name ?? id) : "");
-  const techDef = (id?: string) => (id ? S.tax?.techniques.find((t) => t.id === id)?.description : undefined);
+  const opColor = (opId: string) => opInk(store.tax, opId).base;
+  const opText = (opId: string) => opInk(store.tax, opId).text;
+  const opOn = (opId: string) => opInk(store.tax, opId).on;
+  const opName = (id: string) => opLabel(store.tax, id).name;
+  const opPlain = (id: string) => opLabel(store.tax, id).plain;
+  const techName = (id?: string) => (id ? (store.tax.techniques.find((t) => t.id === id)?.name ?? id) : "");
+  const techDef = (id?: string) => (id ? store.tax.techniques.find((t) => t.id === id)?.description : undefined);
   const domainOf = (branchId?: string) => {
-    const b = branchId ? S.tax?.branches.find((x) => x.id === branchId) : undefined;
-    return b ? (S.tax?.domains.find((d) => d.id === b.domainId)?.name ?? b.domainId) : "";
+    const b = branchId ? store.tax.branches.find((x) => x.id === branchId) : undefined;
+    return b ? (store.tax.domains.find((d) => d.id === b.domainId)?.name ?? b.domainId) : "";
   };
   const branchLabel = (branchId: string) => {
-    const b = S.tax?.branches.find((x) => x.id === branchId);
+    const b = store.tax.branches.find((x) => x.id === branchId);
     return b ? `${opName(b.operationId)} · ${domainOf(branchId)}` : branchId;
   };
   const aspect = (r: Reference) => (r.width && r.height ? r.width / r.height : 3 / 4);
   const img = (r: Reference, big = false) =>
     `<img src="${esc(api.assetUrl(big ? r.thumb1024 : r.thumb256))}" alt="${esc(r.title)}" loading="lazy">`;
+  const allRefs = () => [...store.refs.values()];
 
   // ---------- rendering ----------
+  const arrivalOf = (ref: Reference, via: string | null) =>
+    ref.tags.find((t) => via && t.techniqueId === via) ?? ref.tags.find((t) => t.techniqueId) ?? ref.tags[0] ?? null;
+
   function show(id: string, { push = true, via = null as string | null } = {}) {
-    const ref = S.byId.get(id);
+    const ref = store.refs.get(id);
     if (!ref) return;
     if (push && S.focus && S.focus !== id) S.trail.push(S.focus);
     const spec = $("#specimen")!;
@@ -78,7 +74,7 @@ export function mountReference(
     S.hot = null;
     S.filter = null;
     // The path you arrived on stays in the record header at rest.
-    S.arrival = ref.tags.find((t) => via && t.techniqueId === via) ?? ref.tags.find((t) => t.techniqueId) ?? ref.tags[0] ?? null;
+    S.arrival = arrivalOf(ref, via);
     clearTimeout(S.paintTimer);
     const mine = ++S.nav;
     const related = api.related(id).catch(() => [] as Scored[]);
@@ -86,33 +82,83 @@ export function mountReference(
       const list = await related;
       if (mine !== S.nav) return;
       S.related = list;
-      spec.style.setProperty("--ar", String(aspect(ref)));
-      $("#plate")!.innerHTML = img(ref, true);
-      renderBoxes(ref);
-      renderCallouts(ref);
-      renderRanked(ref);
-      renderLinks(ref);
-      renderRecord(ref, S.arrival);
-      readout();
-      spec.classList.remove("is-leaving");
-      redraw();
+      paintFocus(ref, true);
     };
     if (first) void paint();
     else {
       spec.classList.add("is-leaving");
       S.paintTimer = setTimeout(() => void paint(), PAINT_DELAY);
     }
-    const back = $<HTMLButtonElement>("#back")!;
-    back.disabled = !S.trail.length;
-    $("#back-label")!.textContent = S.trail.length ? `Back to ${S.byId.get(S.trail[S.trail.length - 1])?.title ?? ""}` : "Back";
+    renderBack();
     renderStatus();
   }
 
+  function paintFocus(ref: Reference, plate: boolean) {
+    const spec = $("#specimen")!;
+    spec.style.setProperty("--ar", String(aspect(ref)));
+    if (plate) $("#plate")!.innerHTML = img(ref, true);
+    renderBoxes(ref);
+    renderCallouts(ref);
+    renderRanked(ref);
+    renderLinks(ref);
+    renderRecord(ref, S.arrival);
+    readout();
+    spec.classList.remove("is-leaving");
+    redraw();
+  }
+
+  /** Re-render the focus in place after a Change: the pin, filter and trail stay. */
+  function refresh() {
+    const ref = focusRef();
+    if (!ref) return;
+    S.arrival = ref.tags.find((t) => t.id === S.arrival?.id) ?? arrivalOf(ref, null);
+    if (S.pinned != null && !ref.tags[S.pinned]) S.pinned = null;
+    if (S.hot != null && !ref.tags[S.hot]) S.hot = null;
+    clearTimeout(S.paintTimer);
+    const mine = ++S.nav;
+    void api
+      .related(ref.id)
+      .catch(() => [] as Scored[])
+      .then((list) => {
+        const now = focusRef();
+        if (mine !== S.nav || !now) return;
+        S.related = list;
+        // ponytail: the plate image is kept; a Change never edits the image itself
+        paintFocus(now, false);
+        syncPins();
+        if (S.pinned != null) hot(S.pinned);
+      });
+  }
+
+  function renderEmpty() {
+    S.focus = S.pinned = S.hot = S.arrival = S.filter = null;
+    S.related = [];
+    S.ranked = [];
+    clearTimeout(S.paintTimer);
+    S.nav++;
+    $("#specimen")!.classList.remove("is-leaving");
+    for (const s of ["#plate", "#boxes", "#pane-ranked", "#pane-links", "#lab-meta"]) $(s)!.innerHTML = "";
+    $("#pane-callouts")!.innerHTML = `<p class="none">No references yet.</p>`;
+    $("#links-count")!.textContent = "";
+    $("#ref-id")!.textContent = "";
+    $("#ref-id")!.title = "";
+    root.querySelectorAll(".cell[data-level] [data-v]").forEach((v) => (v.textContent = ""));
+    redraw();
+  }
+
+  function renderBack() {
+    const back = $<HTMLButtonElement>("#back")!;
+    const last = S.trail[S.trail.length - 1];
+    back.disabled = !S.trail.length;
+    $("#back-label")!.textContent = last ? `Back to ${store.refs.get(last)?.title ?? ""}` : "Back";
+  }
+
   function renderStatus() {
-    $("#lib-count")!.textContent = `${S.refs.length} references`;
-    $("#inbox-count")!.textContent = String(S.refs.filter((r) => !r.tags.length).length);
-    $("#data-source")!.textContent = S.source;
-    $("#data-source")!.title = S.sourceTitle || S.source;
+    const folder = store.root.split(/[\\/]/).filter(Boolean).pop() ?? store.root;
+    $("#lib-count")!.textContent = `${store.refs.size} references`;
+    $("#inbox-count")!.textContent = String(store.inbox().length);
+    $("#data-source")!.textContent = [`Library: ${folder}`, store.warning].filter(Boolean).join(" · ");
+    $("#data-source")!.title = [store.root, store.warning].filter(Boolean).join(" · ");
     $("#find-similar")!.textContent = `Find similar: ${S.settings.findSimilar === "on" ? "on" : "off"}`;
   }
 
@@ -131,12 +177,12 @@ export function mountReference(
   function thumbsFor(technique?: string) {
     if (!technique) return [];
     return S.related
-      .filter((x) => S.byId.get(x.id)?.tags.some((t) => t.techniqueId === technique))
+      .filter((x) => store.refs.get(x.id)?.tags.some((t) => t.techniqueId === technique))
       .slice(0, 4);
   }
 
   function readout() {
-    const ref = S.focus ? S.byId.get(S.focus) : undefined;
+    const ref = focusRef();
     if (!ref) return;
     const value = $<HTMLInputElement>("#value")!.checked ? "on" : "off";
     // Items wrap as whole units; the separator trails each item so no line starts with "·".
@@ -170,7 +216,7 @@ export function mountReference(
               : th.length
                 ? `<div class="thumbs">${th
                     .map((x) => {
-                      const r = S.byId.get(x.id)!;
+                      const r = store.refs.get(x.id)!;
                       const region = r.tags.find((u) => u.techniqueId === t.techniqueId && u.region)?.region;
                       return `<button class="thumb" data-go="${esc(r.id)}" data-via="${esc(t.techniqueId)}" title="${esc(r.title)}" aria-label="Open ${esc(r.title)}, score ${fmt(x.score)}"><span class="t">${tileHTML(img(r), aspect(r), opColor(op), region)}</span><span class="sc">${fmt(x.score)}</span></button>`;
                     })
@@ -188,7 +234,7 @@ export function mountReference(
     const byScore = new Map(S.related.map((x) => [x.id, x]));
     const blank = (id: string): Scored => ({ id, score: 0, sharedTechniques: [], sharedBranches: [] });
     const list = S.filter
-      ? S.refs.filter((r) => r.tags.some((t) => t.techniqueId === S.filter)).map((r) => byScore.get(r.id) ?? blank(r.id))
+      ? allRefs().filter((r) => r.tags.some((t) => t.techniqueId === S.filter)).map((r) => byScore.get(r.id) ?? blank(r.id))
       : S.related;
     S.ranked = list.map((x) => x.id);
     const head = S.filter
@@ -203,7 +249,7 @@ export function mountReference(
         );
     const rows = list
       .map((x) => {
-        const r = S.byId.get(x.id);
+        const r = store.refs.get(x.id);
         if (!r) return "";
         const why = x.sharedTechniques.length
           ? `shares ${x.sharedTechniques.map(techName).join(", ")}`
@@ -219,9 +265,9 @@ export function mountReference(
   }
 
   const linksOf = (ref: Reference) =>
-    S.links
+    store.links
       .filter((l) => l.fromRef === ref.id || l.toRef === ref.id)
-      .map((l) => ({ ...l, other: S.byId.get(l.fromRef === ref.id ? l.toRef : l.fromRef)! }))
+      .map((l) => ({ ...l, other: store.refs.get(l.fromRef === ref.id ? l.toRef : l.fromRef)! }))
       .filter((l) => l.other);
 
   function renderLinks(ref: Reference) {
@@ -263,7 +309,7 @@ export function mountReference(
   }
 
   // ---------- leaders and hover ----------
-  const focusRef = () => (S.focus ? S.byId.get(S.focus) : undefined);
+  const focusRef = () => (S.focus ? store.refs.get(S.focus) : undefined);
   const colors = () => (focusRef()?.tags ?? []).map((t) => opColor(t.operationId));
   const redraw = () => requestAnimationFrame(() => drawLeaders(root, colors(), S.hot));
 
@@ -371,7 +417,8 @@ export function mountReference(
     selectPane(next.dataset.pane!);
   }, { signal });
   document.addEventListener("keydown", (e) => {
-    if ((e.target as Element).matches?.("input")) return;
+    // The picker, the lightbox and text fields own their keys (Plan 2 Global Constraints).
+    if ((e.target as Element).closest?.(".picker, .lightbox, input, textarea, [contenteditable]")) return;
     if (e.key === "/") {
       e.preventDefault();
       $<HTMLInputElement>("#q")!.focus();
@@ -400,68 +447,56 @@ export function mountReference(
 
   mountSearch(root, api, {
     techniqueName: techName,
-    operationLabel: (id) => ({ name: opName(id), plain: opPlain(id), color: opColor(id) }),
-    referenceTitle: (id) => S.byId.get(id)?.title,
+    operationLabel: (id) => ({ ...opLabel(store.tax, id), color: opColor(id) }),
+    referenceTitle: (id) => store.refs.get(id)?.title,
     onTechnique: applyFilter,
     onReference: (id) => show(id),
   }, signal);
 
   const notify = mountImport(root, api, {
-    libraryRoot: () => S.root,
-    onLibrary: (lib) => {
-      apply(lib);
-      const id = S.focus && S.byId.has(S.focus) ? S.focus : start()?.id;
-      if (id) show(id, { push: false });
-      else renderStatus();
-    },
+    libraryRoot: () => store.root,
+    // Plan 1's import reopens the library; Plan 2 Task 5 replaces this with store.apply(change).
+    onLibrary: (lib) => store.reset(lib, store.tax),
   }, signal);
 
-  // ---------- load ----------
-  function apply(lib: LibraryView) {
-    S.root = lib.root;
-    S.refs = lib.references;
-    S.links = lib.links;
-    S.byId = new Map(S.refs.map((r) => [r.id, r]));
-    const folder = lib.root.split(/[\\/]/).filter(Boolean).pop() ?? lib.root;
-    S.source = [`Library: ${folder}`, lib.warning].filter(Boolean).join(" · ");
-    S.sourceTitle = [lib.root, lib.warning].filter(Boolean).join(" · ");
-  }
-  const start = () => S.refs.find((r) => r.tags.length >= 3) ?? S.refs.find((r) => r.tags.length) ?? S.refs[0];
+  // ---------- the Store ----------
+  const start = () => {
+    const refs = allRefs();
+    return refs.find((r) => r.tags.length >= 3) ?? refs.find((r) => r.tags.length) ?? refs[0];
+  };
+  const unsubscribe = store.subscribe((c) => {
+    S.trail = S.trail.filter((id) => store.refs.has(id));
+    if (c.reset && store.warning) notify(warningHTML(store.warning));
+    if (S.focus && store.refs.has(S.focus)) refresh();
+    else {
+      // The focus was removed: back along the trail, then the first reference, then empty.
+      const id = c.reset ? start()?.id : (S.trail.pop() ?? store.refs.keys().next().value);
+      if (id) show(id, { push: false });
+      else renderEmpty();
+    }
+    renderBack();
+    renderStatus();
+  });
 
-  async function load() {
-    try {
-      S.settings = await api.getSettings();
-    } catch {
-      /* keep defaults */
-    }
-    applyTheme(S.settings.theme === "system" ? systemTheme() : S.settings.theme);
-    if (!initial && !S.settings.lastLibrary) {
-      S.source = "No library open yet.";
-      renderStatus();
-      return;
-    }
-    try {
-      const lib = initial ?? (await api.openLibrary(S.settings.lastLibrary!));
-      apply(lib);
-      // After an import the reopen's warning goes out with the summary (importer.ts).
-      if (lib.warning) notify(warningHTML(lib.warning));
-      S.tax = await api.getTaxonomy();
-    } catch (err) {
-      S.source = `Could not open the library: ${String(err)}`;
-      renderStatus();
-      return;
-    }
-    const first = start();
-    if (first) show(first.id, { push: false });
-    else renderStatus();
-  }
+  renderStatus();
+  if (store.warning) notify(warningHTML(store.warning));
+  const first = start();
+  if (first) show(first.id, { push: false });
+  else renderEmpty();
 
-  const ready = load();
+  const ready = api
+    .getSettings()
+    .then((s) => void (S.settings = s), () => {}) // keep the defaults
+    .then(() => {
+      applyTheme(S.settings.theme === "system" ? systemTheme() : S.settings.theme);
+      renderStatus();
+    });
   return {
     show: (id: string) => show(id),
     ready,
     destroy: () => {
       life.abort();
+      unsubscribe();
       clearTimeout(S.paintTimer);
       S.nav++; // drop any paint still in flight
     },

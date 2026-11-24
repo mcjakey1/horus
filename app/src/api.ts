@@ -41,6 +41,8 @@ export type LibraryView = {
   warning?: string | null;
   /** Demo-seed problems; already joined into `warning`. */
   seedWarnings?: string[];
+  /** Plan 2 Task 5: the seed fallback after a damaged taxonomy.json; taxonomy edits are refused. */
+  taxonomyReadOnly: boolean;
 };
 
 export type Operation = { id: string; name: string; plainLabel: string; color?: string | null; icon: string; description: string };
@@ -62,6 +64,20 @@ export type Taxonomy = {
   branches: Branch[];
   techniques: Technique[];
   branchTechniques: { branchId: string; techniqueId: string }[];
+};
+
+// Plan 2 Task 5 types (the commands land with Task 5; Task 7 builds against them).
+export type NewTag = { operationId: string; techniqueId?: string; branchId?: string; region?: Region };
+/** A bundled demo image that uses a technique (SPEC §6.2); `path` is absolute. */
+export type DemoExample = { techniqueId: string; title: string; path: string };
+/** What a mutating command changed. `taxonomy` is set only when it changed. */
+export type Change = {
+  references: Reference[];
+  removed: string[];
+  taxonomy?: Taxonomy | null;
+  created?: string | null;
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
 export type Scored = { id: string; score: number; sharedTechniques: string[]; sharedBranches: string[] };
@@ -108,6 +124,8 @@ export interface Api {
   pickImages(): Promise<string[]>;
   /** URL for an absolute file path from Rust (asset protocol). */
   assetUrl(path: string): string;
+  undo(): Promise<Change>;
+  redo(): Promise<Change>;
 }
 
 const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "tif", "tiff", "gif"];
@@ -129,4 +147,6 @@ export const tauriApi: Api = {
   pickImages: async () =>
     (await open({ multiple: true, title: "Import images", filters: [{ name: "Images", extensions: IMAGE_EXTS }] })) ?? [],
   assetUrl: (path) => convertFileSrc(path),
+  undo: () => invoke("undo"),
+  redo: () => invoke("redo"),
 };

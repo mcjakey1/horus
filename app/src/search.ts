@@ -1,6 +1,7 @@
 // Search by idea (option A): the combobox. Results come from the Rust `search` command;
 // names and plain labels come from the taxonomy. Port of prototype renderResults/moveActive/choose.
 import type { Api, Hit } from "./api";
+import { esc } from "./esc";
 
 export type SearchHooks = {
   techniqueName(id: string): string;
@@ -9,9 +10,6 @@ export type SearchHooks = {
   onTechnique(id: string): void;
   onReference(id: string): void;
 };
-
-const esc = (s = "") =>
-  String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 export function mountSearch(root: HTMLElement, api: Api, hooks: SearchHooks, signal?: AbortSignal): { close(): void } {
   const input = root.querySelector<HTMLInputElement>("#q")!;
