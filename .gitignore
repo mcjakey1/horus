@@ -1,0 +1,13 @@
+# third-party reference material: never commit or ship
+reference/
+REFERENCE-ANALYSIS.md
+.impeccable/mocks/
+.impeccable/review/
+.impeccable/questions/
+# build output
+app/node_modules/
+app/src-tauri/target/
+app/dist/
+# local scratch
+.superpowers/
+.worktrees/

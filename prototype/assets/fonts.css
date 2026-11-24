@@ -1,0 +1,49 @@
+@font-face {
+  font-family: 'Red Hat Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/jVyY7nDnA2uf2zVvFAhhzEs-VMSjJpBTfgjwQV3I-7E.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Red Hat Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fonts/jVyY7nDnA2uf2zVvFAhhzEs-VMSjJpBTfgjwQW_I-7E.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/vEF02_tTDB4M7-auWDN0ahZJW1ge6NmXpVAHV83Bfb_US2D2QYxoUKIkn98pRl9dCw.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fonts/vEF02_tTDB4M7-auWDN0ahZJW1ge6NmXpVAHV83Bfb_US2D2QYxoUKIkn98pdF9dCw.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/vEFy2_tTDB4M7-auWDN0ahZJW3IX2ih5nk3AucvUHf6OAVIJmeUDygwjihdqrhw.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fonts/vEFy2_tTDB4M7-auWDN0ahZJW3IX2ih5nk3AucvUHf6OAVIJmeUDygwjiiVqrhw.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(fonts/vEFy2_tTDB4M7-auWDN0ahZJW3IX2ih5nk3AucvUHf6OAVIJmeUDygwjisltrhw.ttf) format('truetype');
+}

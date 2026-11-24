@@ -1,0 +1,1311 @@
+{
+  "version": 1,
+  "operations": [
+    {
+      "id": "differentiate",
+      "name": "Differentiate",
+      "plainLabel": "Stand out",
+      "color": null,
+      "icon": "a row of short vertical bars with one bar twice as tall",
+      "description": "Make one thing win the viewer's attention over everything else in the picture."
+    },
+    {
+      "id": "group",
+      "name": "Group",
+      "plainLabel": "Hold together",
+      "color": null,
+      "icon": "three small shapes wrapped by one rounded outline",
+      "description": "Make separate parts read as a single unit instead of a scatter of pieces."
+    },
+    {
+      "id": "sequence",
+      "name": "Sequence",
+      "plainLabel": "Lead the eye",
+      "color": null,
+      "icon": "a curved arrow passing through three points",
+      "description": "Decide what the viewer looks at first, next and last."
+    },
+    {
+      "id": "infer",
+      "name": "Infer",
+      "plainLabel": "Make them think",
+      "color": null,
+      "icon": "a dot, a plus sign, a dot, an equals sign and an empty circle",
+      "description": "Leave a gap or a puzzle that the viewer fills in with their own idea."
+    }
+  ],
+  "domains": [
+    {
+      "id": "feature",
+      "name": "Feature",
+      "icon": "a short strip of three swatches, dark to light",
+      "description": "The raw look of marks and surfaces: colour, light and dark, texture, size and shape."
+    },
+    {
+      "id": "grouping",
+      "name": "Grouping",
+      "icon": "three short bars tied together by one bracket",
+      "description": "How the eye decides which parts belong together and which stand apart."
+    },
+    {
+      "id": "space",
+      "name": "Space",
+      "icon": "a horizon line with two lines running to a vanishing point",
+      "description": "Where things sit in the frame and in depth: placement, cropping, focus and overlap."
+    },
+    {
+      "id": "social",
+      "name": "Social",
+      "icon": "a simple head in profile",
+      "description": "Signals we read from people: faces, eyes, gestures and body language."
+    },
+    {
+      "id": "semantic",
+      "name": "Semantic",
+      "icon": "an empty speech bubble",
+      "description": "What the depicted things are and what they stand for."
+    },
+    {
+      "id": "cultural",
+      "name": "Cultural",
+      "icon": "a classical column",
+      "description": "Shared references the viewer already knows: genres, famous images, reading habits and ways of making."
+    }
+  ],
+  "branches": [
+    {
+      "id": "differentiate.feature",
+      "operationId": "differentiate",
+      "domainId": "feature"
+    },
+    {
+      "id": "differentiate.grouping",
+      "operationId": "differentiate",
+      "domainId": "grouping"
+    },
+    {
+      "id": "differentiate.space",
+      "operationId": "differentiate",
+      "domainId": "space"
+    },
+    {
+      "id": "differentiate.social",
+      "operationId": "differentiate",
+      "domainId": "social"
+    },
+    {
+      "id": "differentiate.semantic",
+      "operationId": "differentiate",
+      "domainId": "semantic"
+    },
+    {
+      "id": "group.feature",
+      "operationId": "group",
+      "domainId": "feature"
+    },
+    {
+      "id": "group.grouping",
+      "operationId": "group",
+      "domainId": "grouping"
+    },
+    {
+      "id": "group.social",
+      "operationId": "group",
+      "domainId": "social"
+    },
+    {
+      "id": "sequence.feature",
+      "operationId": "sequence",
+      "domainId": "feature"
+    },
+    {
+      "id": "sequence.grouping",
+      "operationId": "sequence",
+      "domainId": "grouping"
+    },
+    {
+      "id": "sequence.space",
+      "operationId": "sequence",
+      "domainId": "space"
+    },
+    {
+      "id": "sequence.social",
+      "operationId": "sequence",
+      "domainId": "social"
+    },
+    {
+      "id": "sequence.cultural",
+      "operationId": "sequence",
+      "domainId": "cultural"
+    },
+    {
+      "id": "infer.grouping",
+      "operationId": "infer",
+      "domainId": "grouping"
+    },
+    {
+      "id": "infer.space",
+      "operationId": "infer",
+      "domainId": "space"
+    },
+    {
+      "id": "infer.social",
+      "operationId": "infer",
+      "domainId": "social"
+    },
+    {
+      "id": "infer.semantic",
+      "operationId": "infer",
+      "domainId": "semantic"
+    },
+    {
+      "id": "infer.cultural",
+      "operationId": "infer",
+      "domainId": "cultural"
+    }
+  ],
+  "techniques": [
+    {
+      "id": "chiaroscuro",
+      "name": "Chiaroscuro",
+      "icon": "a circle half lit and half in deep shadow",
+      "description": "Strong light against deep shadow, so forms carve out of the dark.",
+      "synonyms": [
+        "dramatic lighting",
+        "moody",
+        "spotlight",
+        "low key",
+        "high contrast",
+        "film noir",
+        "tenebrism",
+        "Rembrandt lighting",
+        "shadow"
+      ],
+      "citation": "Arnheim, Art and Visual Perception (1954; rev. 1974), chapter on light",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "pop-out",
+      "name": "Pop-out",
+      "icon": "a grid of small circles with one small triangle",
+      "description": "One item differs from all its neighbours in a single obvious way, so it is spotted instantly.",
+      "synonyms": [
+        "odd one out",
+        "eye-catching",
+        "the one red one",
+        "standout",
+        "find it fast"
+      ],
+      "citation": "Treisman & Gelade, \"A feature-integration theory of attention\", Cognitive Psychology (1980)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "saturation-blocking",
+      "name": "Saturation blocking",
+      "icon": "a grey rectangle with one solid bright square inside",
+      "description": "Keep one area in rich, vivid colour and mute or grey out everything around it.",
+      "synonyms": [
+        "selective color",
+        "color splash",
+        "desaturated background",
+        "muted palette",
+        "pop of color"
+      ],
+      "citation": "Itten, The Art of Color (1961), contrast of saturation",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "simultaneous-contrast",
+      "name": "Simultaneous contrast",
+      "icon": "two identical small squares sitting on a light and a dark field",
+      "description": "Pick the surrounding colour so the subject's own colour looks brighter, deeper or more intense than it really is.",
+      "synonyms": [
+        "color interaction",
+        "glowing color",
+        "vibrating colors",
+        "relative color",
+        "neighbouring colors"
+      ],
+      "citation": "Chevreul, The Principles of Harmony and Contrast of Colours (1839); Albers, Interaction of Color (1963)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "warm-and-cool-split",
+      "name": "Warm and cool split",
+      "icon": "a square split diagonally into a warm half and a cool half",
+      "description": "Give the subject warm colours and the surroundings cool ones, or the reverse, so they separate.",
+      "synonyms": [
+        "teal and orange",
+        "orange and teal",
+        "color temperature",
+        "warm cool contrast",
+        "cool shadows warm light"
+      ],
+      "citation": "Itten, The Art of Color (1961), contrast of warm and cool",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "scale-disparity",
+      "name": "Scale disparity",
+      "icon": "a huge circle beside a tiny one",
+      "description": "Show something far bigger or smaller than it should be next to what surrounds it.",
+      "synonyms": [
+        "giant",
+        "tiny",
+        "out of scale",
+        "oversized",
+        "miniature",
+        "surreal scale"
+      ],
+      "citation": null,
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "semantic-contrast",
+      "name": "Semantic contrast",
+      "icon": "a soft cloud shape facing a hard-edged block",
+      "description": "Put two things with opposite meanings side by side so the clash grabs attention and makes a point.",
+      "synonyms": [
+        "juxtaposition",
+        "opposites",
+        "clash",
+        "ironic pairing",
+        "unexpected combination",
+        "contrast of ideas"
+      ],
+      "citation": "Phillips & McQuarrie, \"Beyond visual metaphor: A new typology of visual rhetoric in advertising\", Marketing Theory (2004)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "common-region",
+      "name": "Common region",
+      "icon": "three dots inside a rectangle, two dots outside it",
+      "description": "Things inside the same box, panel or patch of background read as belonging together.",
+      "synonyms": [
+        "boxed",
+        "container",
+        "panel",
+        "card",
+        "background shape",
+        "enclosed"
+      ],
+      "citation": "Palmer, \"Common region: A new principle of perceptual grouping\", Cognitive Psychology (1992)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "good-continuation",
+      "name": "Good continuation",
+      "icon": "a smooth S-curve made of small dots",
+      "description": "Parts that line up along one smooth line or curve are seen as one flowing thing, and the eye rides along it.",
+      "synonyms": [
+        "flow",
+        "S-curve",
+        "line of action",
+        "continuous line",
+        "follow-through",
+        "rhythm"
+      ],
+      "citation": "Wertheimer, \"Untersuchungen zur Lehre von der Gestalt II\", Psychologische Forschung (1923)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "symmetry",
+      "name": "Symmetry",
+      "icon": "two mirrored half-shapes on either side of a dashed vertical line",
+      "description": "Mirror the two halves of the picture so the whole reads as one balanced, stable shape.",
+      "synonyms": [
+        "mirrored",
+        "balanced",
+        "centered composition",
+        "reflection",
+        "kaleidoscope",
+        "formal"
+      ],
+      "citation": "Arnheim, Art and Visual Perception (1954; rev. 1974), chapter on balance",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "face-schema",
+      "name": "Face schema",
+      "icon": "two dots over a short curve inside a plain rectangle",
+      "description": "Arrange things so they read as a face, which people notice first and see as one whole.",
+      "synonyms": [
+        "pareidolia",
+        "faces in things",
+        "hidden face",
+        "face in objects",
+        "eyes"
+      ],
+      "citation": "Morton & Johnson, \"CONSPEC and CONLERN: A two-process theory of infant face recognition\", Psychological Review (1991)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "size-hierarchy",
+      "name": "Size hierarchy",
+      "icon": "three circles shrinking from large to small",
+      "description": "Make the most important thing biggest and step the rest down in size, so they are read in that order.",
+      "synonyms": [
+        "visual hierarchy",
+        "big to small",
+        "dominant and subordinate",
+        "read order",
+        "headline size"
+      ],
+      "citation": "Lupton & Phillips, Graphic Design: The New Basics (2008), chapter on hierarchy",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "temporal-synthesis",
+      "name": "Temporal synthesis",
+      "icon": "one figure repeated three times, fading from left to right",
+      "description": "Pack several moments of an action into one image, so the viewer reads it as movement over time.",
+      "synonyms": [
+        "motion trail",
+        "multiple exposure",
+        "chronophotography",
+        "stroboscopic",
+        "before and after",
+        "motion blur"
+      ],
+      "citation": "Gombrich, \"Moment and Movement in Art\", Journal of the Warburg and Courtauld Institutes (1964)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "leading-lines",
+      "name": "Leading lines",
+      "icon": "two lines converging on a small dot",
+      "description": "Use roads, rails, edges or beams in the scene to steer the eye toward the subject.",
+      "synonyms": [
+        "converging lines",
+        "vanishing point",
+        "guiding lines",
+        "road to subject",
+        "directional lines"
+      ],
+      "citation": null,
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "gaze-cue",
+      "name": "Gaze cue",
+      "icon": "an eye with a dotted line running to a small dot",
+      "description": "Where a figure looks, the viewer looks too, so their eyeline points at what matters.",
+      "synonyms": [
+        "eyeline",
+        "looking at",
+        "follow the gaze",
+        "eye direction",
+        "where they look"
+      ],
+      "citation": "Friesen & Kingstone, \"The eyes have it! Reflexive orienting is triggered by nonpredictive gaze\", Psychonomic Bulletin & Review (1998)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "closure",
+      "name": "Closure",
+      "icon": "four corner brackets that imply a square",
+      "description": "Leave a shape incomplete and let the mind finish it, so broken pieces still read as one form.",
+      "synonyms": [
+        "implied shape",
+        "incomplete shape",
+        "fill in the gaps",
+        "implied line",
+        "negative space"
+      ],
+      "citation": "Wertheimer, \"Untersuchungen zur Lehre von der Gestalt II\", Psychologische Forschung (1923); Kanizsa, Organization in Vision (1979)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "forced-perspective",
+      "name": "Forced perspective",
+      "icon": "a small hand outline pinching a distant tall shape",
+      "description": "Line up near and far things from one exact viewpoint so they seem to touch or swap sizes.",
+      "synonyms": [
+        "perspective trick",
+        "optical illusion",
+        "holding the tower",
+        "tiny people",
+        "scale trick"
+      ],
+      "citation": null,
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "caricatural-exaggeration",
+      "name": "Caricatural exaggeration",
+      "icon": "a head outline with one oversized nose",
+      "description": "Push a person's or thing's most telling feature far past real proportions.",
+      "synonyms": [
+        "caricature",
+        "exaggerated",
+        "cartoonish",
+        "big head",
+        "stylized features",
+        "push the shapes"
+      ],
+      "citation": "Ramachandran & Hirstein, \"The science of art\", Journal of Consciousness Studies (1999)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "contextual-metaphor",
+      "name": "Contextual metaphor",
+      "icon": "a small square sitting inside a circle where something else belongs",
+      "description": "Place an ordinary object where something else normally goes, so the setting makes you see it as that other thing.",
+      "synonyms": [
+        "visual metaphor",
+        "out of context",
+        "unexpected setting",
+        "this as that",
+        "displacement"
+      ],
+      "citation": "Forceville, Pictorial Metaphor in Advertising (1996); Lakoff & Johnson, Metaphors We Live By (1980)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "complementary-pairing",
+      "name": "Complementary pairing",
+      "icon": "two half-circles of opposite hues touching",
+      "description": "Set colours from opposite sides of the colour wheel against each other so both look stronger.",
+      "synonyms": [
+        "complementary colors",
+        "opposite colors",
+        "red and green",
+        "blue and orange",
+        "purple and yellow"
+      ],
+      "citation": "Itten, The Art of Color (1961), complementary contrast",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "rim-light",
+      "name": "Rim light",
+      "icon": "a dark circle with a thin bright arc on one edge",
+      "description": "Light from behind draws a bright edge around the subject and lifts it off the background.",
+      "synonyms": [
+        "backlit",
+        "edge light",
+        "halo",
+        "kicker",
+        "hair light",
+        "glowing outline"
+      ],
+      "citation": "Bordwell & Thompson, Film Art: An Introduction (1st ed. 1979), on backlighting in three-point lighting",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "silhouette",
+      "name": "Silhouette",
+      "icon": "a solid black figure against a light rectangle",
+      "description": "Show the subject as a flat dark shape against light, so its outline alone does the talking.",
+      "synonyms": [
+        "backlit",
+        "shadow figure",
+        "black shape",
+        "contre-jour",
+        "sunset figure",
+        "outline"
+      ],
+      "citation": null,
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "texture-against-flat",
+      "name": "Texture against flat",
+      "icon": "a cross-hatched circle on a plain field",
+      "description": "Put one rough, detailed surface on a smooth, plain one so the texture jumps out.",
+      "synonyms": [
+        "tactile",
+        "rough on smooth",
+        "material contrast",
+        "grain",
+        "texture contrast",
+        "flat background"
+      ],
+      "citation": null,
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "isolation-in-void",
+      "name": "Isolation in void",
+      "icon": "one small dot in a wide empty rectangle",
+      "description": "Surround a single subject with empty space so nothing competes with it.",
+      "synonyms": [
+        "negative space",
+        "minimal",
+        "empty background",
+        "lone subject",
+        "breathing room",
+        "white space"
+      ],
+      "citation": null,
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "selective-focus",
+      "name": "Selective focus",
+      "icon": "one sharp circle among blurred, fuzzy circles",
+      "description": "Keep the subject sharp and let everything in front of or behind it go soft.",
+      "synonyms": [
+        "shallow depth of field",
+        "bokeh",
+        "blurry background",
+        "rack focus",
+        "tilt shift",
+        "soft focus"
+      ],
+      "citation": "Bordwell & Thompson, Film Art: An Introduction (1st ed. 1979), on depth of field and focus",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "color-blocking",
+      "name": "Color blocking",
+      "icon": "a rectangle divided into three flat colour fields",
+      "description": "Build the picture from large flat fields of solid colour, so things that share a colour read together.",
+      "synonyms": [
+        "flat color",
+        "block color",
+        "bold color fields",
+        "solid shapes",
+        "graphic color",
+        "poster colors"
+      ],
+      "citation": "Wertheimer, \"Untersuchungen zur Lehre von der Gestalt II\", Psychologische Forschung (1923), grouping by similarity",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "figure-ground-reversal",
+      "name": "Figure-ground reversal",
+      "icon": "a square half black and half white with one wavy edge shared by both shapes",
+      "description": "Shape the empty space so it forms a second image, and the viewer flips between the two readings.",
+      "synonyms": [
+        "negative space",
+        "double image",
+        "hidden image",
+        "optical illusion",
+        "two readings",
+        "positive negative",
+        "Rubin vase"
+      ],
+      "citation": "Rubin, Synsoplevede Figurer (Visually Experienced Figures) (1915)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "proximity-clustering",
+      "name": "Proximity clustering",
+      "icon": "two tight clusters of dots with a gap between them",
+      "description": "Things placed close together read as one group, and gaps split them into separate groups.",
+      "synonyms": [
+        "clustered",
+        "close together",
+        "spacing",
+        "bunched",
+        "huddle",
+        "groups of things"
+      ],
+      "citation": "Wertheimer, \"Untersuchungen zur Lehre von der Gestalt II\", Psychologische Forschung (1923)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "anthropomorphism",
+      "name": "Anthropomorphism",
+      "icon": "a simple box shape with two stick arms",
+      "description": "Give an animal or object human feelings, poses or behaviour, so the viewer relates to it like a person.",
+      "synonyms": [
+        "personified",
+        "humanized",
+        "talking animals",
+        "object with a face",
+        "cute object",
+        "character design"
+      ],
+      "citation": "Epley, Waytz & Cacioppo, \"On seeing human: A three-factor theory of anthropomorphism\", Psychological Review (2007)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "semantic-compounding",
+      "name": "Semantic compounding",
+      "icon": "a circle and a square fused into one shape",
+      "description": "Fuse two different things into one hybrid object that carries both of their meanings at once.",
+      "synonyms": [
+        "hybrid",
+        "mashup",
+        "fusion",
+        "two in one",
+        "merged objects",
+        "photo manipulation"
+      ],
+      "citation": "Forceville, Pictorial Metaphor in Advertising (1996), hybrid metaphor",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "center-placement",
+      "name": "Center placement",
+      "icon": "a dot at the crossing of a rectangle's two diagonals",
+      "description": "Put the subject dead centre, where the frame's balance points straight at it.",
+      "synonyms": [
+        "centered",
+        "bullseye",
+        "middle of frame",
+        "central composition",
+        "dead center"
+      ],
+      "citation": "Arnheim, The Power of the Center (1982)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "frame-within-a-frame",
+      "name": "Frame within a frame",
+      "icon": "a small rectangle nested off-centre inside a larger one, with a dot inside it",
+      "description": "Use a doorway, window, arch or gap in the scene to box in the subject.",
+      "synonyms": [
+        "doorway shot",
+        "window frame",
+        "natural frame",
+        "framed by",
+        "portal",
+        "vignette"
+      ],
+      "citation": null,
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "body-vector",
+      "name": "Body vector",
+      "icon": "a stick figure with an outstretched arm pointing right",
+      "description": "Point arms, limbs and posture toward something so the body itself directs the eye.",
+      "synonyms": [
+        "pointing",
+        "gesture",
+        "pose direction",
+        "body language",
+        "reaching",
+        "line of action"
+      ],
+      "citation": "Zettl, Sight, Sound, Motion: Applied Media Aesthetics (1st ed. 1973), on index vectors",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "reading-path",
+      "name": "Reading path",
+      "icon": "a zig-zag line linking four small boxes",
+      "description": "Lay the parts out along a planned route, such as a Z or an S, so the eye travels through them in order.",
+      "synonyms": [
+        "Z pattern",
+        "F pattern",
+        "eye path",
+        "visual flow",
+        "left to right",
+        "panel flow"
+      ],
+      "citation": null,
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "pattern-break",
+      "name": "Pattern break",
+      "icon": "a row of identical squares with one turned on its corner",
+      "description": "Set up a repeating pattern, then break it in one place so that spot draws the eye.",
+      "synonyms": [
+        "odd one out",
+        "break the pattern",
+        "one different",
+        "repetition with a twist",
+        "rogue element"
+      ],
+      "citation": "von Restorff, \"Über die Wirkung von Bereichsbildungen im Spurenfeld\", Psychologische Forschung (1933)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "occlusion",
+      "name": "Occlusion",
+      "icon": "one circle partly hidden behind a square",
+      "description": "Let one thing hide part of another, which sets up front and back and leaves the hidden part to imagination.",
+      "synonyms": [
+        "overlap",
+        "hidden",
+        "peeking",
+        "partly covered",
+        "layering",
+        "behind"
+      ],
+      "citation": "Kanizsa, Organization in Vision (1979)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "crop-at-the-edge",
+      "name": "Crop at the edge",
+      "icon": "a rectangle with a large circle cut off by its right edge",
+      "description": "Cut the subject off at the border so the viewer imagines what continues outside the frame.",
+      "synonyms": [
+        "tight crop",
+        "cut off",
+        "bleed",
+        "out of frame",
+        "partial view",
+        "extreme close-up"
+      ],
+      "citation": "Bordwell & Thompson, Film Art: An Introduction (1st ed. 1979), on offscreen space",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "visual-quotation",
+      "name": "Visual quotation",
+      "icon": "a small framed rectangle between two quote-like brackets",
+      "description": "Borrow the pose, layout or look of one specific well-known image so viewers recognise the reference.",
+      "synonyms": [
+        "homage",
+        "parody",
+        "reference",
+        "remake",
+        "pastiche",
+        "famous painting",
+        "meme"
+      ],
+      "citation": null,
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "visible-facture",
+      "name": "Visible facture",
+      "icon": "three loose diagonal brush strokes",
+      "description": "Leave the brush strokes, pencil marks or traces of making in plain view, so the viewer feels the hand behind it.",
+      "synonyms": [
+        "brushstrokes",
+        "painterly",
+        "handmade",
+        "impasto",
+        "rough sketch",
+        "hand-drawn",
+        "process visible"
+      ],
+      "citation": null,
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "genre-quotation",
+      "name": "Genre quotation",
+      "icon": "a rectangle with a bold title band across its top",
+      "description": "Dress the image in the familiar look of a whole genre so viewers bring that genre's mood and expectations with them.",
+      "synonyms": [
+        "in the style of",
+        "retro",
+        "pulp",
+        "movie poster look",
+        "B-movie",
+        "vintage ad",
+        "pastiche"
+      ],
+      "citation": "Bordwell & Thompson, Film Art: An Introduction (1st ed. 1979), on film genres",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "form-substitution",
+      "name": "Form substitution",
+      "icon": "a circle with an arrow pointing to an identically sized sphere-like shape",
+      "description": "Replace an object with a different one of the same shape, so the swap creates a new meaning.",
+      "synonyms": [
+        "visual pun",
+        "shape swap",
+        "lookalike",
+        "replacement",
+        "this as that",
+        "visual rhyme"
+      ],
+      "citation": "Phillips & McQuarrie, \"Beyond visual metaphor: A new typology of visual rhetoric in advertising\", Marketing Theory (2004)",
+      "examples": [],
+      "custom": false
+    },
+    {
+      "id": "set-apart",
+      "name": "Set apart",
+      "icon": "a tight cluster of dots with one dot far off to the side",
+      "description": "Move one element away from a tight group, so the gap alone singles it out.",
+      "synonyms": [
+        "separated",
+        "apart from the crowd",
+        "lone figure",
+        "outsider",
+        "breakaway",
+        "left out"
+      ],
+      "citation": "Wertheimer, \"Untersuchungen zur Lehre von der Gestalt II\", Psychologische Forschung (1923), grouping by proximity",
+      "examples": [],
+      "custom": true
+    },
+    {
+      "id": "direct-address",
+      "name": "Direct address",
+      "icon": "an eye seen straight on, looking out of the frame",
+      "description": "Have the subject look straight out at the viewer, so the eye contact grabs and holds attention.",
+      "synonyms": [
+        "eye contact",
+        "looking at camera",
+        "staring at you",
+        "breaking the fourth wall",
+        "direct gaze",
+        "confrontational"
+      ],
+      "citation": "Senju & Hasegawa, \"Direct gaze captures visuospatial attention\", Visual Cognition (2005)",
+      "examples": [],
+      "custom": true
+    },
+    {
+      "id": "incongruous-object",
+      "name": "Incongruous object",
+      "icon": "a small fish shape sitting on a bookshelf of plain rectangles",
+      "description": "Put one thing in the scene that plainly does not belong there, so the eye goes straight to it.",
+      "synonyms": [
+        "out of place",
+        "doesn't belong",
+        "what's wrong with this picture",
+        "absurd detail",
+        "surreal object",
+        "odd detail"
+      ],
+      "citation": "Loftus & Mackworth, \"Cognitive determinants of fixation location during picture viewing\", Journal of Experimental Psychology: Human Perception and Performance (1978)",
+      "examples": [],
+      "custom": true
+    },
+    {
+      "id": "limited-palette",
+      "name": "Limited palette",
+      "icon": "three swatches of close, related hues side by side",
+      "description": "Paint the whole image from a few related colours, so every part feels like it belongs to the same picture.",
+      "synonyms": [
+        "limited palette",
+        "color harmony",
+        "monochrome",
+        "analogous colors",
+        "color grade",
+        "unified palette",
+        "duotone"
+      ],
+      "citation": "Itten, The Art of Color (1961), on colour harmony",
+      "examples": [],
+      "custom": true
+    },
+    {
+      "id": "repoussoir",
+      "name": "Repoussoir",
+      "icon": "a large dark shape at the bottom-left corner with a small bright dot beyond it",
+      "description": "Put a large, darker shape at the near edge of the picture, so the eye is pushed past it into the scene.",
+      "synonyms": [
+        "foreground framing",
+        "dark foreground",
+        "push into the scene",
+        "foreground silhouette",
+        "coulisse",
+        "foreground element"
+      ],
+      "citation": null,
+      "examples": [],
+      "custom": true
+    },
+    {
+      "id": "arrow-cue",
+      "name": "Arrow cue",
+      "icon": "a small arrow followed by the numbers 1, 2, 3",
+      "description": "Use arrows, numbers or other learned signs to tell the viewer where to look next.",
+      "synonyms": [
+        "arrow",
+        "numbered steps",
+        "pointer",
+        "callout",
+        "step 1 2 3",
+        "infographic flow"
+      ],
+      "citation": "Zettl, Sight, Sound, Motion: Applied Media Aesthetics (1st ed. 1973), on index vectors",
+      "examples": [],
+      "custom": true
+    },
+    {
+      "id": "missing-piece",
+      "name": "Missing piece",
+      "icon": "a row of four circles with an empty dotted gap where a fifth should be",
+      "description": "Show a familiar set or row with one member gone, so the viewer notices the absence and asks why.",
+      "synonyms": [
+        "absence",
+        "empty spot",
+        "the missing one",
+        "gap in the row",
+        "what's missing",
+        "empty chair"
+      ],
+      "citation": null,
+      "examples": [],
+      "custom": true
+    }
+  ],
+  "branchTechniques": [
+    {
+      "branchId": "differentiate.feature",
+      "techniqueId": "complementary-pairing",
+      "source": "observed",
+      "rationale": "Colours opposite on the wheel make each other look stronger, so the paired subject stands out."
+    },
+    {
+      "branchId": "differentiate.semantic",
+      "techniqueId": "semantic-contrast",
+      "source": "observed",
+      "rationale": "Meanings that clash beside each other make the pairing impossible to overlook."
+    },
+    {
+      "branchId": "infer.semantic",
+      "techniqueId": "contextual-metaphor",
+      "source": "observed",
+      "rationale": "The setting reassigns what the object is, and the viewer has to work out the new reading."
+    },
+    {
+      "branchId": "infer.cultural",
+      "techniqueId": "genre-quotation",
+      "source": "observed",
+      "rationale": "The borrowed genre look brings its mood with it, and the viewer reads the image through that genre."
+    },
+    {
+      "branchId": "differentiate.feature",
+      "techniqueId": "chiaroscuro",
+      "source": "drafted",
+      "rationale": "The lit subject wins against the dark; the lever is value."
+    },
+    {
+      "branchId": "differentiate.feature",
+      "techniqueId": "pop-out",
+      "source": "drafted",
+      "rationale": "One odd colour, shape or size among sameness is the plainest way to stand out."
+    },
+    {
+      "branchId": "differentiate.feature",
+      "techniqueId": "saturation-blocking",
+      "source": "drafted",
+      "rationale": "The only vivid area grabs attention; the lever is colour intensity."
+    },
+    {
+      "branchId": "differentiate.feature",
+      "techniqueId": "simultaneous-contrast",
+      "source": "drafted",
+      "rationale": "The surround is tuned so the subject's colour reads stronger than its neighbours."
+    },
+    {
+      "branchId": "differentiate.feature",
+      "techniqueId": "warm-and-cool-split",
+      "source": "drafted",
+      "rationale": "Colour temperature splits the subject from its setting."
+    },
+    {
+      "branchId": "differentiate.feature",
+      "techniqueId": "rim-light",
+      "source": "drafted",
+      "rationale": "A bright edge peels the subject off the background."
+    },
+    {
+      "branchId": "differentiate.feature",
+      "techniqueId": "silhouette",
+      "source": "drafted",
+      "rationale": "A dark shape on light makes the outline the strongest thing in the frame."
+    },
+    {
+      "branchId": "differentiate.feature",
+      "techniqueId": "texture-against-flat",
+      "source": "drafted",
+      "rationale": "Surface detail against plainness singles out the textured part."
+    },
+    {
+      "branchId": "differentiate.grouping",
+      "techniqueId": "pattern-break",
+      "source": "drafted",
+      "rationale": "A repeating group is set up so the one member that breaks it stands out."
+    },
+    {
+      "branchId": "differentiate.space",
+      "techniqueId": "isolation-in-void",
+      "source": "drafted",
+      "rationale": "Empty space around the subject removes every competitor."
+    },
+    {
+      "branchId": "differentiate.space",
+      "techniqueId": "selective-focus",
+      "source": "drafted",
+      "rationale": "Sharpness at one depth plane separates the subject from what is in front of and behind it."
+    },
+    {
+      "branchId": "differentiate.space",
+      "techniqueId": "center-placement",
+      "source": "drafted",
+      "rationale": "The frame's centre is its strongest position, so whatever sits there dominates."
+    },
+    {
+      "branchId": "differentiate.space",
+      "techniqueId": "frame-within-a-frame",
+      "source": "drafted",
+      "rationale": "An inner frame boxes the subject off from the rest of the scene."
+    },
+    {
+      "branchId": "differentiate.social",
+      "techniqueId": "face-schema",
+      "source": "drafted",
+      "rationale": "Viewers find faces before almost anything else, so a face-like arrangement wins attention."
+    },
+    {
+      "branchId": "group.feature",
+      "techniqueId": "color-blocking",
+      "source": "drafted",
+      "rationale": "Shared flat colour binds separate parts into one unit (grouping by similarity)."
+    },
+    {
+      "branchId": "group.grouping",
+      "techniqueId": "common-region",
+      "source": "drafted",
+      "rationale": "A shared box or background patch makes its contents one group."
+    },
+    {
+      "branchId": "group.grouping",
+      "techniqueId": "good-continuation",
+      "source": "drafted",
+      "rationale": "Parts along one smooth path read as one continuous thing."
+    },
+    {
+      "branchId": "group.grouping",
+      "techniqueId": "symmetry",
+      "source": "drafted",
+      "rationale": "Mirrored halves read as one balanced whole rather than two sides."
+    },
+    {
+      "branchId": "group.grouping",
+      "techniqueId": "closure",
+      "source": "drafted",
+      "rationale": "Broken pieces are completed by the eye into a single form."
+    },
+    {
+      "branchId": "group.grouping",
+      "techniqueId": "proximity-clustering",
+      "source": "drafted",
+      "rationale": "Nearness is the most basic signal that things belong together."
+    },
+    {
+      "branchId": "group.social",
+      "techniqueId": "face-schema",
+      "source": "drafted",
+      "rationale": "Scattered parts snap into one whole the moment they read as a face."
+    },
+    {
+      "branchId": "group.social",
+      "techniqueId": "body-vector",
+      "source": "drafted",
+      "rationale": "Figures turned and reaching toward each other read as one group or one exchange."
+    },
+    {
+      "branchId": "sequence.feature",
+      "techniqueId": "chiaroscuro",
+      "source": "drafted",
+      "rationale": "The eye lands on the brightest light first, then works out into the shadows."
+    },
+    {
+      "branchId": "sequence.feature",
+      "techniqueId": "size-hierarchy",
+      "source": "drafted",
+      "rationale": "Stepped sizes set the reading order from largest to smallest."
+    },
+    {
+      "branchId": "sequence.grouping",
+      "techniqueId": "good-continuation",
+      "source": "drafted",
+      "rationale": "A smooth line of parts is followed from one end to the other."
+    },
+    {
+      "branchId": "sequence.grouping",
+      "techniqueId": "temporal-synthesis",
+      "source": "drafted",
+      "rationale": "Repeated stages of one action are read as a series, in order, like frames."
+    },
+    {
+      "branchId": "sequence.space",
+      "techniqueId": "leading-lines",
+      "source": "drafted",
+      "rationale": "Lines through the scene carry the eye to a destination."
+    },
+    {
+      "branchId": "sequence.social",
+      "techniqueId": "gaze-cue",
+      "source": "drafted",
+      "rationale": "Viewers look where the figure looks, which hands the eye to the next element."
+    },
+    {
+      "branchId": "sequence.social",
+      "techniqueId": "body-vector",
+      "source": "drafted",
+      "rationale": "A pointing arm or leaning body sends the eye along its direction."
+    },
+    {
+      "branchId": "sequence.cultural",
+      "techniqueId": "reading-path",
+      "source": "drafted",
+      "rationale": "A Z or F route works because it follows the viewer's learned reading direction (left to right in many cultures)."
+    },
+    {
+      "branchId": "infer.grouping",
+      "techniqueId": "closure",
+      "source": "drafted",
+      "rationale": "What is left out is filled in by the viewer, so the viewer takes part in making the image."
+    },
+    {
+      "branchId": "infer.space",
+      "techniqueId": "forced-perspective",
+      "source": "drafted",
+      "rationale": "The viewer has to work out the trick of near and far to get the joke."
+    },
+    {
+      "branchId": "infer.space",
+      "techniqueId": "figure-ground-reversal",
+      "source": "drafted",
+      "rationale": "The second image hides in the empty space and is found only by looking again."
+    },
+    {
+      "branchId": "infer.space",
+      "techniqueId": "occlusion",
+      "source": "drafted",
+      "rationale": "What is hidden behind something is left for the viewer to imagine."
+    },
+    {
+      "branchId": "infer.space",
+      "techniqueId": "crop-at-the-edge",
+      "source": "drafted",
+      "rationale": "Whatever lies past the border is completed in the viewer's head."
+    },
+    {
+      "branchId": "infer.social",
+      "techniqueId": "face-schema",
+      "source": "drafted",
+      "rationale": "A face hidden in an object rewards a second look and invites the viewer to read a character into it."
+    },
+    {
+      "branchId": "infer.social",
+      "techniqueId": "caricatural-exaggeration",
+      "source": "drafted",
+      "rationale": "The exaggeration comments on character, and the viewer reads the comment."
+    },
+    {
+      "branchId": "infer.social",
+      "techniqueId": "anthropomorphism",
+      "source": "drafted",
+      "rationale": "The viewer reads feelings and intentions into something that is not human."
+    },
+    {
+      "branchId": "infer.semantic",
+      "techniqueId": "semantic-contrast",
+      "source": "drafted",
+      "rationale": "Beyond catching the eye, the clash of meanings asks the viewer to resolve it into a message."
+    },
+    {
+      "branchId": "infer.semantic",
+      "techniqueId": "scale-disparity",
+      "source": "drafted",
+      "rationale": "An impossible size reads as a statement about importance or power that the viewer decodes."
+    },
+    {
+      "branchId": "infer.semantic",
+      "techniqueId": "semantic-compounding",
+      "source": "drafted",
+      "rationale": "The viewer works out what joining these two meanings is saying."
+    },
+    {
+      "branchId": "infer.semantic",
+      "techniqueId": "form-substitution",
+      "source": "drafted",
+      "rationale": "The shape swap only pays off once the viewer connects the two objects."
+    },
+    {
+      "branchId": "infer.cultural",
+      "techniqueId": "visual-quotation",
+      "source": "drafted",
+      "rationale": "The meaning depends on the viewer recognising the borrowed image."
+    },
+    {
+      "branchId": "infer.cultural",
+      "techniqueId": "visible-facture",
+      "source": "drafted",
+      "rationale": "Visible marks signal handmade, honest or raw, which viewers read from what they know about how art is made."
+    },
+    {
+      "branchId": "differentiate.grouping",
+      "techniqueId": "set-apart",
+      "source": "drafted",
+      "rationale": "Being left out of a group is a reason to stand out; the lever is how things group."
+    },
+    {
+      "branchId": "differentiate.social",
+      "techniqueId": "direct-address",
+      "source": "drafted",
+      "rationale": "Eye contact from a person in the picture is a social signal that beats almost everything else for attention."
+    },
+    {
+      "branchId": "differentiate.semantic",
+      "techniqueId": "incongruous-object",
+      "source": "drafted",
+      "rationale": "What a thing is, in the wrong setting, is what makes it stand out; the lever is meaning, not looks."
+    },
+    {
+      "branchId": "group.feature",
+      "techniqueId": "limited-palette",
+      "source": "drafted",
+      "rationale": "Shared colour across the whole frame binds unrelated parts into one picture."
+    },
+    {
+      "branchId": "sequence.space",
+      "techniqueId": "repoussoir",
+      "source": "drafted",
+      "rationale": "A near shape at the edge sends the eye inward and back, so it sets the path through depth."
+    },
+    {
+      "branchId": "sequence.cultural",
+      "techniqueId": "arrow-cue",
+      "source": "drafted",
+      "rationale": "Arrows and numbers work only because viewers have learned what they mean, so the order comes from shared convention."
+    },
+    {
+      "branchId": "infer.grouping",
+      "techniqueId": "missing-piece",
+      "source": "drafted",
+      "rationale": "The group sets up an expectation, and the gap in it is what the viewer has to explain."
+    }
+  ]
+}

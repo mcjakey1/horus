@@ -1,0 +1,117 @@
+{
+  "buildPath": "code",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "undersized-ui-text",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/assigned.html"
+        ],
+        "createdAt": "2026-11-24T15:20:06.665Z",
+        "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      },
+      {
+        "rule": "tiny-text",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/assigned.html"
+        ],
+        "createdAt": "2026-11-24T15:20:07.007Z",
+        "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/assigned.html"
+        ],
+        "createdAt": "2026-11-24T15:20:07.323Z",
+        "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      },
+      {
+        "rule": "undersized-ui-text",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/model-pick.html"
+        ],
+        "createdAt": "2026-11-24T15:20:07.627Z",
+        "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      },
+      {
+        "rule": "tiny-text",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/model-pick.html"
+        ],
+        "createdAt": "2026-11-24T15:20:07.954Z",
+        "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/model-pick.html"
+        ],
+        "createdAt": "2026-11-24T15:20:08.267Z",
+        "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      },
+      {
+        "rule": "undersized-ui-text",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-transit.html"
+        ],
+        "createdAt": "2026-11-24T15:20:08.566Z",
+        "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      },
+      {
+        "rule": "tiny-text",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-transit.html"
+        ],
+        "createdAt": "2026-11-24T15:20:08.875Z",
+        "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-transit.html"
+        ],
+        "createdAt": "2026-11-24T15:20:09.193Z",
+        "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      },
+      {
+        "rule": "undersized-ui-text",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/canon.html"
+        ],
+        "createdAt": "2026-11-24T15:20:09.490Z",
+        "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      },
+      {
+        "rule": "tiny-text",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/canon.html"
+        ],
+        "createdAt": "2026-11-24T15:20:09.768Z",
+        "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      },
+      {
+        "rule": "low-contrast",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/canon.html"
+        ],
+        "createdAt": "2026-11-24T15:20:10.079Z",
+        "reason": "Claude: throwaway decision-round sketch; the decision page renders text under 22px as skeleton bars and this file never ships"
+      }
+    ]
+  }
+}
