@@ -82,6 +82,7 @@ export function mountReference(
     const ref = store.refs.get(id);
     if (!ref) return;
     if (picker && picker.el.dataset.ref !== id) closePicker();
+    if (id !== S.focus) lightbox?.close(); // it shows the focus; never another reference behind it
     if (push && S.focus && S.focus !== id) S.trail.push(S.focus);
     const spec = $("#specimen")!;
     const first = !S.focus;

@@ -443,6 +443,16 @@ describe("Reference view", () => {
     expect(document.querySelector(".margin .picker")).not.toBeNull();
   });
 
+  it("showing_another_reference_closes_the_lightbox", async () => {
+    keyOn("l", document.body);
+    view.show("a"); // the same reference: it stays
+    expect(document.querySelector(".lightbox")).not.toBeNull();
+    view.show("b"); // e.g. "Show" on a duplicate in the intake notice
+    expect(document.querySelector(".lightbox")).toBeNull();
+    await settle();
+    expect($("#ref-id").textContent).toBe("b");
+  });
+
   it("notice_over_the_lightbox_takes_focus_and_keys", () => {
     dockPickerInLightbox();
     const notice = $("#import-notice");
