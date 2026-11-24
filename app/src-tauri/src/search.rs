@@ -2,8 +2,15 @@
 
 use crate::model::LibraryData;
 use crate::taxonomy::Taxonomy;
+use serde::Serialize;
 
-#[derive(Debug, Clone, PartialEq)]
+/// Over IPC: `{"kind":"technique","id","operationId","count"}` or `{"kind":"reference","id"}`.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum Hit {
     Technique {
         id: String,
@@ -245,6 +252,23 @@ mod tests {
                 Hit::Reference { id: "r2".into() },
                 Hit::Reference { id: "r3".into() }
             ]
+        );
+    }
+
+    #[test]
+    fn hit_json_is_tagged_camel_case() {
+        let t = Hit::Technique {
+            id: "chiaroscuro".into(),
+            operation_id: "differentiate".into(),
+            count: 2,
+        };
+        assert_eq!(
+            serde_json::to_value(&t).unwrap(),
+            serde_json::json!({"kind": "technique", "id": "chiaroscuro", "operationId": "differentiate", "count": 2})
+        );
+        assert_eq!(
+            serde_json::to_value(Hit::Reference { id: "r1".into() }).unwrap(),
+            serde_json::json!({"kind": "reference", "id": "r1"})
         );
     }
 
