@@ -63,7 +63,7 @@
 - A custom technique is saved with `custom: true` (SPEC §3).
 - Regions are `{x, y, w, h}` in 0..1 of the original image (SPEC §3).
 - The app works offline. A `sourceUrl` is stored as text and never fetched (SPEC §9, §5a C is later).
-- Saves stay atomic, as in Plan 1: write `.tmp`, call `sync_all`, then rename. `library.bak.json` is rotated before each `library.json` save. `taxonomy.json` gets the same atomic write but no backup, because the folder layout from Plan 1 is fixed and every taxonomy change can be undone. Originals are never modified.
+- Saves stay atomic, as in Plan 1: write `.tmp`, call `sync_all`, then rename. `library.bak.json` is rotated before each `library.json` save, and **`taxonomy.bak.json` is rotated before each `taxonomy.json` save** (Plan 1 final review). One added file in the folder layout is worth it: a damaged `taxonomy.json` must never lock the artist out of a library whose references are intact. Originals are never modified.
 - The keyboard flow (SPEC §6.8):
   - number keys pick the operation;
   - typing searches;
@@ -199,12 +199,18 @@
 - Produces:
   ```rust
   impl Taxonomy {
-      pub fn save(&self, path: &Path) -> std::io::Result<()>;   // atomic: NamedTempFile::new_in(parent), write, sync_all, persist
+      pub fn save(&self, path: &Path) -> std::io::Result<()>;   // atomic: NamedTempFile::new_in(parent), write, sync_all, persist;
+                                                                // first rotates <dir>/taxonomy.bak.json (via .tmp + rename) from the current file, only if it parses
+      pub fn load_with_fallback(root: &Path, seed: &Path) -> Result<(Taxonomy, TaxSource), String>;
       pub fn find_by_name(&self, name: &str) -> Option<&Technique>;   // case-insensitive, whitespace-collapsed
       pub fn custom_technique(&self, name: &str, description: &str, operation_id: &str, domain_id: &str)
           -> Result<Edit, CustomError>;                         // builds Edit::AddTechnique, does not apply it
   }
   pub enum CustomError { NameTaken(String /* existing id */), EmptyName, NoSuchBranch }
+  pub enum TaxSource { File, Backup, SeedReadOnly }
+  // load_with_fallback: taxonomy.json; if it can't be read or parsed -> taxonomy.bak.json (Backup);
+  // if that fails too -> the bundled seed (SeedReadOnly). Err only when all three fail (a broken install):
+  // install() then refuses the open with that message; nothing panics (release builds use panic = "abort").
   ```
   - `custom_technique` builds the technique like this:
     - `id` is the slugified name, with `-2`, `-3` and so on appended when taken;
@@ -222,6 +228,11 @@
   - `custom_technique_is_custom_and_linked`: `custom_technique("Halo glow", "A soft ring of light around the subject.", "differentiate", "feature")` gives an `Edit::AddTechnique` whose technique has `custom == true` and `id == "halo-glow"`, with one link to `differentiate.feature`. After `edit::apply`, `validate()` is `Ok`.
   - `custom_name_collision`: `"  chiaroscuro "` and `"CHIAROSCURO"` both return `NameTaken("chiaroscuro")`.
   - `custom_unknown_branch`: `("x", "", "group", "semantic")` returns `NoSuchBranch`, because Group → Semantic was dropped from the seed.
+  - `taxonomy_backup_rotates`: after two `save`s, `taxonomy.bak.json` equals the first saved version, and no `.tmp` remains. A `save` over an unparseable `taxonomy.json` leaves the existing `taxonomy.bak.json` untouched.
+  - `damaged_taxonomy_falls_back`:
+    - Write `{` into `taxonomy.json`. `load_with_fallback` returns the backup's taxonomy with `TaxSource::Backup`.
+    - Corrupt both files. It returns the seed with `TaxSource::SeedReadOnly`.
+    - With all three unreadable (the seed path missing too), it returns `Err`, and nothing panics.
   - `custom_id_suffix`: if `halo-glow` exists, a second "Halo-Glow!" is a `NameTaken`. But a name that slugifies to the same id without collapsing to the same name, such as "Halo  glow." against "Halo glow", gets `id == "halo-glow-2"`.
 
 - [ ] **Step 2: Run, then implement, then run again.** Run `cargo test taxonomy::`. It should FAIL, then PASS, and the Plan 1 taxonomy tests must still pass.
@@ -290,7 +301,7 @@
 **Interfaces:**
 - Consumes Tasks 1–4, and from Plan 1 Task 7: the state, `LibraryView`, `ReferenceView` (`commands.rs:41`), `import_paths` and `correlate::Index::build`.
   - `ReferenceView` is the real Rust name (audit #18). Its fields are private, so add `ReferenceView::new(lib: &Library, r: Reference) -> Result<ReferenceView, LibraryError>`. In TypeScript it stays `Reference`, as in Plan 1's `api.ts`.
-- **The state** (audit #8): `AppState` keeps its existing `import_gate`, `settings`, `config_dir` and `seed_taxonomy` fields. Only `open` changes, to `Mutex<Option<Open>>`, where `Open { lib: Library, tax: Taxonomy, index: Index, history: History, debounce: Debounce }`.
+- **The state** (audit #8): `AppState` keeps its existing `import_gate`, `settings`, `config_dir`, `seed_taxonomy` and `demo_dir` fields (`demo_dir` is the bundled demo set from Plan 1 Task 9). Plan 1's lock order stays: import gate, then settings, then state. Only `open` changes, to `Mutex<Option<Open>>`, where `Open { lib: Library, tax: Taxonomy, index: Index, history: History, debounce: Debounce }`.
   - **Both** import commands, `import_paths` and `import_bytes`, hold `import_gate` for their whole run. Imports therefore stay one at a time, as the Plan 1 ledger requires, because the temporary thumbnail names are fixed per hash.
 - Every mutating command follows the same steps:
   1. build an `Edit`;
@@ -325,13 +336,30 @@
   ```
   - Rust assigns each tag `id: new_id("t")` and `suggested: false`.
   - `open_library` and `create_library` first call `flush` on the library that is open. On `Err`, they return `Err("Couldn't save the current library: <reason>")` and leave it open.
+  - **A damaged taxonomy never blocks opening** (Plan 1 final review, item 3). Plan 1's `install` fails the whole open on an unparseable `taxonomy.json` (`commands.rs:108`). It now calls `Taxonomy::load_with_fallback` instead.
+    - **`Backup`:** the `LibraryView.warning` says "taxonomy.json could not be read, so Horus opened its backup (taxonomy.bak.json). Your most recent technique changes may be missing."
+    - **`SeedReadOnly`:** the warning says "The library's technique list (taxonomy.json) is damaged and has no usable backup. Horus is showing the starting technique list; your file has been left untouched."
+      - The taxonomy is then **read-only**, and the saver never writes `taxonomy.json`, so the damaged file and any custom techniques in it stay recoverable.
+      - **It is enforced once, in the shared mutating-command recipe:** step 2 refuses with `Err("TaxonomyReadOnly")` any `Edit` that would set `Touched.taxonomy` while `tax_source == SeedReadOnly`. This covers `add_technique` here and every Plan 3 Task 9 taxonomy edit, with no per-command checks.
+      - Plan 3's UI shows the error as a toast: "The technique list is read-only because taxonomy.json is damaged."
+      - Tagging still works. A tag whose technique is missing from the seed is shown as an unknown technique and keeps its ids.
+    - `Open` gains `tax_source: TaxSource`.
+  - **Switching libraries** needs no new command (item 2). Plan 1's `install` already writes the new root to `lastLibrary` (`commands.rs` `install`) on every open and create. So switching updates it, and **no `{ lastLibrary: null }` clear path is needed**. If the last library fails to open at start-up, Plan 1's first-run screen already handles it.
+  - **Import sniffing** (Plan 1 final review minor):
+    - `import::import_one` reads the first 64 bytes of the source and checks them with `image::guess_format` before `copy_and_hash`.
+    - It accepts only `matches!(fmt, ImageFormat::Jpeg | ImageFormat::Png | ImageFormat::WebP | ImageFormat::Tiff | ImageFormat::Gif)`, the decoders enabled in `Cargo.toml`. `guess_format` also recognises BMP, ICO, TGA, AVIF and QOI, which would otherwise still be copied before failing to decode.
+    - An unsupported type (PSD, video, PDF) is skipped as `Skip::Unsupported` without copying the file.
+    - Today the file is copied fully and only then rejected.
+  - **`Skip::InsideLibrary`** (Plan 1 final review minor):
+    - It replaces `Skip::Unsupported("inside the library")` (`import.rs:72`).
+    - Plan 1's `src/importer.ts:19` switches on the variant's `kind` instead of matching the `"inside the library"` string.
   - `import_paths` and `import_bytes` do not block, as in Plan 1. The import runs off the lock. The new references then get `note` and `source_url`, and are appended as a single `Edit::AddReferences`, so undo removes them from the library. The image files stay in `images/`, and re-importing them dedupes back to the same hash.
   - **`import_bytes`** (audit #7):
     - **Metadata header:** an HTTP header carries only ASCII, so the metadata travels as one header, `x-meta`, holding `encodeURIComponent(JSON.stringify({ name, note, sourceUrl }))`.
     - Rust decodes it with a small `percent_decode(&str) -> Result<String, String>` helper in `commands.rs`, then `serde_json`. A malformed value is an `Err`, not a panic.
     - **Name:** only the last path component is kept (`Path::new(&name).file_name()`). The characters `< > : " / \ | ? *` and control characters become `_`, and an empty result becomes `pasted.png`.
     - **Write:** the body is written to `<root>/.incoming/<that name>` through a `.tmp` file, then imported (the reference title is that name's stem), then deleted.
-    - `.incoming/` is created on demand. It is the only addition to the folder layout, and it is emptied on open.
+    - `.incoming/` is created on demand and emptied on open. Together with `taxonomy.bak.json` (Task 3), it is one of this plan's two additions to the folder layout.
   - `ExitRequested`:
     1. Call `flush`.
     2. On `Err`, call `api.prevent_exit()` and emit `save-failed { message }`.
@@ -357,21 +385,32 @@
   - `exit_flushes_pending`: after `add_tags` and an immediate call to the exit handler's flush function, `library.json` holds the tag.
   - `exit_save_failure_keeps_app_open`: when `library.json.tmp` is a directory, the exit handler returns "prevent exit", and `retry_save` returns `Err` with the reason (Review Focus 2).
   - `open_clears_history`: after `add_tags`, then `open_library` on the same path, `undo()` returns `can_undo: false`.
+  - `damaged_taxonomy_opens`:
+    - With `taxonomy.json` set to `{` and a good `taxonomy.bak.json`, `open_library` succeeds with the backup warning.
+    - With both files damaged, it succeeds with the read-only warning and `taxonomyReadOnly: true`. `add_technique` then returns `Err("TaxonomyReadOnly")`, and so does a fake taxonomy-touching `Edit` sent through the shared recipe. After a tag edit and 1 s, `taxonomy.json` is still byte-identical.
+  - `sniff_skips_without_copy`: `fake.psd`, and a minimal valid BMP that `guess_format` recognises, both give `Skip::Unsupported`, and no file is created in `images/` or its temp directory. A source opened by a test hook that counts reads past byte 64 is read no further.
+  - `inside_library_variant`: importing `<root>/images` gives `Skip::InsideLibrary`, which serialises as `{"kind":"insideLibrary"}`. Plan 1 has no `importer.test.ts`, so **create** `app/src/importer.test.ts` with this case: a report carrying `Skip { kind: "insideLibrary" }` renders "already inside the library folder", and `"unsupported"` renders "not a supported image type".
   - `switch_flushes_pending`: `add_tags` on library A, then an immediate `open_library(B)`. A's `library.json` holds the tag. With A's `library.json.tmp` made a directory, `open_library(B)` returns `Err` and A stays open.
 
 - [ ] **Step 2: Run, then implement, then run again.** Run `cargo test commands::`. It should FAIL, then PASS.
 
-- [ ] **Step 3: Extend `api.ts`.** Add `NewTag`, `NewTechnique`, `TagFor`, `Change` and `ImportResult`, and one wrapper per new command. `importPaths(paths: string[], meta?: { note?: string; sourceUrl?: string }): Promise<ImportResult>` keeps `meta` optional. Update every Plan 1 caller and fake of `importPaths` (Task 8's `view.test.ts` fake `Api`, and any import button in `main.ts`) to read `.report` from the new result. `importBytes(name: string, bytes: ArrayBuffer, meta: { note?: string; sourceUrl?: string })` calls `invoke("import_bytes", bytes, { headers: { "x-meta": encodeURIComponent(JSON.stringify({ name, ...meta })) } })`. Also add `onSaveStatus(cb)` and `onSaveFailed(cb)`, using `listen`.
+- [ ] **Step 3: Extend `api.ts`.** Add `NewTag`, `NewTechnique`, `TagFor`, `Change` and `ImportResult`, and one wrapper per new command. `importPaths(paths: string[], meta?: { note?: string; sourceUrl?: string }): Promise<ImportResult>` keeps `meta` optional. Update every Plan 1 caller and fake of `importPaths` (Task 8's `view.test.ts` fake `Api`, and any import button in `main.ts`) to read `.report` from the new result. `importBytes(name: string, bytes: ArrayBuffer, meta: { note?: string; sourceUrl?: string })` calls `invoke("import_bytes", bytes, { headers: { "x-meta": encodeURIComponent(JSON.stringify({ name, ...meta })) } })`. Also add `onSaveStatus(cb)` and `onSaveFailed(cb)`, using `listen`. Add `| { kind: "insideLibrary" }` to the TS `Skip` union in `api.ts` (Task 5's new variant), so `importer.ts` type-checks when it switches on `kind`.
 
 - [ ] **Step 3a: Add the IPC contract test, `app/src/api.contract.test.ts`** (audit #1).
   - It uses `mockIPC((cmd, args) => …)` and `clearMocks` from `@tauri-apps/api/mocks`.
   - It holds one table row per command, giving the command name and its sorted argument keys:
-    - **Plan 1:** `create_library` [`path`], `open_library` [`path`], `get_taxonomy` [], `related` [`id`], `search` [`q`], `get_settings` [], `set_settings` [`s`].
+    - **Plan 1, checked against the real Plan 1 HEAD `f0b90c4`** (`app/src/api.ts`, `src-tauri/src/commands.rs`): `create_library` [`path`, `seedDemo`], `open_library` [`path`], `get_taxonomy` [], `related` [`id`], `search` [`q`], `get_settings` [], `set_settings` [`s`] (a `Partial<Settings>` patch), `system_ram_gb` [] (`systemRamGb` in `api.ts`).
     - **This plan:** `add_tags` [`refId`, `tags`], `update_tag` [`refId`, `tag`, `tagId`], `remove_tag` [`refId`, `tagId`], `set_field` [`field`, `refIds`, `value`], `add_technique` [`t`, `tag`], `undo` [], `redo` [], `image_path` [`refId`], `import_paths` [`note`, `paths`, `sourceUrl`], `retry_save` [], `exit_without_saving` [].
   - For each row, it calls the matching `tauriApi` wrapper with sample values, and asserts the command name and `Object.keys(args).sort()`.
   - **`import_bytes`:** the test spies on `invoke` from `@tauri-apps/api/core` and asserts the raw `ArrayBuffer` payload, plus an `x-meta` header that decodes back to `{ name, note, sourceUrl }`.
   - **Later plans** (3, 4, 5 and 6) add their own rows in their own api steps. A wrapper with no row fails the test: the test enumerates `Object.keys(tauriApi)` and requires a row for every key not in `NON_IPC_KEYS`.
-  - `NON_IPC_KEYS` holds the members that make no plain `invoke` call: `assetUrl` (`convertFileSrc`), the event listeners (`onSaveStatus`, `onSaveFailed`, and later ones such as Plan 5's `onSimilarStatus`), and `importBytes`, which the raw-body test covers separately.
+  - `NON_IPC_KEYS` holds the members that make no plain, own-command `invoke` call:
+    - `assetUrl` (`convertFileSrc`);
+    - the event listeners (`onSaveStatus`, `onSaveFailed`, and later ones such as Plan 5's `onSimilarStatus`);
+    - `importBytes`, which the raw-body test covers separately;
+    - **`pickFolder` and `pickImages`**. These go through `@tauri-apps/plugin-dialog`'s `open()`, which invokes the plugin's own `plugin:dialog|open` command. Its argument shape belongs to the plugin, not to Horus, so pinning it would test the plugin's internals.
+
+    **Decision: pickers go in `NON_IPC_KEYS`, not rows.** Their behaviour when cancelled (`pickFolder` gives `null`, `pickImages` gives `[]`) is tested where they are used: in the switching menu and the Inbox's "Add images…" (Task 9), and in the new `importer.test.ts` (Task 5).
 
 - [ ] **Step 4: Commit.** Commit message: `feat(app): tag, field, technique, undo/redo and intake commands with debounced saving`.
 
@@ -437,7 +476,8 @@
   - `app/src/ops.ts`;
   - `app/src/tagging/model.ts`;
   - `app/src/tagging/match-cases.json`;
-  - `app/src/keys.ts`.
+  - `app/src/keys.ts`;
+  - `app/src/esc.ts`, the single HTML-escaping helper (Plan 1 final review minor). `esc()` is currently duplicated in `firstrun.ts`, `importer.ts`, `reference/view.ts` and `search.ts`. Each of them now imports `esc` from `esc.ts`, and the local copies are deleted.
 - Modify (audit #28):
   - `app/src/reference/view.ts`: the view reads from the `Store` instead of its private `S`;
   - `app/src/reference/view.test.ts`;
@@ -447,6 +487,7 @@
   - `app/src/ops.test.ts`;
   - `app/src/tagging/model.test.ts`;
   - `app/src/keys.test.ts`;
+  - `app/src/esc.test.ts`;
   - a Rust test `search::tests::shared_match_cases` in `app/src-tauri/src/search.rs`, which reads the same JSON through `include_str!("../../src/tagging/match-cases.json")`.
 
 **Interfaces:**
@@ -512,6 +553,10 @@
     - `removed_focus_falls_back`: a `Change` whose `removed` holds the focused id moves to the previous reference in the trail.
     - `reset_switches_library`: `store.reset` re-renders from the new data.
     - `no_private_fetch`: `mountReference` never calls `api.openLibrary` or `api.getTaxonomy`.
+  - `esc`:
+    - `esc('<img src=x onerror="a">&\'')` gives `&lt;img src=x onerror=&quot;a&quot;&gt;&amp;&#39;`.
+    - A source check asserts that no file under `app/src` other than `esc.ts` defines a function or const named `esc`.
+  - `unknown_op_is_neutral_in_reference_view`: a callout for a tag whose `operationId` is missing from `store.tax` gets `opInk`'s neutral triple (`var(--ink-2)`), never Differentiate's amber (Plan 1 final review minor; Plan 3 cross-plan impact item 3).
   - `techniquesFor(seed, "group")` contains `color-blocking` and not `pop-out`.
   - `domainChoice(seed, "differentiate", "chiaroscuro")` gives `{ branchId: "differentiate.feature" }`. A fixture taxonomy where `t` sits under `differentiate.feature` and `differentiate.space` gives `{ ask: [both] }`.
   - The cases from `match-cases.json` are checked against `matchesQuery`, which takes the technique from the seed.
@@ -602,9 +647,11 @@
   - `app/src/inbox/view.ts`;
   - `app/src/intake.ts`;
   - `app/src/grid/windowed.ts`: the windowed tile grid, which Plan 4's Boards view reuses (audit #16).
+- Create also: `app/src/library-menu.ts` and `app/src/library-menu.test.ts`.
 - Modify:
-  - `app/index.html`: enable the Inbox tab;
-  - `app/src/main.ts`: wire intake and the views.
+  - `app/index.html`: enable the Inbox tab, and add a "Library" menu button at the left of the top bar;
+  - `app/src/main.ts`: wire intake, the views and the library menu;
+  - `app/src/importer.ts` (Plan 1): the intake toast extends it rather than duplicating it. It switches on `Skip.kind` (Task 5).
 - Test:
   - `app/src/inbox/view.test.ts`;
   - `app/src/intake.test.ts`.
@@ -622,7 +669,16 @@
   export function wireIntake(win: { onDragDropEvent: Function }, doc: Document, deps: IntakeDeps): () => void;
   export function dupRows(report: ImportReport, store: Store, meta: { note?: string; sourceUrl?: string }): DupRow[];
   export type DupRow = { existingId: string; title: string; action: "show" | "merge"; fills: ("note" | "sourceUrl")[] };
+  // library-menu.ts — switching libraries after first run (Plan 1 final review, item 2)
+  export function mountLibraryMenu(button: HTMLElement, api: Api, store: Store, toast: (m: string) => void): { destroy(): void };
   ```
+- **Switching libraries.** The "Library" menu offers:
+  - **"Open library…":** `api.pickFolder("Open a Horus library")`, then `api.openLibrary(path)`.
+  - **"New library…":** `api.pickFolder("Choose a folder for the new library")`, then a one-line confirm with the checkbox "Start with the demo set". It is off here, unlike first run, because this library is a second one. Then `api.createLibrary(path, seedDemo)`.
+  - On success, either action calls `store.reset(view, await api.getTaxonomy())` and shows `view.warning` as a toast if it is present.
+  - On `Err`, the toast shows the message, for example "Couldn't save the current library: …" from Task 5's flush-on-switch, and the current library stays open.
+  - A cancelled folder picker (`pickFolder` gives `null`) does nothing.
+  - Plan 6's native File menu later calls the same two functions.
 - **Inbox:**
   - It is a grid of `store.inbox()` thumbnails (`thumb256`, at their true aspect ratio, letterboxed on a fixed-size tile), rendered through `mountWindowedGrid`. Its images use `loading="lazy"` and `decoding="async"`, so a hoard of 2,000 items stays smooth (SPEC §9). `focus(i)` calls `scrollTo(i)`. The tab badge shows the live count.
   - Selecting an item docks the picker beside it.
@@ -632,7 +688,7 @@
 - **Intake:**
   - **Drag and drop:** `onDragDropEvent` `drop` with `paths` (files or folders) calls `importPaths`. If the drop position falls on an element with `[data-ref-drop="<id>"]`, which is the Reference view's central plate, the picker then opens for each new reference with `preset: presetFrom(store.refs.get(id))` (SPEC §6.5).
   - **Paste:** a `paste` event with `image/*` clipboard items calls `importBytes` once for each item. When the clipboard's `text/html` contains `<img src="http…">`, or `text/uri-list` has an http(s) URL, it becomes the `sourceUrl`. When the paste has no image item, a toast says "Paste the image itself — Horus doesn't download from the web." (Review Focus 5).
-  - **File picker (SPEC §9):** an "Add images…" button in the Inbox header calls `open({ multiple: true, filters: [{ name: "Images", extensions: ["jpg","jpeg","png","webp","tiff","tif","gif"] }] })` from `@tauri-apps/plugin-dialog`, which Plan 1 Task 9 installs, and passes the chosen paths to `importPaths`. "Add folder…" does the same with `{ directory: true }`.
+  - **File picker (SPEC §9):** an "Add images…" button in the Inbox header calls Plan 1's `api.pickImages()`, which returns `[]` when cancelled, and passes the chosen paths to `importPaths`. "Add folder…" calls `api.pickFolder("Add a folder of images")`. Plan 1's status-bar import buttons keep working, and both routes share `importer.ts`'s report display.
   - **The note field:** after any intake, a toast shows "Added N to the Inbox", with an optional one-line note field. Submitting it calls `setField(newIds, "note", text)` once, as one undo step for the whole batch.
   - **Duplicates (SPEC §9):** `report.duplicates` produces one `DupRow` per existing reference, listed in the same toast as "Already in your library: <title>":
     - **Show** opens it in the Reference view.
@@ -651,6 +707,15 @@
     - A drop over `[data-ref-drop="r1"]` calls `openPicker` with `preset` equal to `presetFrom(r1)` for the returned new id.
     - A paste with a PNG blob and `text/html` `<img src="https://ex.org/a.png">` calls `importBytes` with `sourceUrl: "https://ex.org/a.png"`.
     - A paste with only `text/plain` "https://ex.org/a.png" calls nothing and toasts the exact copy.
+    - `typed_text_is_text` (Plan 1 final review minor: XSS):
+      - A note typed into the intake note field as `<img src=x onerror="window.__xss=1">` and saved through a fake `setField` renders as text in the Inbox tile's tooltip and in the toast.
+      - The same holds for a pasted file whose `x-meta` name is `<b>t</b>.png`, which becomes the tile's title.
+      - `window.__xss` stays undefined, and no `img[src="x"]` or `b` element comes from the data.
+  - Library menu:
+    - "Open library…" with a fake picker returning `"D:/B"` calls `openLibrary("D:/B")` and then `store.reset`.
+    - A cancelled picker calls nothing.
+    - An `openLibrary` rejection toasts its message, and `store.reset` is not called.
+    - "New library…" with the demo box left unticked calls `createLibrary("D:/C", false)`.
     - `dupRows`: an existing reference without `sourceUrl` plus intake metadata with `sourceUrl` gives `action: "merge"` and `fills: ["sourceUrl"]`. With no intake metadata, it gives `action: "show"`.
 
 - [ ] **Step 2: Run, then implement, then run again.** Run `npm test -- inbox intake`. It should FAIL, then PASS.
@@ -769,3 +834,19 @@ These audit rows are owned by Plan 2 and applied above:
 - **#23:** the `Field` comment is neutral.
 - **#28:** the Reference view is fed by the `Store` (Task 7). Plan 3's cross-plan impact item 3 says that if Plan 2 Task 7 lands first, it makes the data part against the `Store`. That is what Task 7 does. `opInk` replaces the view's `OP_KEY`, so an unknown operation is neutral, not amber.
 - **Plan 3 cross-plan impact item 1:** the dynamic operation picker, with 1 to 9 operations and keys `1`–`9` (Task 8, Global Constraints).
+
+**From the Plan 1 final review (2026-11-25):**
+1. **The IPC table against Plan 1 HEAD `f0b90c4`:**
+   - `create_library` [`path`, `seedDemo`];
+   - `system_ram_gb` [];
+   - the pickers go in `NON_IPC_KEYS`, which is the choice made;
+   - `AppState.demo_dir` is kept.
+2. **Library switching:** the "Library" menu (Task 9). No `lastLibrary` clear path is needed, because `install` rewrites it on every open and create.
+3. **The taxonomy fallback: chosen, `taxonomy.bak.json` rotation**, with a read-only seed only as the last resort (Tasks 3 and 5).
+   - Falling back silently to the seed would lose custom techniques on the next save, so the seed is never written.
+   - This adds `taxonomy.bak.json` to the folder layout. **Tell the Plan 6 owner:** Plan 6's layout constraint and its integrity check must list it, and the sweep leaves it alone.
+   - **Tell the Plan 3 owner:** Plan 3 Task 9's taxonomy edits get `Err("TaxonomyReadOnly")` from the shared recipe when `tax_source == SeedReadOnly`, so Plan 3 needs no check of its own. Its Task 10 inspector shows that error, and may disable its edit controls when the store's taxonomy is flagged read-only. Add `taxonomyReadOnly: boolean` to `LibraryView` and the `Store` for that.
+4. **Minors:**
+   - sniff before copy, and `Skip::InsideLibrary` (Task 5);
+   - unknown operation inks are neutral, through `opInk`, and `esc.ts` deduplicates `esc()` (Task 7);
+   - XSS tests cover typed notes and titles (Task 9).
