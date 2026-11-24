@@ -5,11 +5,12 @@ use crate::correlate::{Index, Scored};
 use crate::demo;
 use crate::import::{self, ImportReport};
 use crate::library::{Library, LibraryError, thumb_path_in};
-use crate::model::{Link, Reference};
+use crate::model::{LibraryData, Link, Reference};
 use crate::search::{self, Hit};
 use crate::settings::{self, Settings, SettingsPatch};
 use crate::taxonomy::Taxonomy;
 use serde::Serialize;
+use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use tauri::{AppHandle, Manager, Runtime};
@@ -102,6 +103,19 @@ fn update_settings(st: &AppState, patch: SettingsPatch) -> Result<(), String> {
 
 /// Shared tail of create and open: load and check the taxonomy, index, allow the library's
 /// image folders in the asset scope, remember it as the last library, and make it the open one.
+/// Rule: a reference whose hash fails the path guard (a hand-edited library.json) is hidden
+/// from the window: no `ReferenceView`, no `related` score, no search hit or technique count.
+/// It stays in `lib.data` so saves keep it. Every index build and search reads this view.
+fn visible(lib: &Library) -> Cow<'_, LibraryData> {
+    let shown = |r: &Reference| thumb_path_in(&lib.root, &r.hash, 256).is_ok();
+    if lib.data.references.iter().all(shown) {
+        return Cow::Borrowed(&lib.data); // the usual case: nothing hidden, nothing copied
+    }
+    let mut data = lib.data.clone();
+    data.references.retain(shown);
+    Cow::Owned(data)
+}
+
 fn install<R: Runtime>(
     app: &AppHandle<R>,
     lib: Library,
@@ -163,7 +177,7 @@ fn install<R: Runtime>(
         warning: (!warnings.is_empty()).then(|| warnings.join(" ")),
         seed_warnings,
     };
-    let index = Index::build(&lib.data);
+    let index = Index::build(&visible(&lib));
     *lock(&st.open) = Some((lib, tax, index));
     Ok(view)
 }
@@ -234,7 +248,7 @@ pub fn related<R: Runtime>(app: AppHandle<R>, id: String) -> Result<Vec<Scored>,
     let st = app.state::<AppState>();
     let open = lock(&st.open);
     let (lib, _, index) = open.as_ref().ok_or(NO_LIBRARY)?;
-    Ok(index.related(&lib.data, &id))
+    Ok(index.related(&visible(lib), &id))
 }
 
 /// Runs off the main thread. The state lock is held only to read the known hashes and,
@@ -279,7 +293,7 @@ fn run_import(st: &AppState, paths: Vec<String>) -> Result<ImportReport, String>
         lib.data.references.truncate(before);
         return Err(library_error(e));
     }
-    *index = Index::build(&lib.data);
+    *index = Index::build(&visible(lib));
     Ok(out.report)
 }
 
@@ -288,7 +302,7 @@ pub fn search<R: Runtime>(app: AppHandle<R>, q: String) -> Result<Vec<Hit>, Stri
     let st = app.state::<AppState>();
     let open = lock(&st.open);
     let (lib, tax, _) = open.as_ref().ok_or(NO_LIBRARY)?;
-    Ok(search::search(tax, &lib.data, &q))
+    Ok(search::search(tax, &visible(lib), &q))
 }
 
 #[tauri::command]
@@ -689,9 +703,16 @@ mod tests {
         let path = Path::new(&e.lib).join("library.json");
         let mut json: serde_json::Value =
             serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        // Both share Chiaroscuro, so the hidden one would score as related and count in search.
+        let tag = serde_json::json!([{ "id": "t1", "operationId": "differentiate",
+            "techniqueId": "chiaroscuro", "branchId": "differentiate.feature", "suggested": false }]);
+        json["references"][0]["tags"] = tag.clone();
+        let good = json["references"][0]["id"].as_str().unwrap().to_string();
         let mut bad = json["references"][0].clone();
         bad["id"] = "bad".into();
         bad["hash"] = "../../evil".into();
+        bad["title"] = "Evil plate".into();
+        bad["tags"] = tag;
         json["references"].as_array_mut().unwrap().push(bad);
         fs::write(&path, serde_json::to_vec(&json).unwrap()).unwrap();
 
@@ -704,6 +725,23 @@ mod tests {
                 "1 references in library.json have an image name Horus did not write, so they are hidden."
             ),
             "{warning}"
+        );
+        // Hidden everywhere the window can reach: related, search hits and technique counts.
+        let rel = related(e.handle(), good.clone()).unwrap();
+        assert!(rel.iter().all(|x| x.id != "bad"), "{rel:?}");
+        let hits = search(e.handle(), "chiaroscuro".into()).unwrap();
+        assert!(
+            hits.contains(&Hit::Technique {
+                id: "chiaroscuro".into(),
+                operation_id: "differentiate".into(),
+                count: 1,
+            }),
+            "{hits:?}"
+        );
+        let hits = search(e.handle(), "evil plate".into()).unwrap();
+        assert!(
+            !hits.contains(&Hit::Reference { id: "bad".into() }),
+            "{hits:?}"
         );
         // Hidden, not dropped: the next save (an import) keeps the entry.
         e.import("p3_red.png").unwrap();
