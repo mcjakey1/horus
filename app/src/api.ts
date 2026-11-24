@@ -139,6 +139,8 @@ export interface Api {
   /** With `tag`: adds the technique and tags the reference in one undo step; `Change.created` is the new id. */
   addTechnique(t: NewTechnique, tag?: TagFor): Promise<Change>;
   demoExamples(): Promise<DemoExample[]>;
+  /** Absolute path of the original image, for the lightbox. Pass through `assetUrl`. */
+  imagePath(refId: string): Promise<string>;
 }
 
 const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "tif", "tiff", "gif"];
@@ -167,4 +169,5 @@ export const tauriApi: Api = {
   removeTag: (refId, tagId) => invoke("remove_tag", { refId, tagId }),
   addTechnique: (t, tag) => invoke("add_technique", { t, tag: tag ?? null }),
   demoExamples: () => invoke("demo_examples"),
+  imagePath: (refId) => invoke("image_path", { refId }),
 };

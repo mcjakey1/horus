@@ -37,6 +37,7 @@ function fakeApi(lastLibrary: string | null): Api {
     removeTag: vi.fn(),
     addTechnique: vi.fn(),
     demoExamples: vi.fn(async () => []),
+    imagePath: vi.fn(),
   };
 }
 
