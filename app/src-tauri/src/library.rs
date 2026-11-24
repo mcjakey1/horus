@@ -15,6 +15,8 @@ pub enum LibraryError {
     Corrupt { recovered_from_backup: bool },
     #[error("folder is not a Horus library")]
     NotALibrary,
+    #[error("folder already holds a Horus library")]
+    AlreadyALibrary,
 }
 
 pub struct Library {
@@ -27,6 +29,10 @@ pub struct Library {
 
 impl Library {
     pub fn create(root: &Path, seed_taxonomy: &Path) -> Result<Library, LibraryError> {
+        // Never lose work: refuse before touching anything.
+        if root.join(DATA).exists() {
+            return Err(LibraryError::AlreadyALibrary);
+        }
         for sub in ["images", "thumbs/256", "thumbs/1024"] {
             fs::create_dir_all(root.join(sub))?;
         }
@@ -195,6 +201,35 @@ mod tests {
         assert!(opened.recovered_from_backup);
         assert_eq!(opened.data, backup);
         assert_eq!(opened.data.boards.len(), 1);
+    }
+
+    #[test]
+    fn create_refuses_existing_library() {
+        let (dir, mut lib) = new_lib();
+        lib.data.references.push(Reference {
+            id: "r1".into(),
+            title: "Kept".into(),
+            creator: None,
+            year: None,
+            source_url: None,
+            credit: None,
+            note: None,
+            file: "r1.jpg".into(),
+            hash: "abc".into(),
+            width: 10,
+            height: 10,
+            added_at: "2026-11-25T00:00:00Z".into(),
+            tags: vec![],
+        });
+        lib.save().unwrap();
+        let before = fs::read(dir.path().join("library.json")).unwrap();
+        assert!(matches!(
+            Library::create(dir.path(), &seed()),
+            Err(LibraryError::AlreadyALibrary)
+        ));
+        assert_eq!(fs::read(dir.path().join("library.json")).unwrap(), before);
+        let opened = Library::open(dir.path()).unwrap();
+        assert_eq!(opened.data.references, lib.data.references);
     }
 
     #[test]
