@@ -274,6 +274,28 @@ describe("technique picker", () => {
     expect(sent(api)[0][1].map((t) => t.techniqueId)).toEqual([cards(el)[1]]);
   });
 
+  it("tick_box_on_an_ask_card_shows_its_radios_and_stays_unticked", () => {
+    const { el } = mount({}, { tax: withTexture() });
+    key(row(el), "1");
+    const box = el.querySelector<HTMLInputElement>('.pk-card[data-tech="chiaroscuro"] .pk-tick')!;
+    box.click();
+    const card = el.querySelector<HTMLElement>('.pk-card[data-tech="chiaroscuro"]')!;
+    expect(card.classList.contains("is-hi")).toBe(true);
+    expect(card.querySelectorAll('input[type="radio"]')).toHaveLength(2);
+    expect(card.querySelector<HTMLInputElement>(".pk-tick")!.checked).toBe(false);
+    expect(el.querySelector(".pk-msg")!.textContent).toBe("Choose a domain first.");
+  });
+
+  it("a_late_result_after_close_does_not_call_onDone", async () => {
+    const onDone = vi.fn();
+    const { p, el } = mount({ onDone });
+    key(row(el), "3");
+    key(row(el), "Enter");
+    p.close();
+    await flush();
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
   it("ticks_drop_when_their_technique_leaves_the_taxonomy", () => {
     const preset = twoDiff();
     const { el, api, store } = mount({ preset });

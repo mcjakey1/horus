@@ -266,5 +266,5 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .pk-msg { margin: 0; font-size: 13px; color: var(--ink-2); }
 .pk-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
 .pk-chips:empty { display: none; }
-.pk-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px; border: 1px solid var(--line-2); font-size: 13px; }
+.pk-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px; border: 1px solid var(--line-2); font: 500 14px/1.25 var(--serif); }
 .pk-chip button { width: 22px; height: 22px; color: var(--ink-2); }

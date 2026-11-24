@@ -178,13 +178,11 @@ export function mountPicker(
       (c) => {
         if (done) S.busy = false;
         store.apply(c);
-        if (!done) return;
-        if (!S.closed) {
-          S.ticks = [];
-          S.form = false;
-          slot.innerHTML = "";
-          setQuery("");
-        }
+        if (!done || S.closed) return; // a late result must not close a picker opened since
+        S.ticks = [];
+        S.form = false;
+        slot.innerHTML = "";
+        setQuery("");
         opts.onDone?.();
       },
       (err) => {
@@ -257,7 +255,10 @@ export function mountPicker(
     if (i >= 0) S.ticks.splice(i, 1);
     else {
       const t = tagFor(id);
-      if (!t) return say("Choose a domain first.");
+      if (!t) {
+        renderCards(); // shows the card's domain radios and resets its tick box
+        return say("Choose a domain first.");
+      }
       S.ticks.push(t);
     }
     renderCards();
