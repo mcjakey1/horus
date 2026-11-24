@@ -56,8 +56,6 @@ impl Library {
         if !path.is_file() {
             return Err(LibraryError::NotALibrary);
         }
-        let parse =
-            |p: &Path| -> Option<LibraryData> { serde_json::from_slice(&fs::read(p).ok()?).ok() };
         let (data, recovered_from_backup) = match serde_json::from_slice(&fs::read(&path)?) {
             Ok(data) => (data, false),
             Err(_) => match parse(&root.join(BACKUP)) {
@@ -91,7 +89,8 @@ impl Library {
         tmp.write_all(&json)?;
         tmp.as_file().sync_all()?;
         let data = self.root.join(DATA);
-        if data.is_file() {
+        // Rotate only a library.json that parses, so a corrupt file never replaces a good backup.
+        if parse(&data).is_some() {
             fs::copy(&data, self.root.join(BACKUP))?;
         }
         tmp.persist(&data).map_err(|e| e.error)?;
@@ -109,6 +108,10 @@ impl Library {
             .join(size.to_string())
             .join(format!("{hash}.jpg"))
     }
+}
+
+fn parse(p: &Path) -> Option<LibraryData> {
+    serde_json::from_slice(&fs::read(p).ok()?).ok()
 }
 
 #[cfg(test)]
@@ -230,6 +233,24 @@ mod tests {
         assert_eq!(fs::read(dir.path().join("library.json")).unwrap(), before);
         let opened = Library::open(dir.path()).unwrap();
         assert_eq!(opened.data.references, lib.data.references);
+    }
+
+    #[test]
+    fn save_after_recovery_keeps_good_backup() {
+        let (dir, mut lib) = new_lib();
+        add_board(&mut lib, "b1");
+        lib.save().unwrap();
+        add_board(&mut lib, "b2");
+        lib.save().unwrap(); // backup now holds the library with b1
+        fs::write(dir.path().join("library.json"), "{").unwrap();
+        let opened = Library::open(dir.path()).unwrap();
+        assert!(opened.recovered_from_backup);
+        let good = opened.data.clone();
+        opened.save().unwrap();
+        let backup: LibraryData =
+            serde_json::from_slice(&fs::read(dir.path().join("library.bak.json")).unwrap())
+                .unwrap();
+        assert_eq!(backup, good);
     }
 
     #[test]
