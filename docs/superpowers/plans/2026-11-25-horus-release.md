@@ -22,7 +22,7 @@
 - `DESIGN.md`: The Conservation Study.
 - `demo/README.md`: the rights rule and the remaining assumption about the four WPA posters with no recorded artist.
 
-**Carried from the Plan 1 ledger** (`.worktrees/horus-foundation/.superpowers/sdd/2026-11-24-horus-foundation/progress.md`). This plan owns enforcing these, whichever plan landed the change:
+**Carried from the Plan 1 ledger** (`docs/superpowers/ledgers/2026-11-24-horus-foundation-ledger.md`). This plan owns enforcing these, whichever plan landed the change:
 - From the Task 1 minors, routed to Plan 1 Task 10: the CSP is null, and `withGlobalTauri` must be off (Task 1 here).
 - `tauri-plugin-opener`: prune it or use it (Task 1).
 - From the AGY #2 Task 1 carry: Cargo `description` and `authors` (Task 1).
