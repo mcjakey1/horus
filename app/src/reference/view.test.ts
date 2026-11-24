@@ -33,11 +33,18 @@ const taxonomy: Taxonomy = {
     { id: "sequence", name: "Sequence", plainLabel: "Lead the eye", icon: "", description: "" },
   ],
   domains: [{ id: "feature", name: "Feature", icon: "", description: "" }],
-  branches: [{ id: "differentiate-feature", operationId: "differentiate", domainId: "feature" }],
+  branches: [
+    { id: "differentiate-feature", operationId: "differentiate", domainId: "feature" },
+    { id: "sequence-feature", operationId: "sequence", domainId: "feature" },
+  ],
   techniques: [
     { id: "silhouette", name: "Silhouette", icon: "", description: "A dark shape against light.", synonyms: [], examples: [], custom: false },
+    { id: "rhythm", name: "Rhythm", icon: "", description: "", synonyms: [], examples: [], custom: false },
   ],
-  branchTechniques: [{ branchId: "differentiate-feature", techniqueId: "silhouette" }],
+  branchTechniques: [
+    { branchId: "differentiate-feature", techniqueId: "silhouette" },
+    { branchId: "sequence-feature", techniqueId: "rhythm" },
+  ],
 };
 
 const A = ref("a", "Plate A", [tag("a1", "differentiate", "silhouette", "differentiate-feature"), tag("a2", "sequence")]);
@@ -333,6 +340,84 @@ describe("Reference view", () => {
     expect(pins()).toEqual(["false", "false"]);
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "2", bubbles: true }));
     expect(pins()).toEqual(["false", "true"]);
+  });
+
+  // ---------- Task 11: the AND/OR technique filter (SPEC §5a) ----------
+  const rows = () => [...document.querySelectorAll<HTMLElement>("#pane-ranked .row")].map((r) => r.dataset.go);
+  const chips = () => [...document.querySelectorAll<HTMLElement>("#pane-ranked .chip")].map((c) => c.textContent?.replace("×", "").trim());
+  const pressed = () => document.querySelector("#pane-ranked [data-mode][aria-pressed='true']")?.textContent;
+  const byCallout = (tech: string) => $<HTMLButtonElement>(`#pane-callouts [data-filter="${tech}"]`).click();
+  /** A's partial tag becomes Rhythm, and D has only Rhythm: A = {silhouette, rhythm}, B = {silhouette}, D = {rhythm}. */
+  async function withRhythm() {
+    const A2 = { ...A, tags: [A.tags[0], tag("a2", "sequence", "rhythm", "sequence-feature")] };
+    store.apply({ ...none, references: [A2, ref("d", "Plate D", [tag("d1", "sequence", "rhythm", "sequence-feature")])] });
+    await settle();
+  }
+
+  it("filter_two_chips_all_of_leaves_single_match", async () => {
+    await withRhythm();
+    const calls = vi.mocked(api.related).mock.calls.length;
+    $("#pane-callouts .call").dataset.mark = "kept";
+    byCallout("silhouette");
+    byCallout("rhythm");
+    byCallout("rhythm"); // choosing it again keeps it, never toggles it off
+    expect($("#pane-ranked").hidden).toBe(false);
+    expect(chips()).toEqual(["Silhouette", "Rhythm"]);
+    expect(pressed()).toBe("Any of"); // the default
+    expect(rows()[0]).toBe("b"); // ranked by related score: b scores 0.8
+    expect(new Set(rows())).toEqual(new Set(["a", "b", "d"]));
+    $<HTMLButtonElement>('#pane-ranked [data-mode="and"]').click();
+    expect(rows()).toEqual(["a"]);
+    expect(pressed()).toBe("All of");
+    expect(document.activeElement).toBe($('#pane-ranked [data-mode="and"]')); // keyboard focus survives the re-render
+    // view state only: no new scores, no store Change, the callouts untouched
+    expect(vi.mocked(api.related).mock.calls.length).toBe(calls);
+    expect($("#pane-callouts .call").dataset.mark).toBe("kept");
+    expect(api.undo).not.toHaveBeenCalled();
+  });
+
+  it("filter_show_clears_chips", async () => {
+    byCallout("silhouette");
+    $<HTMLButtonElement>('#pane-ranked [data-mode="and"]').click();
+    expect(chips()).toEqual(["Silhouette"]);
+    view.show("b");
+    await settle();
+    expect(chips()).toEqual([]);
+    expect($("#pane-ranked").textContent).toContain("related · strongest first");
+    byCallout("silhouette");
+    expect(pressed()).toBe("Any of"); // the mode resets too
+  });
+
+  it("filter_chip_ink_and_remove", async () => {
+    await withRhythm();
+    byCallout("silhouette");
+    byCallout("rhythm");
+    const chip = $("#pane-ranked .chip");
+    expect(chip.style.getPropertyValue("--c")).toBe("var(--diff)"); // opInk of Silhouette's operation
+    // the ink is set through the CSSOM: no inline style in the markup beyond that one property
+    expect(document.querySelectorAll("#pane-ranked [style]:not(.chip)")).toHaveLength(0);
+    expect(chip.getAttribute("style")).toBe("--c: var(--diff);");
+    const x = $<HTMLButtonElement>("#pane-ranked .chip-x");
+    expect(x.getAttribute("aria-label")).toBe("Remove Silhouette from the filter");
+    x.click();
+    expect(chips()).toEqual(["Rhythm"]);
+    expect(document.activeElement).toBe($('#pane-ranked .chip-x[data-untoggle="rhythm"]'));
+    $<HTMLButtonElement>("#pane-ranked .chip-x").click();
+    expect(chips()).toEqual([]);
+    expect(document.activeElement).toBe($('.m-tab[data-pane="ranked"]'));
+  });
+
+  it("filter_from_search_and_empty_copy", async () => {
+    vi.mocked(api.search).mockResolvedValue([{ kind: "technique", id: "rhythm", operationId: "sequence", count: 0 }]);
+    const q = $<HTMLInputElement>("#q");
+    q.value = "rhy";
+    q.dispatchEvent(new Event("input"));
+    await settle();
+    $('#q-results li[data-t="rhythm"]').click();
+    expect(chips()).toEqual(["Rhythm"]);
+    expect($("#pane-ranked").textContent).toContain("No reference has any of these yet.");
+    $<HTMLButtonElement>('#pane-ranked [data-mode="and"]').click();
+    expect($("#pane-ranked").textContent).toContain("No reference has all of these yet.");
   });
 });
 

@@ -8,6 +8,7 @@ import { opInk, opLabel } from "../ops";
 import { mountSearch } from "../search";
 import type { Store, StoreEvent } from "../store";
 import { mountPicker } from "../tagging/picker";
+import { type Filter, matchesFilter, toggle } from "./filter";
 import { drawLeaders, highlight } from "./leaders";
 import { tileHTML } from "./tile";
 
@@ -15,6 +16,7 @@ const fmt = (n: number) => n.toFixed(2);
 const stateLabel = { full: "full tag", partial: "partial", region: "region" } as const;
 const stateOf = (t: Tag): keyof typeof stateLabel => (t.region ? "region" : t.techniqueId ? "full" : "partial");
 const PAINT_DELAY = 180; // matches .specimen.is-leaving transition
+const noFilter = (): Filter => ({ techniques: [], mode: "or" });
 
 /** `ready` resolves once the settings (theme, Find similar status) are in; the library is painted at mount. */
 export function mountReference(
@@ -34,7 +36,7 @@ export function mountReference(
     arrival: null as Tag | null,
     related: [] as Scored[],
     ranked: [] as string[],
-    filter: null as string | null,
+    filter: noFilter(),
     paintTimer: 0 as ReturnType<typeof setTimeout> | 0,
     plateSrc: "", // what #plate shows, so any paint can tell whether it is stale
     nav: 0, // drops stale paints
@@ -56,6 +58,16 @@ export function mountReference(
     const b = store.tax.branches.find((x) => x.id === branchId);
     return b ? `${opName(b.operationId)} · ${domainOf(branchId)}` : branchId;
   };
+  /** The operation a technique is shown under, by search's rule (`search.rs`): the one the library
+   * tags it under most, else its first operation in branch order; none → opInk's neutral. */
+  const techOp = (id: string) => {
+    const ops = store.tax.branches
+      .filter((b) => store.tax.branchTechniques.some((l) => l.branchId === b.id && l.techniqueId === id))
+      .map((b) => b.operationId);
+    const uses = (op: string) =>
+      allRefs().reduce((n, r) => n + r.tags.filter((t) => t.techniqueId === id && t.operationId === op).length, 0);
+    return ops.reduce((best, op) => (uses(op) > uses(best) ? op : best), ops[0] ?? "");
+  };
   const aspect = (r: Reference) => (r.width && r.height ? r.width / r.height : 3 / 4);
   const img = (r: Reference, big = false) =>
     `<img src="${esc(api.assetUrl(big ? r.thumb1024 : r.thumb256))}" alt="${esc(r.title)}" loading="lazy">`;
@@ -75,7 +87,7 @@ export function mountReference(
     S.focus = id;
     S.pinned = null;
     S.hot = null;
-    S.filter = null;
+    S.filter = noFilter();
     // The path you arrived on stays in the record header at rest.
     S.arrival = arrivalOf(ref, via);
     clearTimeout(S.paintTimer);
@@ -138,7 +150,8 @@ export function mountReference(
   }
 
   function renderEmpty() {
-    S.focus = S.pinned = S.hot = S.arrival = S.filter = null;
+    S.focus = S.pinned = S.hot = S.arrival = null;
+    S.filter = noFilter();
     S.related = [];
     S.ranked = [];
     S.plateSrc = "";
@@ -218,6 +231,7 @@ export function mountReference(
         <div><h3><button class="pin" aria-pressed="false" aria-label="Pin callout ${i + 1}: ${esc(name)}">${esc(name)}</button><span class="state">${stateLabel[stateOf(t)]}</span></h3>
           <div class="path"><span class="op">${esc(opName(op))}</span>${domain ? ` · ${esc(domain)}` : ""} · ${esc(opPlain(op))}</div>
           ${def ? `<p class="pane-note">${esc(def)}</p>` : ""}
+          ${t.techniqueId ? `<button class="text-btn filter-by" data-filter="${esc(t.techniqueId)}" aria-label="Filter the Ranked list by ${esc(name)}">Filter by this</button>` : ""}
           ${
             !t.techniqueId
               ? `<p class="none">Partial tags don't count toward related scores.</p>`
@@ -241,15 +255,26 @@ export function mountReference(
     const prev = new Set(S.ranked);
     const byScore = new Map(S.related.map((x) => [x.id, x]));
     const blank = (id: string): Scored => ({ id, score: 0, sharedTechniques: [], sharedBranches: [] });
-    const list = S.filter
-      ? allRefs().filter((r) => r.tags.some((t) => t.techniqueId === S.filter)).map((r) => byScore.get(r.id) ?? blank(r.id))
+    const f = S.filter;
+    const filtering = f.techniques.length > 0;
+    const list = filtering
+      ? allRefs()
+          .filter((r) => matchesFilter(r, f))
+          .map((r) => byScore.get(r.id) ?? blank(r.id))
+          .sort((a, b) => b.score - a.score)
       : S.related;
     S.ranked = list.map((x) => x.id);
-    const head = S.filter
-      ? `<p class="pane-note">Using <b class="mono">${esc(techName(S.filter))}</b> · ${list.length} references · <button class="settings" id="clear-filter">Clear</button></p>`
+    const mode = (m: Filter["mode"], label: string) =>
+      `<button class="text-btn" data-mode="${m}" aria-pressed="${f.mode === m}">${label}</button>`;
+    const head = filtering
+      ? `<div class="filter"><div class="filter-mode" role="group" aria-label="Match">${mode("or", "Any of")}${mode("and", "All of")}</div>
+        <ul class="chips">${f.techniques
+          .map((id) => `<li class="chip" data-t="${esc(id)}"><span>${esc(techName(id))}</span><button class="chip-x" data-untoggle="${esc(id)}" aria-label="Remove ${esc(techName(id))} from the filter">×</button></li>`)
+          .join("")}</ul>
+        <p class="pane-note">${list.length} references · <button class="settings" id="clear-filter">Clear</button></p></div>`
       : `<p class="pane-note">${list.length} related · strongest first</p>`;
     // SPEC §4: links the artist drew are always shown, listed first, never mixed into the score.
-    const mine = S.filter
+    const mine = filtering
       ? []
       : linksOf(ref).map(
           ({ other }) =>
@@ -267,8 +292,11 @@ export function mountReference(
         return `<button class="row${prev.size && !prev.has(r.id) ? " is-new" : ""}" data-go="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>${esc(why)}</small></span><span class="sc">${r.id === ref.id ? "this" : fmt(x.score)}</span></button>`;
       })
       .join("");
-    pane.innerHTML =
-      head + mine.join("") + (list.length ? rows : `<p class="none">Nothing shares a technique with this reference yet.</p>`);
+    const empty = filtering
+      ? `No reference has ${f.mode === "and" ? "all" : "any"} of these yet.`
+      : "Nothing shares a technique with this reference yet.";
+    pane.innerHTML = head + mine.join("") + (list.length ? rows : `<p class="none">${empty}</p>`);
+    pane.querySelectorAll<HTMLElement>(".chip").forEach((c) => c.style.setProperty("--c", opColor(techOp(c.dataset.t!))));
     setTimeout(() => pane.querySelectorAll(".is-new").forEach((el) => el.classList.remove("is-new")), 2400);
   }
 
@@ -360,11 +388,19 @@ export function mountReference(
   const systemTheme = () =>
     typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 
-  function applyFilter(tech: string) {
-    S.filter = tech;
-    selectPane("ranked");
+  /** Filter changes are view state: re-rank the Ranked pane only (no Change, no undo, no refetch). */
+  function rerank(filter: Filter, focusOn?: () => HTMLElement | null | undefined) {
+    S.filter = filter;
     const ref = focusRef();
     if (ref) renderRanked(ref);
+    // innerHTML dropped the focused control; put keyboard focus back near where the artist was.
+    if (focusOn) (focusOn() ?? $('.m-tab[data-pane="ranked"]'))?.focus();
+  }
+
+  /** Choosing a technique (search or callout) adds it; choosing it again keeps it. */
+  function applyFilter(tech: string) {
+    selectPane("ranked");
+    rerank(S.filter.techniques.includes(tech) ? S.filter : toggle(S.filter, tech));
   }
 
   // ---------- events ----------
@@ -380,12 +416,23 @@ export function mountReference(
       syncPins();
       return;
     }
-    if (target.id === "clear-filter") {
-      S.filter = null;
-      const ref = focusRef();
-      if (ref) renderRanked(ref);
-      return;
+    const choose = target.closest<HTMLElement>("[data-filter]");
+    if (choose) return applyFilter(choose.dataset.filter!);
+    const untoggle = target.closest<HTMLElement>("[data-untoggle]");
+    if (untoggle) {
+      const k = S.filter.techniques.indexOf(untoggle.dataset.untoggle!);
+      // the chip that slides into its place (or the one before it) keeps focus; none left → the tab
+      return rerank(toggle(S.filter, untoggle.dataset.untoggle!), () => {
+        const xs = root.querySelectorAll<HTMLElement>("#pane-ranked .chip-x");
+        return xs[Math.min(k, xs.length - 1)];
+      });
     }
+    const mode = target.closest<HTMLElement>("[data-mode]");
+    if (mode) {
+      const m = mode.dataset.mode as Filter["mode"];
+      return rerank({ ...S.filter, mode: m }, () => $(`#pane-ranked [data-mode="${m}"]`));
+    }
+    if (target.id === "clear-filter") return rerank(noFilter(), () => null);
     const tab = target.closest<HTMLElement>(".m-tab");
     if (tab) selectPane(tab.dataset.pane!);
   }, { signal });
