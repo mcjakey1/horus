@@ -1,3 +1,4 @@
+pub mod correlate;
 pub mod library;
 pub mod model;
 pub mod taxonomy;
