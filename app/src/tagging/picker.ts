@@ -350,6 +350,7 @@ export function mountPicker(
       return apply();
     }
     if (e.key === " " && !text) {
+      if (t.matches('input[type="radio"]')) return; // Space picks the domain radio
       if (!grid.querySelector(".pk-card.is-hi[data-tech]")) return; // a focused button clicks as usual
       e.preventDefault();
       return toggleTick();
@@ -359,6 +360,18 @@ export function mountPicker(
       search.focus();
       setQuery(search.value + e.key);
     }
+  });
+
+  // A card reached by Tab (or any focus) is the highlighted one, so Enter, Space and the arrows act on it.
+  el.addEventListener("focusin", (e) => {
+    const card = (e.target as Element).closest<HTMLElement>(".pk-card");
+    if (!card) return;
+    const i = [...grid.querySelectorAll(".pk-card")].indexOf(card);
+    if (i < 0) return;
+    const shown = i === hiIndex(); // already highlighted: record it, never repaint (that would drop the focus)
+    S.nav = true;
+    S.hi = i;
+    if (!shown) renderCards();
   });
 
   el.addEventListener("input", (e) => {

@@ -215,6 +215,46 @@ describe("technique picker", () => {
     ]);
   });
 
+  it("tab_focused_card_is_what_enter_applies (fix round 1, I1)", () => {
+    const { el, api } = mount();
+    key(row(el), "1");
+    const first = el.querySelector<HTMLElement>(".pk-card[data-tech]")!;
+    first.focus(); // where Tab from the search field lands
+    expect(hi(el)?.dataset.tech).toBe(first.dataset.tech);
+    expect(document.activeElement).toBe(hi(el));
+    key(document.activeElement!, "Enter");
+    expect(sent(api)).toEqual([
+      ["r", [{ operationId: "differentiate", techniqueId: first.dataset.tech, branchId: "differentiate.feature" }]],
+    ]);
+  });
+
+  it("tab_focused_card_space_ticks_and_down_moves_on (fix round 1, I1)", () => {
+    const { el } = mount();
+    key(row(el), "1");
+    el.querySelector<HTMLElement>(".pk-card[data-tech]")!.focus();
+    key(document.activeElement!, " ");
+    expect(hi(el)!.classList.contains("is-ticked")).toBe(true);
+    key(document.activeElement!, "ArrowDown");
+    expect(hi(el)?.dataset.tech).toBe(cards(el)[1]);
+    expect(document.activeElement).toBe(hi(el));
+  });
+
+  it("space_on_a_domain_radio_is_left_to_the_radio (fix round 1, I2)", () => {
+    const { el, api } = mount({}, { tax: withTexture() });
+    key(row(el), "1");
+    type(el, "chiaroscuro");
+    const radio = hi(el)!.querySelector<HTMLInputElement>('input[type="radio"]')!;
+    radio.focus();
+    expect(key(radio, " ").defaultPrevented).toBe(false); // the browser checks it
+    expect(el.querySelector(".pk-msg")!.textContent).toBe("");
+    expect(hi(el)!.classList.contains("is-ticked")).toBe(false);
+    radio.click(); // what the browser's Space does: check it and fire change
+    key(radio, "Enter");
+    expect(sent(api)).toEqual([
+      ["r", [{ operationId: "differentiate", techniqueId: "chiaroscuro", branchId: "differentiate.feature" }]],
+    ]);
+  });
+
   it("partial_tag: 3, then Enter with nothing highlighted", async () => {
     const onDone = vi.fn();
     const { el, api } = mount({ onDone });
