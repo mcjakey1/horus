@@ -37,8 +37,8 @@ Run on 2026-11-25 at `5552f2d` (branch `p2-t12-e2e`), with the harness `docs/sup
 |---|---|---|---|
 | 1 | Drop a folder of 20: "Added 20 to the Inbox", badge 20; Ctrl+Z, Ctrl+Shift+Z | PASS | Import 4.6 s; undo 35 ms; redo 23 ms |
 | 2 | Drop it again: 20 "Already in your library" rows, no new references | PASS | 20 rows; still 20 references |
-| 3 | Keyboard-only tagging of 5 Inbox items (`1`, type, Enter, →), each under 10 s | **PARTIAL** | Tagging 62–83 ms each. **→ after Enter does not move on** (below) |
-| 4 | Drop a new image on a reference's plate: picker opens with its techniques ticked | **FAIL** | Imported, but no picker (below) |
+| 3 | Keyboard-only tagging of 5 Inbox items (`1`, type, Enter, →), each under 10 s | PASS on re-run (was PARTIAL) | Re-run: 121, 86, 58, 68, 61 ms per tag; → alone moved on 4 of 4 times |
+| 4 | Drop a new image on a reference's plate: picker opens with its techniques ticked | PASS on re-run (was FAIL) | Re-run: the picker opened in the Inbox on the new reference, with Chiaroscuro (the source's technique) ticked |
 | 5 | A box dragged in the lightbox and tagged shows as an outline on the Reference view tile | PASS | `.treg` outline on X's thumb in Y's Chiaroscuro callout |
 | 6 | "Halo glow" from the picker in `taxonomy.json` with `"custom": true` within 1 s; one Ctrl+Z removes both it and its tag within 1 s | PASS | Added 585 ms; removed 573 ms (the 500 ms debounce plus the write) |
 | 7 | A browser paste with `<img>` HTML fills `sourceUrl` | PASS | `sourceUrl` in `library.json` is the `<img src>` |
@@ -47,7 +47,7 @@ Run on 2026-11-25 at `5552f2d` (branch `p2-t12-e2e`), with the harness `docs/sup
 
 No console errors, and no external network requests (item 7's URL was never fetched).
 
-**Item 3 (to fix):** → does nothing while focus is in the picker's search field.
+**Item 3 (fixed in `67fa199`, see the re-run below):** → does nothing while focus is in the picker's search field.
 - **Repro:**
   1. In the Inbox, press `1`.
   2. Type `chiaro`, then press Enter. The item is tagged, and focus stays in `.pk-search`.
@@ -57,7 +57,7 @@ No console errors, and no external network requests (item 7's URL was never fetc
   - The Inbox's handler then returns early on any text field (`inbox/view.ts`, the `isTextEntry` check).
 - **The keyboard path that works:** Enter, then Tab (onto a technique card), then →.
 
-**Item 4 (to fix):** "Tag like this" never fires on the Reference view's plate.
+**Item 4 (fixed in `67fa199`, see the re-run below):** "Tag like this" never fires on the Reference view's plate.
 - **The cause:**
   - `.boxes` (`#boxes`) is `position: absolute; inset: 0` over `#plate`, and is its sibling, not its child.
   - The drop hit-test (`intake.ts`, `elementFromPoint`, then `closest("[data-ref-drop]")`) lands on `div.box.is-whole` inside it, and finds no `[data-ref-drop]`.
@@ -72,7 +72,23 @@ No console errors, and no external network requests (item 7's URL was never fetc
 - **Folder pickers** (first run, Library → New, Library → Open) are answered by fulfilling `plugin:dialog|open` over CDP.
 - **Item 3:**
   - Switching to the Inbox was a click on its tab; the tagging itself was keys only.
-  - After the → failure, the harness used Tab, then →, to reach the other items.
+  - In the first run, after the → failure, the harness used Tab, then →, to reach the other items. The re-run needed no Tab.
 - **Item 8:** the close is the real window close, through `CloseMainWindow`, sent from a PowerShell already holding the process, so its start-up time isn't counted.
 - **Item 9:** library B was made first with Library → New library…. The harness then switched back to A and tagged there, so A had an undo step. It then opened B with Open library… and pressed Ctrl+Z.
 - The test libraries and `%APPDATA%\art.horus.app` were deleted afterwards.
+
+**Re-run of items 3 and 4** (2026-11-25, at `67fa199`): a fresh release build, the same harness, and a fresh library, deleted afterwards.
+- **The fixes:**
+  - `data-ref-drop` is now on `#specimen`.
+  - After an Inbox apply, focus moves to the operations row.
+- **Item 3: PASS.**
+  - The 5 items were tagged with keys only: `1`, type, Enter, then →.
+  - → alone moved to the next item 4 of 4 times.
+  - Each tag took 121, 86, 58, 68 and 61 ms.
+- **Item 4: PASS.**
+  - The plate centre still hit-tests to `div.box.is-whole`, but `closest("[data-ref-drop]")` now finds `#specimen`.
+  - The drop opened the picker in the Inbox on the new reference, with Chiaroscuro (the source's only technique) ticked.
+- **The other items:** 1, 2 and 5–9 passed again, with no console errors and no external requests.
+  - Item 6 took 565 ms to add and 601 ms to undo.
+  - In item 8, the close came 33 ms after Enter.
+- **The harness change:** `focusId` now reads `[data-ref-drop]` instead of `#plate`.

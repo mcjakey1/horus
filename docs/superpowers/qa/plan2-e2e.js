@@ -100,7 +100,7 @@ async function openRef(page, r) {
   await sleep(500);
   await blur(page);
 }
-const focusId = (page) => page.evaluate(() => document.querySelector("#plate")?.dataset.refDrop ?? null);
+const focusId = (page) => page.evaluate(() => document.querySelector("[data-ref-drop]")?.dataset.refDrop ?? null);
 
 (async () => {
   // ---------- set up: a fresh library, demo set off ----------
