@@ -18,7 +18,7 @@ use std::borrow::Cow;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
+use std::sync::{Condvar, Mutex, MutexGuard, PoisonError, TryLockError};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
@@ -39,6 +39,8 @@ pub struct AppState {
     /// The window may close without a flush: set by "Try again" once it saved, and by
     /// "Quit without saving".
     skip_close_flush: AtomicBool,
+    /// A close came while an import ran: the import's end closes the window (I1).
+    close_owed: AtomicBool,
     /// Imports queue here for their whole run: thumbnail temp names are fixed per hash.
     import_gate: Mutex<()>,
     /// Serialises the settings read-merge-write.
@@ -55,6 +57,7 @@ impl AppState {
             open: Mutex::new(None),
             saver: Condvar::new(),
             skip_close_flush: AtomicBool::new(false),
+            close_owed: AtomicBool::new(false),
             import_gate: Mutex::new(()),
             settings: Mutex::new(()),
             config_dir,
@@ -180,6 +183,8 @@ pub enum CloseDecision {
     Close,
     /// The flush failed with this reason: keep the window open and ask.
     Prevent(String),
+    /// An import is running: keep the window open; its end closes it.
+    Wait,
 }
 
 const NO_LIBRARY: &str = "No library is open.";
@@ -709,6 +714,26 @@ fn run_import<R: Runtime>(
     note: Option<String>,
     source_url: Option<String>,
 ) -> Result<ImportResult, String> {
+    let result = import_gated(app, paths, note, source_url);
+    // I1: a close that came mid-import is taken now, on every exit. `close()` re-raises
+    // CloseRequested, so the normal flush (and the B5 dialog if it fails) applies.
+    if app
+        .state::<AppState>()
+        .close_owed
+        .swap(false, Ordering::SeqCst)
+        && let Some(w) = app.get_webview_window("main")
+    {
+        let _ = w.close();
+    }
+    result
+}
+
+fn import_gated<R: Runtime>(
+    app: &AppHandle<R>,
+    paths: Vec<PathBuf>,
+    note: Option<String>,
+    source_url: Option<String>,
+) -> Result<ImportResult, String> {
     let st = app.state::<AppState>();
     // Taken before the hash snapshot, so a queued import sees the previous one's results.
     let gate = lock(&st.import_gate);
@@ -917,11 +942,21 @@ pub fn start_saver<R: Runtime>(app: &AppHandle<R>) {
     });
 }
 
-/// B5, as a pure decision: flush unless the artist chose to quit without saving.
+/// B5, as a pure decision: flush unless the artist chose to quit without saving. While an
+/// import runs it waits instead (I1): the close is owed, and the import's end takes it. Never
+/// blocks, so the UI thread is not held for the import's length.
 pub fn close_decision(st: &AppState) -> CloseDecision {
     if st.skip_close_flush.load(Ordering::SeqCst) {
         return CloseDecision::Close;
     }
+    // Owed before the try: an import that ends in between still sees it (no lost wake-up).
+    st.close_owed.store(true, Ordering::SeqCst);
+    let _gate = match st.import_gate.try_lock() {
+        Err(TryLockError::WouldBlock) => return CloseDecision::Wait,
+        Err(TryLockError::Poisoned(p)) => p.into_inner(),
+        Ok(g) => g,
+    };
+    st.close_owed.store(false, Ordering::SeqCst);
     match lock(&st.open).as_mut().map(flush_open) {
         Some(Err(reason)) => CloseDecision::Prevent(reason),
         _ => CloseDecision::Close,
@@ -933,8 +968,10 @@ pub fn close_decision(st: &AppState) -> CloseDecision {
 #[tauri::command]
 pub fn retry_save<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     let st = app.state::<AppState>();
-    if let CloseDecision::Prevent(reason) = close_decision(&st) {
-        return Err(reason);
+    match close_decision(&st) {
+        CloseDecision::Prevent(reason) => return Err(reason),
+        CloseDecision::Wait => return Ok(()), // the running import's end closes the window
+        CloseDecision::Close => {}
     }
     st.skip_close_flush.store(true, Ordering::SeqCst);
     if let Some(w) = app.get_webview_window("main") {
@@ -1921,6 +1958,63 @@ mod tests {
         fs::remove_dir(&blocker).unwrap();
         assert_eq!(close_decision(&st(&e)), CloseDecision::Close);
         assert_eq!(saved_tag_count(&e), 0, "closed without flushing");
+    }
+
+    /// I1: a close during an import waits (and owes a close); with the gate free it flushes.
+    #[test]
+    fn close_waits_while_the_import_gate_is_held() {
+        let e = created();
+        let state = st(&e);
+        {
+            let _gate = lock(&state.import_gate);
+            assert_eq!(close_decision(&state), CloseDecision::Wait);
+            assert_eq!(
+                close_decision(&state),
+                CloseDecision::Wait,
+                "a second close"
+            );
+            assert!(state.close_owed.load(Ordering::SeqCst));
+        }
+        assert_eq!(close_decision(&state), CloseDecision::Close);
+        assert!(!state.close_owed.load(Ordering::SeqCst));
+    }
+
+    /// I1: a close mid-import never loses it; once the import has saved, the owed close is
+    /// taken (its `window.close()` re-runs the normal flush, which is not unit-tested here).
+    #[test]
+    fn close_mid_import_waits_then_closes() {
+        let e = created();
+        let src = tempfile::tempdir().unwrap();
+        fs::copy(fixture("small.jpg"), src.path().join("a_small.jpg")).unwrap();
+        image::RgbImage::from_fn(1500, 1500, |x, y| image::Rgb([x as u8, y as u8, 7]))
+            .save(src.path().join("b_big.png"))
+            .unwrap();
+        let thumbs = Path::new(&e.lib).join("thumbs/256");
+        let state = st(&e);
+        std::thread::scope(|s| {
+            let (h, p) = (e.handle(), src.path().to_string_lossy().into_owned());
+            let import = s.spawn(move || {
+                tauri::async_runtime::block_on(import_paths(h, vec![p], None, None)).unwrap()
+            });
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            while fs::read_dir(&thumbs).unwrap().next().is_none() {
+                assert!(std::time::Instant::now() < deadline, "import never started");
+                std::thread::yield_now();
+            }
+            assert_eq!(close_decision(&state), CloseDecision::Wait);
+            assert_eq!(
+                close_decision(&state),
+                CloseDecision::Wait,
+                "a second close"
+            );
+            assert_eq!(import.join().unwrap().report.added.len(), 2);
+        });
+        assert!(
+            !state.close_owed.load(Ordering::SeqCst),
+            "the import's end took the owed close"
+        );
+        assert_eq!(saved(&e)["references"].as_array().unwrap().len(), 2);
+        assert_eq!(close_decision(&state), CloseDecision::Close);
     }
 
     #[test]

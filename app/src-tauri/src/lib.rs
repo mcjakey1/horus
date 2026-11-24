@@ -36,14 +36,23 @@ pub fn run() {
             Ok(())
         })
         // B5: flush before the main window closes; if that fails, keep it open and ask.
+        // I1: while an import runs, keep it open and say so; the import's end closes it.
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event
                 && window.label() == "main"
-                && let CloseDecision::Prevent(message) =
-                    commands::close_decision(&window.state::<commands::AppState>())
             {
-                api.prevent_close();
-                let _ = window.emit("save-failed", serde_json::json!({ "message": message }));
+                match commands::close_decision(&window.state::<commands::AppState>()) {
+                    CloseDecision::Close => {}
+                    CloseDecision::Prevent(message) => {
+                        api.prevent_close();
+                        let _ =
+                            window.emit("save-failed", serde_json::json!({ "message": message }));
+                    }
+                    CloseDecision::Wait => {
+                        api.prevent_close();
+                        let _ = window.emit("close-waiting", ());
+                    }
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -75,9 +84,14 @@ pub fn run() {
             // A best-effort backstop for programmatic exits: no window is left to ask in.
             if let RunEvent::ExitRequested { .. } = event
                 && let Some(st) = app.try_state::<commands::AppState>()
-                && let CloseDecision::Prevent(e) = commands::close_decision(&st)
             {
-                eprintln!("Horus: the last changes could not be saved on exit: {e}");
+                match commands::close_decision(&st) {
+                    CloseDecision::Close => {}
+                    CloseDecision::Prevent(e) => {
+                        eprintln!("Horus: the last changes could not be saved on exit: {e}")
+                    }
+                    CloseDecision::Wait => eprintln!("Horus: an import was still running on exit."),
+                }
             }
         });
 }
