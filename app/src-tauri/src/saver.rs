@@ -64,6 +64,11 @@ impl Debounce {
         self.failed = true;
     }
 
+    /// Whether a library edit is waiting, so an import can put the flag back after a rollback.
+    pub fn library_dirty(&self) -> bool {
+        self.dirty_library
+    }
+
     /// An import just saved library.json, which also wrote any pending tag edits.
     pub fn clear_library(&mut self) {
         self.dirty_library = false;

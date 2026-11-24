@@ -711,7 +711,7 @@ fn run_import<R: Runtime>(
 ) -> Result<ImportResult, String> {
     let st = app.state::<AppState>();
     // Taken before the hash snapshot, so a queued import sees the previous one's results.
-    let _gate = lock(&st.import_gate);
+    let gate = lock(&st.import_gate);
     let (root, known) = {
         let open = lock(&st.open);
         let lib = &open.as_ref().ok_or(NO_LIBRARY)?.lib;
@@ -741,23 +741,29 @@ fn run_import<R: Runtime>(
             refs: refs.collect(),
         };
         let applied = edit::apply(&mut o.lib.data, &mut o.tax, add).map_err(|e| e.to_string())?;
-        // Through `flush`, not a bare `lib.save()`: a pending custom technique is written to
-        // taxonomy.json before library.json holds tags that use it. The save also writes any
-        // pending tag edits.
-        o.debounce.touch(Instant::now(), true, false);
-        if let Err(e) = flush_open(o) {
-            // Memory must match disk: take back what was not saved. The index is rebuilt only
-            // after a good save, so it still describes the rolled-back references.
-            edit::apply_inverse(&mut o.lib.data, &mut o.tax, applied.inverse)
-                .expect("the inverse of an edit just applied applies");
-            return Err(e);
-        }
+        // Nothing added (duplicates or skips only): nothing to save and no undo step.
         if !out.report.added.is_empty() {
+            // Through `flush`, not a bare `lib.save()`: a pending custom technique is written
+            // to taxonomy.json before library.json holds tags that use it. The save also
+            // writes any pending tag edits.
+            let pending = o.debounce.library_dirty();
+            o.debounce.touch(Instant::now(), true, false);
+            if let Err(e) = flush_open(o) {
+                // Memory must match disk: take back what was not saved. The index is rebuilt
+                // only after a good save, so it still describes the rolled-back references.
+                edit::apply_inverse(&mut o.lib.data, &mut o.tax, applied.inverse)
+                    .expect("the inverse of an edit just applied applies");
+                if !pending {
+                    o.debounce.clear_library(); // the rollback left nothing to save
+                }
+                return Err(e);
+            }
             o.history.record(applied.inverse);
         }
         reindex(o, &applied.touched);
         change(o, &applied.touched, None)
     };
+    drop(gate); // hooks run with no lock held, as in `commit`
     hooks::after_change(app, &change);
     Ok(ImportResult {
         report: out.report,
@@ -1680,6 +1686,26 @@ mod tests {
         assert!(c.references.is_empty());
         let image = Path::new(&e.lib).join("images").join(&made.file);
         assert!(image.is_file(), "undo keeps the image file (Decision 2)");
+    }
+
+    /// AGY #3: a rolled-back import leaves nothing pending, so close does not ask.
+    #[test]
+    fn failed_import_leaves_nothing_to_save() {
+        let e = created();
+        fs::create_dir(Path::new(&e.lib).join("library.json.tmp")).unwrap();
+        assert!(e.import("small.jpg").is_err());
+        assert_eq!(close_decision(&st(&e)), CloseDecision::Close);
+    }
+
+    #[test]
+    fn duplicate_only_import_does_not_rewrite() {
+        let e = created();
+        e.import("small.jpg").unwrap();
+        let path = Path::new(&e.lib).join("library.json");
+        let mtime = fs::metadata(&path).unwrap().modified().unwrap();
+        std::thread::sleep(Duration::from_millis(20));
+        assert_eq!(e.import("small.jpg").unwrap().duplicates.len(), 1);
+        assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), mtime);
     }
 
     #[test]
