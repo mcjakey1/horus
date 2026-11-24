@@ -52,9 +52,10 @@
   - Shipped strings, artwork and the intro never use "Iris", "A Taxonomy of Visuals" or "Modern Art Direction", the reel's yellow-green title lockup, the floating breadcrumb card or the red `01 OPERATION` numbering.
   - **Recommended:** the app icon and intro avoid an eye motif. Iris is eye-themed, and AGY flagged that Horus is eye-adjacent (SPEC header).
 - **Third-party material never ships:** `reference/`, `REFERENCE-ANALYSIS.md`, `.impeccable/mocks/`, `.impeccable/review/` and `.impeccable/questions/` (PRODUCT.md, Plan 1 Global Constraints).
-- **The library folder layout is Plan 1's, plus `.incoming/` (Plan 2) and `embeddings.bin` (Plan 5).**
+- **The library folder layout is Plan 1's, plus `.incoming/` and `taxonomy.bak.json` (Plan 2) and `embeddings.bin` (Plan 5).**
   - The integrity work only reads it, removes `*.tmp` files (including those in `.incoming/`), and adds references through `edit::apply`.
   - It ignores `embeddings.bin`.
+  - It never deletes or rewrites `taxonomy.bak.json`. That file is only validated (Task 2).
 - **The intro** plays once on first launch, can be replayed from a menu, and any key or click skips it (SPEC §5). It is never longer than 6 seconds, and it shows as a still frame under `prefers-reduced-motion: reduce` (DESIGN.md Motion, SPEC §11 anti-goal).
 - **The three platforms:**
   - Windows 10 1809+ and 11 (x64);
@@ -202,9 +203,11 @@
       pub missing_originals: Vec<String>,     // reference ids whose images/<file> is gone (never deleted from library.json)
       pub rebuilt_thumbs: Vec<String>,        // reference ids whose thumbs were missing and were regenerated
       pub orphans: Vec<PathBuf>,              // images/<hash>.<ext> that no reference points to
+      pub taxonomy_backup_invalid: bool,      // taxonomy.bak.json present but Taxonomy::load or validate() fails; reported, never deleted
   }
   pub fn sweep_tmp(root: &Path) -> Vec<PathBuf>;                 // root, images/, thumbs/256/, thumbs/1024/, .incoming/: names ending ".tmp" or starting ".tmp"
-  pub fn check(lib: &Library) -> IntegrityReport;               // existence checks only, no hashing; rebuilds missing thumbs from the original
+  pub fn check(lib: &Library) -> IntegrityReport;               // existence checks only, no hashing; rebuilds missing thumbs from the original;
+                                                                // if taxonomy.bak.json exists, loads it and runs validate() (Plan 2 Task 3 rotation)
   pub fn verify_hashes(lib: &Library, cancel: &AtomicBool) -> Vec<String>;   // on demand from the menu; ids whose BLAKE3 ≠ hash
   ```
 - `LibraryView` (Plan 1 Task 7) gains `integrity: Option<IntegrityReport>`, which is set when anything was found.
@@ -231,7 +234,11 @@
   - A `.tmp` planted by a fake saver or indexer hook after step 7 survives.
 
 - [ ] **Step 1: Write the failing tests**
-  - `sweep_removes_only_tmp`: plant `images/.tmpAb12`, `images/x.jpg.tmp`, `thumbs/256/.tmpZ` and `library.json.tmp`. All four are removed. `images/<hash>.jpg` and `library.bak.json` stay.
+  - `sweep_removes_only_tmp`: plant `images/.tmpAb12`, `images/x.jpg.tmp`, `thumbs/256/.tmpZ` and `library.json.tmp`. All four are removed. `images/<hash>.jpg`, `library.bak.json` and `taxonomy.bak.json` stay.
+  - `check_validates_taxonomy_backup`:
+    - A valid `taxonomy.bak.json` gives `taxonomy_backup_invalid == false`.
+    - Writing `{` into it gives `true`, and the file is still there, byte-identical, after `check` and `sweep_tmp`.
+    - With no backup present, it gives `false`.
   - `check_finds_orphan_and_missing`: with an extra hash-named file in `images/` and one reference's original deleted, `orphans` and `missing_originals` each hold one entry. `library.json` is unchanged.
   - `check_rebuilds_missing_thumb`: delete `thumbs/256/<hash>.jpg`. After `check` it exists again, and the reference id is in `rebuilt_thumbs`.
   - `recover_orphans_is_one_undo_step`: through commands, "Add them" adds 2 references, and one `undo` removes both while the files stay.
