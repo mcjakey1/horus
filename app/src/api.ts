@@ -41,6 +41,8 @@ export type LibraryView = {
   warning?: string | null;
   /** Demo-seed problems; already joined into `warning`. */
   seedWarnings?: string[];
+  /** Plan 2 Task 5: the seed fallback after a damaged taxonomy.json; taxonomy edits are refused. */
+  taxonomyReadOnly: boolean;
 };
 
 export type Operation = { id: string; name: string; plainLabel: string; color?: string | null; icon: string; description: string };
@@ -62,6 +64,24 @@ export type Taxonomy = {
   branches: Branch[];
   techniques: Technique[];
   branchTechniques: { branchId: string; techniqueId: string }[];
+};
+
+// Plan 2 Task 5 types (the commands land with Task 5; Task 7 builds against them).
+export type NewTag = { operationId: string; techniqueId?: string; branchId?: string; region?: Region };
+/** A bundled demo image that uses a technique (SPEC §6.2); `path` is absolute. */
+export type DemoExample = { techniqueId: string; title: string; path: string };
+/** A custom technique (SPEC §6.7); Rust saves it with `custom: true` under `operationId`'s `domainId` branch. */
+export type NewTechnique = { name: string; description: string; operationId: string; domainId: string };
+/** Tag this reference with the new technique in the same undo step. */
+export type TagFor = { refId: string; region?: Region };
+/** What a mutating command changed. `taxonomy` is set only when it changed. */
+export type Change = {
+  references: Reference[];
+  removed: string[];
+  taxonomy?: Taxonomy | null;
+  created?: string | null;
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
 export type Scored = { id: string; score: number; sharedTechniques: string[]; sharedBranches: string[] };
@@ -108,6 +128,17 @@ export interface Api {
   pickImages(): Promise<string[]>;
   /** URL for an absolute file path from Rust (asset protocol). */
   assetUrl(path: string): string;
+  undo(): Promise<Change>;
+  redo(): Promise<Change>;
+  // Plan 2 Task 5 commands (Task 8 builds against them). Errors are plain strings, e.g. "NameTaken:<id>".
+  /** One undo step for the whole list ("Tag like this"). */
+  addTags(refId: string, tags: NewTag[]): Promise<Change>;
+  /** Replaces the tag; sets `suggested: false` (editing confirms). */
+  updateTag(refId: string, tagId: string, tag: NewTag): Promise<Change>;
+  removeTag(refId: string, tagId: string): Promise<Change>;
+  /** With `tag`: adds the technique and tags the reference in one undo step; `Change.created` is the new id. */
+  addTechnique(t: NewTechnique, tag?: TagFor): Promise<Change>;
+  demoExamples(): Promise<DemoExample[]>;
 }
 
 const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "tif", "tiff", "gif"];
@@ -129,4 +160,11 @@ export const tauriApi: Api = {
   pickImages: async () =>
     (await open({ multiple: true, title: "Import images", filters: [{ name: "Images", extensions: IMAGE_EXTS }] })) ?? [],
   assetUrl: (path) => convertFileSrc(path),
+  undo: () => invoke("undo"),
+  redo: () => invoke("redo"),
+  addTags: (refId, tags) => invoke("add_tags", { refId, tags }),
+  updateTag: (refId, tagId, tag) => invoke("update_tag", { refId, tagId, tag }),
+  removeTag: (refId, tagId) => invoke("remove_tag", { refId, tagId }),
+  addTechnique: (t, tag) => invoke("add_technique", { t, tag: tag ?? null }),
+  demoExamples: () => invoke("demo_examples"),
 };

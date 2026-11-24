@@ -1,14 +1,13 @@
 // "Import images…" / "Import folder…" in the status bar: pick, import, reopen the library so
 // the view sees the new references, then show what happened. Drag-and-drop is Plan 2.
 import type { Api, ImportReport, LibraryView, Skip } from "./api";
+import { esc } from "./esc";
 
 export type ImportHooks = {
   libraryRoot(): string | null;
   onLibrary(lib: LibraryView): void;
 };
 
-const esc = (s = "") =>
-  String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const fileName = (p: string) => p.split(/[\\/]/).pop() || p;
 
 function reason(s: Skip): string {

@@ -1,14 +1,15 @@
 // Start-up: reopen the last library, or run first-run setup (pick a library, the demo set,
-// the Find similar question), then mount the Reference view on the library that came back.
+// the Find similar question), then build the Store on the library that came back (B7) and
+// mount the Reference view on it.
 import type { Api, LibraryView } from "./api";
+import { esc } from "./esc";
+import { wireUndoKeys } from "./keys";
 import { mountReference } from "./reference/view";
+import { createStore } from "./store";
 
 /** SPEC §5a, verbatim. */
 export const FIND_SIMILAR_COPY =
   "Turn on Find similar? It downloads a 150–350 MB image model and indexes your library in the background. Recommended for machines with 8 GB of RAM or more.";
-
-const esc = (s = "") =>
-  String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 export async function boot(root: HTMLElement, api: Api) {
   const settings = await api.getSettings().catch(() => null);
@@ -25,7 +26,10 @@ export async function boot(root: HTMLElement, api: Api) {
     }
   }
   lib ??= await firstRun(root, api, { error, askFindSimilar: (settings?.findSimilar ?? "unset") === "unset" });
-  return mountReference(root, api, lib);
+  const store = createStore(lib, await api.getTaxonomy());
+  const unwire = wireUndoKeys(document, api, store);
+  const view = mountReference(root, api, store);
+  return { ...view, store, destroy: () => (unwire(), view.destroy()) };
 }
 
 /** Resolves once a library is created or opened. */
