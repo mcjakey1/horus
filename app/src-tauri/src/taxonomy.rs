@@ -131,11 +131,21 @@ fn slug(name: &str) -> String {
     if s.is_empty() { "technique".into() } else { s }
 }
 
-/// `Ok(None)` when the file is missing, unreadable or not a taxonomy; `Err` when it is from a
-/// newer Horus (checked first, so a newer file is never skipped and later overwritten).
+/// `Ok(None)` when the file is absent or is not a taxonomy. `Err` when an existing file can't
+/// be read (a sync lock, a permission error): falling back would load an older copy, and the
+/// next saves would rotate the newer file out of both copies (as `library.rs` `open` does).
+/// `Err` too when it is from a newer Horus (checked before parsing, so it is never skipped).
 fn read_taxonomy(path: &Path) -> Result<Option<Taxonomy>, String> {
-    let Ok(bytes) = std::fs::read(path) else {
-        return Ok(None);
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            let name = path.file_name().map_or_else(
+                || path.display().to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            );
+            return Err(format!("Couldn't read {name}: {e}"));
+        }
     };
     let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
         return Ok(None);
@@ -927,6 +937,24 @@ mod tests {
         let (t, src) = Taxonomy::load_with_fallback(root, &seed_path()).unwrap();
         assert_eq!(src, TaxSource::File);
         assert!(t.techniques.iter().any(|x| x.id == "halo-glow"));
+    }
+
+    #[test]
+    fn unreadable_taxonomy_refuses_instead_of_using_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // A directory at the file's path: the read fails with a non-NotFound error, as a
+        // sync lock or permission error would. The older backup must not be used.
+        std::fs::create_dir(root.join("taxonomy.json")).unwrap();
+        std::fs::copy(seed_path(), root.join("taxonomy.bak.json")).unwrap();
+        let err = Taxonomy::load_with_fallback(root, &seed_path()).unwrap_err();
+        assert!(err.starts_with("Couldn't read taxonomy.json:"), "{err}");
+        // The same rule for the backup: unreadable is an error, not a reason to use the seed.
+        std::fs::remove_dir(root.join("taxonomy.json")).unwrap();
+        std::fs::remove_file(root.join("taxonomy.bak.json")).unwrap();
+        std::fs::create_dir(root.join("taxonomy.bak.json")).unwrap();
+        let err = Taxonomy::load_with_fallback(root, &seed_path()).unwrap_err();
+        assert!(err.starts_with("Couldn't read taxonomy.bak.json:"), "{err}");
     }
 
     #[test]
