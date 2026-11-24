@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod correlate;
+pub mod demo;
 pub mod import;
 pub mod library;
 pub mod model;
@@ -14,12 +15,16 @@ use tauri::path::BaseDirectory;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let config_dir = app.path().app_config_dir()?;
             let seed = app
                 .path()
                 .resolve("resources/taxonomy.json", BaseDirectory::Resource)?;
-            app.manage(commands::AppState::new(config_dir, seed));
+            let demo = app
+                .path()
+                .resolve("resources/demo", BaseDirectory::Resource)?;
+            app.manage(commands::AppState::new(config_dir, seed, demo));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -31,6 +36,7 @@ pub fn run() {
             commands::search,
             commands::get_settings,
             commands::set_settings,
+            commands::system_ram_gb,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

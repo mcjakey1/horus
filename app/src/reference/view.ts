@@ -1,6 +1,7 @@
 // The Reference view, ported 1:1 from prototype/app.js (show / render*). Correlation comes from
 // the Rust `related` command; names come from the library's taxonomy (tags carry ids only).
-import type { Api, Link, Reference, Scored, Settings, Tag, Taxonomy } from "../api";
+import type { Api, LibraryView, Link, Reference, Scored, Settings, Tag, Taxonomy } from "../api";
+import { mountImport } from "../importer";
 import { mountSearch } from "../search";
 import { drawLeaders, highlight } from "./leaders";
 import { tileHTML } from "./tile";
@@ -17,14 +18,17 @@ const stateLabel = { full: "full tag", partial: "partial", region: "region" } as
 const stateOf = (t: Tag): keyof typeof stateLabel => (t.region ? "region" : t.techniqueId ? "full" : "partial");
 const PAINT_DELAY = 180; // matches .specimen.is-leaving transition
 
+/** `initial`: a library already opened (first run); otherwise the view opens `lastLibrary`. */
 export function mountReference(
   root: HTMLElement,
   api: Api,
+  initial?: LibraryView,
 ): { show(id: string): void; ready: Promise<void>; destroy(): void } {
   const life = new AbortController();
   const signal = life.signal;
   const $ = <T extends Element = HTMLElement>(s: string) => root.querySelector<T>(s);
   const S = {
+    root: null as string | null,
     refs: [] as Reference[],
     byId: new Map<string, Reference>(),
     links: [] as Link[],
@@ -398,7 +402,26 @@ export function mountReference(
     onReference: (id) => show(id),
   }, signal);
 
+  mountImport(root, api, {
+    libraryRoot: () => S.root,
+    onLibrary: (lib) => {
+      apply(lib);
+      const id = S.focus && S.byId.has(S.focus) ? S.focus : start()?.id;
+      if (id) show(id, { push: false });
+      else renderStatus();
+    },
+  }, signal);
+
   // ---------- load ----------
+  function apply(lib: LibraryView) {
+    S.root = lib.root;
+    S.refs = lib.references;
+    S.links = lib.links;
+    S.byId = new Map(S.refs.map((r) => [r.id, r]));
+    S.source = [`Library: ${lib.root}`, lib.warning].filter(Boolean).join(" · ");
+  }
+  const start = () => S.refs.find((r) => r.tags.length >= 3) ?? S.refs.find((r) => r.tags.length) ?? S.refs[0];
+
   async function load() {
     try {
       S.settings = await api.getSettings();
@@ -406,25 +429,21 @@ export function mountReference(
       /* keep defaults */
     }
     applyTheme(S.settings.theme === "system" ? systemTheme() : S.settings.theme);
-    if (!S.settings.lastLibrary) {
+    if (!initial && !S.settings.lastLibrary) {
       S.source = "No library open yet.";
       renderStatus();
       return;
     }
     try {
-      const lib = await api.openLibrary(S.settings.lastLibrary);
+      apply(initial ?? (await api.openLibrary(S.settings.lastLibrary!)));
       S.tax = await api.getTaxonomy();
-      S.refs = lib.references;
-      S.links = lib.links;
-      S.refs.forEach((r) => S.byId.set(r.id, r));
-      S.source = [`Library: ${lib.root}`, lib.warning].filter(Boolean).join(" · ");
     } catch (err) {
       S.source = `Could not open the library: ${String(err)}`;
       renderStatus();
       return;
     }
-    const start = S.refs.find((r) => r.tags.length >= 3) ?? S.refs.find((r) => r.tags.length) ?? S.refs[0];
-    if (start) show(start.id, { push: false });
+    const first = start();
+    if (first) show(first.id, { push: false });
     else renderStatus();
   }
 

@@ -65,6 +65,9 @@ function fakeApi(): Api {
     search: vi.fn(async () => []),
     getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "unset" as const })),
     setSettings: vi.fn(async () => {}),
+    systemRamGb: vi.fn(async () => 16),
+    pickFolder: vi.fn(async () => null),
+    pickImages: vi.fn(async () => []),
     assetUrl: (path: string) => `asset://${encodeURIComponent(path)}`,
   };
 }
@@ -121,6 +124,28 @@ describe("Reference view", () => {
   it("toggles Value view once per v key", () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "v" }));
     expect(document.querySelector<HTMLInputElement>("#value")!.checked).toBe(true);
+  });
+
+  it("Import images calls importPaths, then reopens the library and summarises", async () => {
+    vi.mocked(api.pickImages).mockResolvedValueOnce(["C:/in/x.jpg", "C:/in/y.psd"]);
+    vi.mocked(api.importPaths).mockResolvedValueOnce({
+      added: ["d"],
+      duplicates: [],
+      skipped: [["C:/in/y.psd", { kind: "unsupported", detail: "unrecognised file type" }]],
+    });
+    const D = ref("d", "Plate D", []);
+    vi.mocked(api.openLibrary).mockResolvedValueOnce({ ...library, references: [A, B, C, D] });
+    document.querySelector<HTMLButtonElement>('[data-import="files"]')!.click();
+    await settle();
+    expect(api.importPaths).toHaveBeenCalledWith(["C:/in/x.jpg", "C:/in/y.psd"]);
+    expect(api.openLibrary).toHaveBeenLastCalledWith("C:\\lib");
+    const imported = vi.mocked(api.importPaths).mock.invocationCallOrder[0];
+    expect(Math.max(...vi.mocked(api.openLibrary).mock.invocationCallOrder)).toBeGreaterThan(imported);
+    expect(document.querySelector("#lib-count")?.textContent).toBe("4 references");
+    const notice = document.querySelector<HTMLElement>("#import-notice")!;
+    expect(notice.hidden).toBe(false);
+    expect(notice.textContent).toContain("Added 1 reference · 1 file skipped");
+    expect(notice.textContent).toContain("y.psd not a supported image type");
   });
 
   it("ignores a search response that arrives after the field was cleared", async () => {

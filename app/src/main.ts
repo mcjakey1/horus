@@ -1,6 +1,6 @@
 import "./fonts/fonts.css";
 import "./styles.css";
 import { tauriApi } from "./api";
-import { mountReference } from "./reference/view";
+import { boot } from "./firstrun";
 
-mountReference(document.body, tauriApi);
+void boot(document.body, tauriApi);

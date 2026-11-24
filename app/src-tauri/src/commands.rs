@@ -2,6 +2,7 @@
 //! `Result<T, String>` with a message the UI can show as-is. All JSON is camelCase.
 
 use crate::correlate::{Index, Scored};
+use crate::demo;
 use crate::import::{self, ImportReport};
 use crate::library::{Library, LibraryError, thumb_path_in};
 use crate::model::{Link, Reference};
@@ -21,16 +22,19 @@ pub struct AppState {
     settings: Mutex<()>,
     config_dir: PathBuf,
     seed_taxonomy: PathBuf,
+    /// The bundled demo set: `manifest.json` and `images/`.
+    demo_dir: PathBuf,
 }
 
 impl AppState {
-    pub fn new(config_dir: PathBuf, seed_taxonomy: PathBuf) -> AppState {
+    pub fn new(config_dir: PathBuf, seed_taxonomy: PathBuf, demo_dir: PathBuf) -> AppState {
         AppState {
             open: Mutex::new(None),
             import_gate: Mutex::new(()),
             settings: Mutex::new(()),
             config_dir,
             seed_taxonomy,
+            demo_dir,
         }
     }
 }
@@ -52,6 +56,8 @@ pub struct LibraryView {
     references: Vec<ReferenceView>,
     links: Vec<Link>,
     warning: Option<String>,
+    /// Demo-seed problems (unknown names, skipped images); also joined into `warning`.
+    seed_warnings: Vec<String>,
 }
 
 const NO_LIBRARY: &str = "No library is open.";
@@ -85,9 +91,13 @@ fn update_settings(st: &AppState, patch: SettingsPatch) -> Result<(), String> {
 
 /// Shared tail of create and open: load and check the taxonomy, index, allow the library
 /// in the asset scope, remember it as the last library, and make it the open one.
-fn install<R: Runtime>(app: &AppHandle<R>, lib: Library) -> Result<LibraryView, String> {
+fn install<R: Runtime>(
+    app: &AppHandle<R>,
+    lib: Library,
+    seed_warnings: Vec<String>,
+) -> Result<LibraryView, String> {
     let st = app.state::<AppState>();
-    let mut warnings = vec![];
+    let mut warnings = seed_warnings.clone();
     if lib.recovered_from_backup {
         warnings.push(
             "library.json could not be read, so Horus opened its backup (library.bak.json). \
@@ -126,6 +136,7 @@ fn install<R: Runtime>(app: &AppHandle<R>, lib: Library) -> Result<LibraryView, 
             .collect(),
         links: lib.data.links.clone(),
         warning: (!warnings.is_empty()).then(|| warnings.join(" ")),
+        seed_warnings,
     };
     let index = Index::build(&lib.data);
     *lock(&st.open) = Some((lib, tax, index));
@@ -136,13 +147,35 @@ fn install<R: Runtime>(app: &AppHandle<R>, lib: Library) -> Result<LibraryView, 
 // for an in-flight import to save (else its references would be swapped away) and no import
 // starts mid-open. Lock order everywhere: import gate, then settings, then state.
 // `async` keeps that wait off the main thread.
+// The demo seed runs on the new, not yet installed library: no state lock is held while it
+// copies files, and `install` swaps it in under the lock, as `run_import` commits.
+// IPC args: `{ path, seedDemo }` (Tauri camelCases `seed_demo`).
 #[tauri::command(async)]
-pub fn create_library<R: Runtime>(app: AppHandle<R>, path: String) -> Result<LibraryView, String> {
+pub fn create_library<R: Runtime>(
+    app: AppHandle<R>,
+    path: String,
+    seed_demo: bool,
+) -> Result<LibraryView, String> {
     let root = absolute(&path)?;
     let st = app.state::<AppState>();
     let _gate = lock(&st.import_gate);
-    let lib = Library::create(&root, &st.seed_taxonomy).map_err(library_error)?;
-    install(&app, lib)
+    let mut lib = Library::create(&root, &st.seed_taxonomy).map_err(library_error)?;
+    let mut seed_warnings = vec![];
+    if seed_demo {
+        // From here the library exists, so a seed problem is a warning, never an error.
+        match Taxonomy::load(&lib.root.join("taxonomy.json")) {
+            Ok(tax) => {
+                let (refs, warnings) = demo::seed(&lib.root, &tax, &st.demo_dir);
+                seed_warnings = warnings;
+                lib.data.references.extend(refs);
+                if let Err(e) = lib.save() {
+                    seed_warnings.push(format!("The demo set was not saved: {}", library_error(e)));
+                }
+            }
+            Err(e) => seed_warnings.push(format!("The demo set was not added: {e}")),
+        }
+    }
+    install(&app, lib, seed_warnings)
 }
 
 #[tauri::command(async)]
@@ -151,7 +184,7 @@ pub fn open_library<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Libra
     let st = app.state::<AppState>();
     let _gate = lock(&st.import_gate);
     let lib = Library::open(&root).map_err(library_error)?;
-    install(&app, lib)
+    install(&app, lib, vec![])
 }
 
 #[tauri::command]
@@ -231,6 +264,15 @@ pub fn set_settings<R: Runtime>(app: AppHandle<R>, s: SettingsPatch) -> Result<(
     update_settings(&app.state::<AppState>(), s)
 }
 
+/// Total physical memory in whole GB, for the first-run Find similar step. `None` if unknown.
+#[tauri::command]
+pub fn system_ram_gb() -> Option<u64> {
+    let mut sys = sysinfo::System::new().ok()?;
+    sys.refresh_memory();
+    let bytes = sys.total_memory();
+    (bytes > 0).then(|| (bytes + (1 << 29)) >> 30)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -271,9 +313,14 @@ mod tests {
     /// A mock app whose config dir is a tempdir, so tests never touch the real settings.
     fn env() -> Env {
         let dir = tempfile::tempdir().unwrap();
-        let seed = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/taxonomy.json");
+        let res = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
         let app = mock_builder()
-            .manage(AppState::new(dir.path().join("config"), seed))
+            .invoke_handler(tauri::generate_handler![create_library])
+            .manage(AppState::new(
+                dir.path().join("config"),
+                res.join("taxonomy.json"),
+                res.join("demo"),
+            ))
             .build(mock_context(noop_assets()))
             .unwrap();
         let lib = dir.path().join("lib").to_string_lossy().into_owned();
@@ -286,8 +333,88 @@ mod tests {
 
     fn created() -> Env {
         let e = env();
-        create_library(e.handle(), e.lib.clone()).unwrap();
+        create_library(e.handle(), e.lib.clone(), false).unwrap();
         e
+    }
+
+    #[test]
+    fn seed_demo_imports_manifest_tags() {
+        let e = env();
+        let started = std::time::Instant::now();
+        let view = create_library(e.handle(), e.lib.clone(), true).unwrap();
+        eprintln!("seeded in {:?}", started.elapsed());
+        let manifest: serde_json::Value = serde_json::from_slice(
+            &fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("resources/demo/manifest.json"))
+                .unwrap(),
+        )
+        .unwrap();
+        let records = manifest.as_array().unwrap();
+        assert_eq!(view.seed_warnings, Vec::<String>::new());
+        assert_eq!(view.warning, None);
+        assert_eq!(view.references.len(), records.len());
+        let tax = get_taxonomy(e.handle()).unwrap();
+        let mut ids = std::collections::HashSet::new();
+        for (rec, r) in records.iter().zip(&view.references) {
+            let r = &r.reference;
+            assert_eq!(r.title, rec["title"].as_str().unwrap());
+            assert_eq!(r.creator.as_deref(), rec["creator"].as_str());
+            assert_eq!(r.source_url.as_deref(), rec["sourceUrl"].as_str());
+            let sugg = rec["suggestedTechniques"].as_array().unwrap();
+            assert_eq!(r.tags.len(), sugg.len(), "{}", r.title);
+            for (s, t) in sugg.iter().zip(&r.tags) {
+                assert!(t.suggested);
+                assert!(ids.insert(t.id.clone()), "duplicate tag id {}", t.id);
+                let tech = tax
+                    .techniques
+                    .iter()
+                    .find(|x| Some(&x.id) == t.technique_id.as_ref());
+                assert_eq!(tech.unwrap().name, s["technique"].as_str().unwrap());
+                let branch = t.branch_id.as_deref().unwrap();
+                assert!(tax.branches.iter().any(|b| b.id == branch), "{branch}");
+                assert_eq!(t.region.is_some(), s.get("region").is_some());
+            }
+        }
+        // Saved, not just returned.
+        let again = open_library(e.handle(), e.lib.clone()).unwrap();
+        assert_eq!(again.references.len(), records.len());
+        assert_eq!(
+            again.references[0].reference.tags,
+            view.references[0].reference.tags
+        );
+    }
+
+    #[test]
+    fn create_with_seed_demo_arg_name_is_camel() {
+        let e = env();
+        let webview = tauri::WebviewWindowBuilder::new(&e.app, "main", Default::default())
+            .build()
+            .unwrap();
+        let call = |args: serde_json::Value| {
+            tauri::test::get_ipc_response(
+                &webview,
+                tauri::webview::InvokeRequest {
+                    cmd: "create_library".into(),
+                    callback: tauri::ipc::CallbackFn(0),
+                    error: tauri::ipc::CallbackFn(1),
+                    url: "http://tauri.localhost".parse().unwrap(),
+                    body: args.into(),
+                    headers: Default::default(),
+                    invoke_key: tauri::test::INVOKE_KEY.to_string(),
+                },
+            )
+        };
+        let snake = call(serde_json::json!({"path": e.lib, "seed_demo": false}));
+        let err = snake.unwrap_err().to_string();
+        assert!(err.contains("seedDemo"), "{err}");
+        let ok = call(serde_json::json!({"path": e.lib, "seedDemo": false}));
+        let view: serde_json::Value = ok.unwrap().deserialize().unwrap();
+        assert_eq!(view["seedWarnings"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn system_ram_is_reported() {
+        let gb = system_ram_gb().expect("RAM detected");
+        assert!((1..=4096).contains(&gb), "{gb}");
     }
 
     #[test]
@@ -366,7 +493,7 @@ mod tests {
     fn errors_are_readable() {
         let e = created();
         assert_eq!(
-            create_library(e.handle(), e.lib.clone()).unwrap_err(),
+            create_library(e.handle(), e.lib.clone(), false).unwrap_err(),
             "That folder already contains a Horus library."
         );
         let empty = Path::new(&e.lib)
