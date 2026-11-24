@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import html from "../../index.html?raw";
-import type { Api, LibraryView, Reference, Scored, Tag, Taxonomy } from "../api";
+import type { Api, Hit, LibraryView, Reference, Scored, Tag, Taxonomy } from "../api";
 import { mountReference } from "./view";
 
 const tag = (id: string, operationId: string, techniqueId?: string, branchId?: string): Tag => ({
@@ -73,14 +73,16 @@ const settle = () => new Promise((r) => setTimeout(r, 260));
 
 describe("Reference view", () => {
   let api: Api;
+  let view: ReturnType<typeof mountReference>;
   beforeEach(async () => {
     document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
     api = fakeApi();
-    const view = mountReference(document.body, api);
+    view = mountReference(document.body, api);
     await view.ready;
     view.show("a");
     await settle();
   });
+  afterEach(() => view.destroy());
 
   it("renders one callout per tag", () => {
     expect(document.querySelectorAll("#pane-callouts .call")).toHaveLength(2);
@@ -106,5 +108,25 @@ describe("Reference view", () => {
     document.querySelector<HTMLButtonElement>("#back")!.click();
     await settle();
     expect(document.querySelector("#ref-id")?.textContent).toBe("a");
+    // showing the reference already in focus must not add a Back step
+    expect(document.querySelector<HTMLButtonElement>("#back")!.disabled).toBe(true);
+  });
+
+  it("toggles Value view once per v key", () => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "v" }));
+    expect(document.querySelector<HTMLInputElement>("#value")!.checked).toBe(true);
+  });
+
+  it("ignores a search response that arrives after the field was cleared", async () => {
+    let resolve!: (h: Hit[]) => void;
+    vi.mocked(api.search).mockImplementationOnce(() => new Promise<Hit[]>((r) => (resolve = r)));
+    const q = document.querySelector<HTMLInputElement>("#q")!;
+    q.value = "sil";
+    q.dispatchEvent(new Event("input"));
+    q.value = "";
+    q.dispatchEvent(new Event("input"));
+    resolve([{ kind: "technique", id: "silhouette", operationId: "differentiate", count: 2 }]);
+    await settle();
+    expect(document.querySelector<HTMLUListElement>("#q-results")!.hidden).toBe(true);
   });
 });

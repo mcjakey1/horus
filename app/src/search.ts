@@ -13,13 +13,14 @@ export type SearchHooks = {
 const esc = (s = "") =>
   String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
-export function mountSearch(root: HTMLElement, api: Api, hooks: SearchHooks): { close(): void } {
+export function mountSearch(root: HTMLElement, api: Api, hooks: SearchHooks, signal?: AbortSignal): { close(): void } {
   const input = root.querySelector<HTMLInputElement>("#q")!;
   const ul = root.querySelector<HTMLUListElement>("#q-results")!;
   let active = 0;
   let seq = 0; // drop stale responses when typing fast
 
   function close() {
+    seq++; // any in-flight response is now stale
     ul.hidden = true;
     input.setAttribute("aria-expanded", "false");
     input.removeAttribute("aria-activedescendant");
@@ -72,7 +73,7 @@ export function mountSearch(root: HTMLElement, api: Api, hooks: SearchHooks): { 
     else if (li.dataset.r) hooks.onReference(li.dataset.r);
   }
 
-  input.addEventListener("input", () => void render());
+  input.addEventListener("input", () => void render(), { signal });
   input.addEventListener("keydown", (e) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
@@ -81,11 +82,10 @@ export function mountSearch(root: HTMLElement, api: Api, hooks: SearchHooks): { 
     if (e.key === "Enter") choose(ul.querySelector<HTMLElement>('li[aria-selected="true"][id]'));
     if (e.key === "Escape") {
       input.value = "";
-      seq++;
       close();
       input.blur();
     }
-  });
-  ul.addEventListener("click", (e) => choose((e.target as Element).closest<HTMLElement>("li[id]")));
+  }, { signal });
+  ul.addEventListener("click", (e) => choose((e.target as Element).closest<HTMLElement>("li[id]")), { signal });
   return { close };
 }

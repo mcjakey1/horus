@@ -17,7 +17,12 @@ const stateLabel = { full: "full tag", partial: "partial", region: "region" } as
 const stateOf = (t: Tag): keyof typeof stateLabel => (t.region ? "region" : t.techniqueId ? "full" : "partial");
 const PAINT_DELAY = 180; // matches .specimen.is-leaving transition
 
-export function mountReference(root: HTMLElement, api: Api): { show(id: string): void; ready: Promise<void> } {
+export function mountReference(
+  root: HTMLElement,
+  api: Api,
+): { show(id: string): void; ready: Promise<void>; destroy(): void } {
+  const life = new AbortController();
+  const signal = life.signal;
   const $ = <T extends Element = HTMLElement>(s: string) => root.querySelector<T>(s);
   const S = {
     refs: [] as Reference[],
@@ -60,7 +65,7 @@ export function mountReference(root: HTMLElement, api: Api): { show(id: string):
   function show(id: string, { push = true, via = null as string | null } = {}) {
     const ref = S.byId.get(id);
     if (!ref) return;
-    if (push && S.focus) S.trail.push(S.focus);
+    if (push && S.focus && S.focus !== id) S.trail.push(S.focus);
     const spec = $("#specimen")!;
     const first = !S.focus;
     S.focus = id;
@@ -321,33 +326,33 @@ export function mountReference(root: HTMLElement, api: Api): { show(id: string):
     }
     const tab = target.closest<HTMLElement>(".m-tab");
     if (tab) selectPane(tab.dataset.pane!);
-  });
+  }, { signal });
   root.addEventListener("mouseover", (e) => {
     const el = (e.target as Element).closest<HTMLElement>(".call, .box");
     if (el) hot(+el.dataset.i!);
-  });
+  }, { signal });
   root.addEventListener("mouseout", (e) => {
     const el = (e.target as Element).closest(".call, .box");
     if (el && !el.contains(e.relatedTarget as Node | null)) unhot();
-  });
+  }, { signal });
   root.addEventListener("focusin", (e) => {
     const el = (e.target as Element).closest<HTMLElement>(".call");
     if (el) hot(+el.dataset.i!);
-  });
+  }, { signal });
   $("#back")!.addEventListener("click", () => {
     const id = S.trail.pop();
     if (id) show(id, { push: false });
-  });
+  }, { signal });
   $("#theme")!.addEventListener("click", () => {
     const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     applyTheme(t);
     S.settings = { ...S.settings, theme: t };
     api.setSettings(S.settings).catch(() => {});
-  });
+  }, { signal });
   $("#value")!.addEventListener("change", (e) => {
     document.body.classList.toggle("value", (e.target as HTMLInputElement).checked);
     readout();
-  });
+  }, { signal });
   $(".m-tabs")!.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     const tabs = [...root.querySelectorAll<HTMLElement>(".m-tab")];
@@ -355,7 +360,7 @@ export function mountReference(root: HTMLElement, api: Api): { show(id: string):
     const next = tabs[(i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
     next.focus();
     selectPane(next.dataset.pane!);
-  });
+  }, { signal });
   document.addEventListener("keydown", (e) => {
     if ((e.target as Element).matches?.("input")) return;
     if (e.key === "/") {
@@ -378,9 +383,11 @@ export function mountReference(root: HTMLElement, api: Api): { show(id: string):
         syncPins();
       }
     }
-  });
-  $("#pane-callouts")!.addEventListener("scroll", redraw, { passive: true });
-  if (typeof ResizeObserver !== "undefined") new ResizeObserver(redraw).observe($(".work")!);
+  }, { signal });
+  $("#pane-callouts")!.addEventListener("scroll", redraw, { passive: true, signal });
+  const resize = typeof ResizeObserver !== "undefined" ? new ResizeObserver(redraw) : null;
+  resize?.observe($(".work")!);
+  signal.addEventListener("abort", () => resize?.disconnect());
 
   mountSearch(root, api, {
     techniqueName: techName,
@@ -388,7 +395,7 @@ export function mountReference(root: HTMLElement, api: Api): { show(id: string):
     referenceTitle: (id) => S.byId.get(id)?.title,
     onTechnique: applyFilter,
     onReference: (id) => show(id),
-  });
+  }, signal);
 
   // ---------- load ----------
   async function load() {
@@ -421,5 +428,13 @@ export function mountReference(root: HTMLElement, api: Api): { show(id: string):
   }
 
   const ready = load();
-  return { show: (id: string) => show(id), ready };
+  return {
+    show: (id: string) => show(id),
+    ready,
+    destroy: () => {
+      life.abort();
+      clearTimeout(S.paintTimer);
+      S.nav++; // drop any paint still in flight
+    },
+  };
 }
