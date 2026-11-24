@@ -112,6 +112,12 @@ describe("Reference view", () => {
     expect(document.querySelector<HTMLButtonElement>("#back")!.disabled).toBe(true);
   });
 
+  it("theme_toggle_sends_only_theme", () => {
+    document.querySelector<HTMLButtonElement>("#theme")!.click();
+    expect(api.setSettings).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.setSettings).mock.calls[0][0]).toStrictEqual({ theme: "dark" });
+  });
+
   it("toggles Value view once per v key", () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "v" }));
     expect(document.querySelector<HTMLInputElement>("#value")!.checked).toBe(true);

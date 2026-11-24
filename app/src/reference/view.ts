@@ -347,7 +347,8 @@ export function mountReference(
     const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     applyTheme(t);
     S.settings = { ...S.settings, theme: t };
-    api.setSettings(S.settings).catch(() => {});
+    // Only the field that changed: a whole cached Settings would put back a stale lastLibrary.
+    api.setSettings({ theme: t }).catch(() => {});
   }, { signal });
   $("#value")!.addEventListener("change", (e) => {
     document.body.classList.toggle("value", (e.target as HTMLInputElement).checked);

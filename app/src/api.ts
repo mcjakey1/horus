@@ -84,7 +84,8 @@ export interface Api {
   importPaths(paths: string[]): Promise<ImportReport>;
   search(q: string): Promise<Hit[]>;
   getSettings(): Promise<Settings>;
-  setSettings(s: Settings): Promise<void>;
+  /** A patch: only the fields sent change (Rust merges into the stored settings). */
+  setSettings(s: Partial<Settings>): Promise<void>;
   /** URL for an absolute file path from Rust (asset protocol). */
   assetUrl(path: string): string;
 }

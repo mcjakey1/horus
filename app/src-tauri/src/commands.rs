@@ -132,17 +132,25 @@ fn install<R: Runtime>(app: &AppHandle<R>, lib: Library) -> Result<LibraryView, 
     Ok(view)
 }
 
-#[tauri::command]
+// Create and open hold the import gate from the disk read to the state swap, so they wait
+// for an in-flight import to save (else its references would be swapped away) and no import
+// starts mid-open. Lock order everywhere: import gate, then settings, then state.
+// `async` keeps that wait off the main thread.
+#[tauri::command(async)]
 pub fn create_library<R: Runtime>(app: AppHandle<R>, path: String) -> Result<LibraryView, String> {
     let root = absolute(&path)?;
-    let lib =
-        Library::create(&root, &app.state::<AppState>().seed_taxonomy).map_err(library_error)?;
+    let st = app.state::<AppState>();
+    let _gate = lock(&st.import_gate);
+    let lib = Library::create(&root, &st.seed_taxonomy).map_err(library_error)?;
     install(&app, lib)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_library<R: Runtime>(app: AppHandle<R>, path: String) -> Result<LibraryView, String> {
-    let lib = Library::open(&absolute(&path)?).map_err(library_error)?;
+    let root = absolute(&path)?;
+    let st = app.state::<AppState>();
+    let _gate = lock(&st.import_gate);
+    let lib = Library::open(&root).map_err(library_error)?;
     install(&app, lib)
 }
 
@@ -409,5 +417,35 @@ mod tests {
         let r = &json["references"][0];
         assert!(r["thumb256"].is_string() && r["addedAt"].is_string());
         assert!(json["root"].is_string());
+    }
+
+    #[test]
+    fn open_waits_for_inflight_import() {
+        let e = created();
+        // small.jpg first (its thumbnail is the "import has started" signal), then a big
+        // image that keeps the import busy long after that.
+        let src = tempfile::tempdir().unwrap();
+        fs::copy(fixture("small.jpg"), src.path().join("a_small.jpg")).unwrap();
+        image::RgbImage::from_fn(1500, 1500, |x, y| image::Rgb([x as u8, y as u8, 7]))
+            .save(src.path().join("b_big.png"))
+            .unwrap();
+        let thumbs = Path::new(&e.lib).join("thumbs/256");
+        let view = std::thread::scope(|s| {
+            let (h, p) = (e.handle(), src.path().to_string_lossy().into_owned());
+            let import =
+                s.spawn(move || tauri::async_runtime::block_on(import_paths(h, vec![p])).unwrap());
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            while fs::read_dir(&thumbs).unwrap().next().is_none() {
+                assert!(std::time::Instant::now() < deadline, "import never started");
+                std::thread::yield_now();
+            }
+            let view = open_library(e.handle(), e.lib.clone()).unwrap();
+            assert_eq!(import.join().unwrap().added.len(), 2);
+            view
+        });
+        assert_eq!(view.references.len(), 2, "open read the library mid-import");
+        let st = e.app.state::<AppState>();
+        let open = lock(&st.open);
+        assert_eq!(open.as_ref().unwrap().0.data.references.len(), 2);
     }
 }
