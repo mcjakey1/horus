@@ -43,7 +43,7 @@ export function mountInbox(
   api: Api,
   store: Store,
   deps: { openPicker(o: PickerOpts): void },
-): { focus(i: number): void; destroy(): void } {
+): { focus(i: number): void; focusId(id: string): void; destroy(): void } {
   root.innerHTML = `<header class="inbox-head">
       <h2 class="inbox-title">Inbox <span class="count" data-inbox-count></span></h2>
       <div class="inbox-actions"><button type="button" class="text-btn" data-intake="files">Add images…</button><button type="button" class="text-btn" data-intake="folder">Add folder…</button></div>
@@ -152,6 +152,12 @@ export function mountInbox(
       derive();
       if (!S.list.length) return;
       select(S.list[Math.max(0, Math.min(S.list.length - 1, i))]);
+    },
+    /** By id, not index: a retained tagged item shifts indexes (fix round 1, I1). */
+    focusId(id) {
+      derive();
+      if (S.list.includes(id)) select(id);
+      else if (S.list.length) select(S.list[0]);
     },
     destroy() {
       unsubscribe();

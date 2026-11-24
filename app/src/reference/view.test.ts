@@ -421,6 +421,23 @@ describe("Reference view", () => {
     expect($("#pane-ranked").textContent).toContain("Plate U");
   });
 
+  it("filtered_ranked_refreshes_when_a_ranked_reference_loses_its_tag (Task 11 carry-in)", async () => {
+    vi.mocked(api.search).mockResolvedValue([{ kind: "technique", id: "rhythm", operationId: "sequence", count: 0 }]);
+    const q = $<HTMLInputElement>("#q");
+    q.value = "rhy";
+    q.dispatchEvent(new Event("input"));
+    await settle();
+    $('#q-results li[data-t="rhythm"]').click();
+    store.apply({ ...none, references: [ref("u", "Plate U", [tag("u1", "sequence", "rhythm", "sequence-x")])] });
+    await settle();
+    expect($("#pane-ranked").textContent).toContain("Plate U"); // U is now in S.ranked
+    // U loses the filtered technique: it shares nothing with the focus, but it was ranked
+    store.apply({ ...none, references: [ref("u", "Plate U", [tag("u1", "infer")])] });
+    await settle();
+    expect($("#pane-ranked").textContent).not.toContain("Plate U");
+    expect($("#pane-ranked").textContent).toContain("No reference has any of these yet.");
+  });
+
   it("filter_by_this_moves_focus_to_the_ranked_tab (Task 11 carry-in)", () => {
     $<HTMLButtonElement>("#pane-callouts .filter-by").click();
     expect(document.activeElement).toBe($('.m-tab[data-pane="ranked"]'));
@@ -459,6 +476,8 @@ describe("Reference view", () => {
     $<HTMLButtonElement>('#pane-callouts .thumb[data-go="b"]').click();
     await settle();
     expect($<HTMLButtonElement>("#back").disabled).toBe(false);
+    store.apply({ ...none, canUndo: true, canRedo: true }); // an undo trail exists before the switch
+    expect([store.canUndo, store.canRedo]).toEqual([true, true]);
     store.reset({ ...library, root: "D:\\other" }, taxonomy);
     await settle();
     expect($<HTMLButtonElement>("#back").disabled).toBe(true);

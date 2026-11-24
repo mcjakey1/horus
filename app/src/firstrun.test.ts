@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import html from "../index.html?raw";
-import type { Api, LibraryView } from "./api";
+import type { DragDropEvent } from "@tauri-apps/api/webview";
+import seedJson from "../src-tauri/resources/taxonomy.json";
+import type { Api, LibraryView, Reference, Tag, Taxonomy } from "./api";
 import { boot, FIND_SIMILAR_COPY } from "./firstrun";
 
 // The library may land in a "Horus Library" subfolder of the picked folder.
@@ -93,5 +95,51 @@ describe("first run", () => {
     await tick();
     await tick();
     expect($(".fr-error").textContent).toContain("could not open your last library at D:\\moved");
+  });
+});
+
+describe("boot wiring (Task 9)", () => {
+  beforeEach(() => {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+  });
+
+  it("a Tag-like-this drop lands on the new Inbox item with its preset, past a retained tagged item (fix round 1, I1)", async () => {
+    const full: Tag = { id: "t1", operationId: "differentiate", techniqueId: "chiaroscuro", branchId: "differentiate.feature", suggested: false };
+    const mk = (id: string, tags: Tag[] = []): Reference => ({
+      id, title: `Plate ${id}`, file: `images/${id}.jpg`, hash: id, width: 3, height: 4,
+      addedAt: "2026-11-25T00:00:00Z", tags, thumb256: id, thumb1024: id,
+    });
+    const library: LibraryView = { root: "C:/lib", references: [mk("s"), mk("r1", [full])], links: [], warning: null, taxonomyReadOnly: false };
+    const api: Api = {
+      ...fakeApi("C:/lib"),
+      openLibrary: vi.fn(async () => library),
+      getTaxonomy: vi.fn(async () => seedJson as unknown as Taxonomy),
+      importPaths: vi.fn(async () => ({ report: { added: ["n1"], duplicates: [], skipped: [] }, change: { references: [mk("n1")], removed: [], canUndo: true, canRedo: false } })),
+    };
+    let drop!: (e: { payload: DragDropEvent }) => void;
+    const win = { onDragDropEvent: vi.fn((cb: typeof drop) => ((drop = cb), Promise.resolve(() => {}))) };
+    const view = await boot(document.body, api, win);
+    await view.ready;
+    await new Promise((r) => setTimeout(r, 260));
+
+    // The artist tags the first Inbox item; it stays on screen, marked tagged.
+    $<HTMLButtonElement>('[data-view-tab="inbox"]').click();
+    expect($(".inbox-tile.is-cur").dataset.id).toBe("s");
+    view.store.apply({ references: [mk("s", [{ ...full, id: "t2" }])], removed: [], canUndo: true, canRedo: false });
+    expect($(".inbox-tile.is-tagged").dataset.id).toBe("s");
+
+    // Back on the Reference view, an image is dropped onto r1's plate.
+    $<HTMLButtonElement>('[data-view-tab="reference"]').click();
+    expect($("#plate").dataset.refDrop).toBe("r1");
+    document.elementFromPoint = vi.fn(() => $("#plate"));
+    drop({ payload: { type: "drop", paths: ["C:/in/x.jpg"], position: { x: 1, y: 1 } } as unknown as DragDropEvent });
+    for (let i = 0; i < 4; i++) await tick();
+
+    expect(document.body.dataset.view).toBe("inbox");
+    expect($(".inbox-tile.is-cur").dataset.id).toBe("n1");
+    const picker = $(".inbox-dock .picker");
+    expect(picker.dataset.ref).toBe("n1");
+    expect([...picker.querySelectorAll<HTMLElement>(".pk-card.is-ticked")].map((c) => c.dataset.tech)).toEqual(["chiaroscuro"]);
+    view.destroy();
   });
 });

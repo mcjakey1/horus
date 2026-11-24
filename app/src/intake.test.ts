@@ -140,6 +140,36 @@ describe("intake", () => {
     expect(vi.mocked(api.importBytes).mock.calls[1][2]).toEqual({});
   });
 
+  it("two pastes back to back both import, in order, the second after the first (fix round 1, I2)", async () => {
+    let finish!: (r: ImportResult) => void;
+    vi.mocked(api.importBytes)
+      .mockImplementationOnce(() => new Promise<ImportResult>((r) => (finish = r)))
+      .mockResolvedValueOnce(result({ added: ["p2"] }, [ref("p2")]));
+    const png = (n: string) => new File([new Uint8Array([1])], n, { type: "image/png" });
+    expect(paste(document.body, [{ type: "image/png", file: png("one.png") }]).defaultPrevented).toBe(true);
+    expect(paste(document.body, [{ type: "image/png", file: png("two.png") }]).defaultPrevented).toBe(true);
+    for (let i = 0; i < 4; i++) await flush();
+    expect(vi.mocked(api.importBytes).mock.calls.map((c) => c[0])).toEqual(["one.png"]); // the second waits
+    finish(result({ added: ["p1"] }, [ref("p1")]));
+    for (let i = 0; i < 4; i++) await flush();
+    expect(vi.mocked(api.importBytes).mock.calls.map((c) => c[0])).toEqual(["one.png", "two.png"]);
+    expect(store.refs.has("p1") && store.refs.has("p2")).toBe(true);
+  });
+
+  it("a drop during a running import is queued too", async () => {
+    let finish!: (r: ImportResult) => void;
+    vi.mocked(api.importPaths)
+      .mockImplementationOnce(() => new Promise<ImportResult>((r) => (finish = r)))
+      .mockResolvedValueOnce(result({ added: ["n3"] }, [ref("n3")]));
+    dropAt(1, 1, ["C:/in/a.jpg"]);
+    dropAt(1, 1, ["C:/in/b.jpg"]);
+    await flush();
+    expect(api.importPaths).toHaveBeenCalledTimes(1);
+    finish(result({ added: ["n1"] }, [ref("n1")]));
+    for (let i = 0; i < 4; i++) await flush();
+    expect(vi.mocked(api.importPaths).mock.calls).toEqual([[["C:/in/a.jpg"]], [["C:/in/b.jpg"]]]);
+  });
+
   it("a paste with no image imports nothing and says so (Review Focus 5)", async () => {
     paste(document.body, [{ type: "text/plain" }], { "text/plain": "https://ex.org/a.png" });
     await flush();

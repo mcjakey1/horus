@@ -42,7 +42,9 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   let dock: ReturnType<typeof dockPicker> | null = null;
   const inbox = mountInbox(inboxRoot, api, store, { openPicker: (o) => dock?.(o) });
   dock = dockPicker(inboxRoot.querySelector<HTMLElement>(".inbox-dock")!, api, store);
-  const views = mountViews(root, { inbox: () => inbox.focus(0) });
+  // Switching to the Inbox lands on its first item, or on the one intake is opening.
+  let landOn: string | null = null;
+  const views = mountViews(root, { inbox: () => (landOn ? inbox.focusId(landOn) : inbox.focus(0)) });
   const unIntake = wireIntake(win ?? null, document, {
     api,
     store,
@@ -54,8 +56,10 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
     // ponytail: several new references each keep their preset; the Inbox lands on the last one
     openPicker: (o) => {
       if (o.preset?.length) dock?.remember(o.refId, o.preset);
-      views.select("inbox");
-      inbox.focus(store.inbox().findIndex((r) => r.id === o.refId));
+      landOn = o.refId;
+      if (views.current() === "inbox") inbox.focusId(o.refId);
+      else views.select("inbox");
+      landOn = null;
     },
   });
   const menu = mountLibraryMenu(root.querySelector<HTMLElement>("#library-menu")!, api, store, notice);

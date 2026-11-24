@@ -54,7 +54,9 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
   const { api, store } = deps;
   // The latest notice's import, for its note field and duplicate rows; gone after a library switch.
   let last: { report: ImportReport; meta: ImportMeta; saved?: string } | null = null;
-  let busy = false;
+  // Imports run one at a time, in arrival order: a paste or drop during an import waits its turn
+  // (SPEC §2's "20 screenshots in two minutes"), never dropped.
+  let queue: Promise<unknown> = Promise.resolve();
 
   const render = () => last && deps.notice(intakeHTML(last.report, dupRows(last.report, store, last.meta), last.saved));
   const failed = (what: string) => (err: unknown) => deps.notice(`<p>${esc(what)}: ${esc(String(err))}</p>`);
@@ -63,10 +65,16 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
     render();
   }
 
-  /** Runs imports one after another, applying each Change, then shows one notice for them all. */
-  async function run(meta: ImportMeta, steps: (() => Promise<ImportResult>)[]): Promise<string[] | null> {
-    if (busy || !steps.length) return null;
-    busy = true;
+  /** Queues one intake behind any running one. */
+  function run(meta: ImportMeta, steps: (() => Promise<ImportResult>)[]): Promise<string[] | null> {
+    if (!steps.length) return Promise.resolve(null);
+    const job = queue.then(() => runNow(meta, steps));
+    queue = job;
+    return job;
+  }
+
+  /** Runs one intake's imports in order, applying each Change, then shows one notice for them all. Never rejects. */
+  async function runNow(meta: ImportMeta, steps: (() => Promise<ImportResult>)[]): Promise<string[] | null> {
     deps.notice(`<p>Importing…</p>`);
     const all: ImportReport = { added: [], duplicates: [], skipped: [], warnings: [] };
     try {
@@ -83,8 +91,6 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
     } catch (err) {
       failed("The import did not finish")(err);
       return null;
-    } finally {
-      busy = false;
     }
   }
   const importPaths = (paths: string[]) => (paths.length ? run({}, [() => api.importPaths(paths)]) : Promise.resolve(null));
