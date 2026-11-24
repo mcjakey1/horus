@@ -85,6 +85,28 @@ describe("openLightbox", () => {
     near(openPicker.mock.calls[0][0].region, { x: 0.1, y: 0.1, w: 0.3, h: 0.4 });
   });
 
+  it("committed_box_stays_what_the_picker_saves", () => {
+    pointer("pointerdown", at(0.1, 0.1));
+    pointer("pointerup", at(0.4, 0.5));
+    const saved = openPicker.mock.calls[0][0].region!;
+    const marker = $(".lb-pending");
+    const drawn = () => [marker.style.left, marker.style.top, marker.style.width, marker.style.height];
+    expect(marker.hidden).toBe(false);
+    expect($(".lb-draft").hidden).toBe(true);
+    const before = drawn();
+    expect(before).toEqual(["10%", "10%", "30%", "40%"]);
+    key("ArrowRight", {}, $(".lb-stage")); // a fresh draft, never the committed box
+    expect($(".lb-draft").hidden).toBe(false);
+    key("Escape", {}, $(".lb-stage")); // drops the draft only
+    pointer("pointerdown", at(0.6, 0.6));
+    pointer("pointerup", at(0.601, 0.601)); // an abandoned sliver
+    expect(drawn()).toEqual(before); // the marker still shows what the docked picker will save
+    expect(openPicker).toHaveBeenCalledTimes(1);
+    near(saved, { x: 0.1, y: 0.1, w: 0.3, h: 0.4 });
+    store.apply({ ...none, references: [{ ...R, tags: [...R.tags, tag("t3", "sequence", saved)] }] });
+    expect(marker.hidden).toBe(true); // the saved tag outlines it now
+  });
+
   it("tiny_or_cancelled_drag_opens_nothing", () => {
     pointer("pointerdown", at(0.1, 0.1));
     pointer("pointerup", { clientX: at(0.1, 0.1).clientX + 2, clientY: at(0.1, 0.1).clientY + 2 });

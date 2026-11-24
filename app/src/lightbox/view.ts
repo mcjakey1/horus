@@ -39,13 +39,13 @@ export function openLightbox(
   el.classList.toggle("is-value", document.body.classList.contains("value")); // starts as the artist was looking
   el.innerHTML = `
     <div class="lb-stage" tabindex="0" aria-label="${esc(ref.title)}. Drag a box, or press Enter and the arrow keys, to tag a region." aria-describedby="lb-hint">
-      <div class="lb-plate"><img alt="${esc(ref.title)}" draggable="false"><div class="lb-boxes"></div><div class="lb-draft" hidden></div></div>
+      <div class="lb-plate"><img alt="${esc(ref.title)}" draggable="false"><div class="lb-boxes"></div><div class="lb-pending" hidden></div><div class="lb-draft" hidden></div></div>
     </div>
     <aside class="lb-side" aria-label="Tag the region"></aside>
     <div class="lb-bar"><p class="lb-hint" id="lb-hint">Drag a box to tag a region · Enter, arrows (Shift resizes), Enter · v value view · Esc closes</p><button type="button" class="text-btn lb-close">Close</button></div>`;
   const q = <T extends HTMLElement = HTMLElement>(s: string) => el.querySelector<T>(s)!;
   const stage = q(".lb-stage"), plateEl = q(".lb-plate"), img = q<HTMLImageElement>("img");
-  const boxes = q(".lb-boxes"), draftEl = q(".lb-draft");
+  const boxes = q(".lb-boxes"), draftEl = q(".lb-draft"), pendingEl = q(".lb-pending");
   let closed = false;
   let from: Pt | null = null; // a drag in progress
   let draft: Region | null = null; // the box being drawn, in 0..1
@@ -86,7 +86,16 @@ export function openLightbox(
         }),
     );
   }
-  const commit = (region: Region) => deps.openPicker({ refId, region });
+  /** The committed box is a read-only marker of what the picker will save; later edits start a new draft. */
+  function showPending(r: Region | null) {
+    pendingEl.hidden = !r;
+    if (r) place(pendingEl, r);
+  }
+  function commit(region: Region) {
+    showDraft(null);
+    showPending(region);
+    deps.openPicker({ refId, region });
+  }
 
   // ---------- pointer: drag a box ----------
   const pt = (e: MouseEvent): Pt => ({ x: e.clientX, y: e.clientY });
@@ -105,8 +114,8 @@ export function openLightbox(
     if (!from) return;
     const r = normRect(from, pt(e), fit().client);
     from = null;
-    showDraft(r); // it stays drawn while the picker tags it
     if (r) commit(r);
+    else showDraft(null);
   }, { signal });
   stage.addEventListener("pointercancel", () => {
     from = null;
@@ -172,7 +181,10 @@ export function openLightbox(
 
   const unsubscribe = store.subscribe((c) => {
     if (c.reset || !store.refs.has(refId)) return close();
-    if (c.references.some((r) => r.id === refId)) showDraft(null); // a new tag now outlines that box
+    if (c.references.some((r) => r.id === refId)) {
+      showDraft(null);
+      showPending(null); // the saved tag outlines that box now
+    }
     if (c.taxonomy || c.references.some((r) => r.id === refId)) renderBoxes();
   });
 
