@@ -326,3 +326,25 @@ body:not([data-view="inbox"]) > .inbox { display: none; }
   .inbox-dock { border-left: 0; border-top: 1px solid var(--line); }
   .inbox-head { flex-wrap: wrap; }
 }
+
+/* minimal lightbox (Plan 2 Task 10; Plan 4 replaces the chrome). Positions come from the CSSOM. */
+.lb-open { position: absolute; top: 14px; left: 16px; padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
+.lightbox { position: fixed; inset: 0; z-index: 40; display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: minmax(0, 1fr) 36px; background: var(--shell); }
+.lb-stage { position: relative; margin: 20px 0 20px 20px; background: var(--card); overflow: hidden; cursor: crosshair; touch-action: none; user-select: none; }
+.lb-plate { position: absolute; box-shadow: 0 1px 2px rgb(0 0 0 / .25), 0 14px 34px rgb(0 0 0 / .22); }
+.lb-plate img { display: block; width: 100%; height: 100%; -webkit-user-drag: none; }
+.lightbox.is-value .lb-plate img { filter: grayscale(1); }
+.lb-box, .lb-draft, .lb-pending { position: absolute; pointer-events: none; }
+.lb-box { border: 2px dotted var(--c); box-shadow: 0 0 0 1px rgb(0 0 0 / .35); } /* a region tag: dotted, in its operation ink */
+.lb-draft { border: 1.5px solid var(--card-ink); box-shadow: 0 0 0 1px rgb(0 0 0 / .45); }
+.lb-pending { border: 2px dotted var(--card-ink); box-shadow: 0 0 0 1px rgb(0 0 0 / .45); } /* the region being tagged */
+.lb-draft[hidden], .lb-pending[hidden] { display: none; }
+.lb-side { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
+.lb-bar { grid-column: 1; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 20px; border-top: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+.lb-hint { margin: 0; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) {
+  .lightbox { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto; }
+  .lb-stage { margin: 16px; }
+  .lb-side { grid-column: 1; grid-row: 2; max-height: 45vh; border-left: 0; border-top: 1px solid var(--line); }
+  .lb-bar { grid-row: 3; min-height: 36px; }
+}

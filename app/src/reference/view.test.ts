@@ -88,6 +88,7 @@ function fakeApi(): Api {
     removeTag: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     addTechnique: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     demoExamples: vi.fn(async () => []),
+    imagePath: vi.fn(async (id: string) => `C:\\lib\\images\\${id}.jpg`),
   };
 }
 
@@ -339,6 +340,77 @@ describe("Reference view", () => {
     expect(pins()).toEqual(["false", "false"]);
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "2", bubbles: true }));
     expect(pins()).toEqual(["false", "true"]);
+  });
+
+  // ---------- Task 10: the minimal lightbox (SPEC §6.6) ----------
+  const keyOn = (k: string, el: Element = document.activeElement ?? document.body) =>
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+
+  it("l_opens_the_lightbox_and_v_stays_inside", () => {
+    keyOn("l", document.body);
+    expect($(".lightbox").getAttribute("aria-label")).toContain("Plate A");
+    const lbValue = () => $(".lightbox").classList.contains("is-value");
+    const before = lbValue(); // it starts from the Reference view's value state (body.value)
+    expect(before).toBe(document.body.classList.contains("value"));
+    const checked = $<HTMLInputElement>("#value").checked;
+    keyOn("v");
+    expect(lbValue()).toBe(!before);
+    expect($<HTMLInputElement>("#value").checked).toBe(checked); // the Reference view's checkbox is untouched
+    keyOn("Escape");
+    expect(document.querySelector(".lightbox")).toBeNull();
+    expect($<HTMLInputElement>("#value").checked).toBe(checked);
+  });
+
+  it("lightbox_keys_never_reach_the_view_from_body", () => {
+    keyOn("l", document.body);
+    const checked = $<HTMLInputElement>("#value").checked;
+    (document.activeElement as HTMLElement).blur(); // a click on blank lightbox space
+    keyOn("v", document.body);
+    expect($<HTMLInputElement>("#value").checked).toBe(checked);
+    (document.activeElement as HTMLElement).blur();
+    keyOn("t", document.body);
+    expect(document.querySelector(".margin .picker")).toBeNull();
+    (document.activeElement as HTMLElement).blur();
+    keyOn("Escape", document.body);
+    expect(document.querySelector(".lightbox")).toBeNull();
+  });
+
+  it("open_lightbox_button_on_the_plate", () => {
+    const btn = $<HTMLButtonElement>("#lab .lb-open");
+    expect(btn.textContent).toBe("Open lightbox");
+    btn.focus();
+    btn.click();
+    expect(document.querySelector(".lightbox")).not.toBeNull();
+    keyOn("Escape");
+    expect(document.activeElement).toBe(btn); // focus returns to the opener
+  });
+
+  it("region_drag_docks_the_picker_inside_the_lightbox", async () => {
+    keyOn("t", document.body); // a margin picker is open first
+    $<HTMLButtonElement>("#lab .lb-open").click();
+    expect(document.querySelector(".margin .picker")).toBeNull(); // it would sit behind the modal
+    const stage = $(".lb-stage");
+    stage.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect;
+    // plate 300×400 → left 175, width 450, height 600; drag 0.1,0.1 → 0.4,0.5
+    for (const [type, fx, fy] of [["pointerdown", 0.1, 0.1], ["pointermove", 0.4, 0.5], ["pointerup", 0.4, 0.5]] as const)
+      stage.dispatchEvent(new MouseEvent(type, { clientX: 175 + fx * 450, clientY: fy * 600, button: 0, bubbles: true }));
+    const picker = $(".lightbox .lb-side .picker");
+    expect(picker.dataset.ref).toBe("a");
+    expect(picker.contains(document.activeElement)).toBe(true);
+    keyOn("1"); // the first operation
+    keyOn("Enter"); // a partial tag for the region
+    await settle();
+    const [refId, tags] = vi.mocked(api.addTags).mock.calls[0];
+    expect(refId).toBe("a");
+    expect(tags[0].operationId).toBe("differentiate");
+    for (const [k, v] of Object.entries({ x: 0.1, y: 0.1, w: 0.3, h: 0.4 })) expect(tags[0].region![k as "x"]).toBeCloseTo(v, 6);
+    // the picker closed after tagging: focus is back in the lightbox, so v never reaches the Reference view
+    expect(document.querySelector(".lightbox .picker")).toBeNull();
+    expect($(".lightbox").contains(document.activeElement)).toBe(true);
+    const checked = $<HTMLInputElement>("#value").checked;
+    keyOn("v");
+    expect($<HTMLInputElement>("#value").checked).toBe(checked);
   });
 
   // ---------- Task 11: the AND/OR technique filter (SPEC §5a) ----------

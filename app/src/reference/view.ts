@@ -4,6 +4,7 @@
 import type { Api, Reference, Scored, Settings, Tag } from "../api";
 import { esc } from "../esc";
 import { mountImport, warningHTML } from "../importer";
+import { openLightbox } from "../lightbox/view";
 import { opInk, opLabel } from "../ops";
 import { mountSearch } from "../search";
 import type { Store, StoreEvent } from "../store";
@@ -498,6 +499,7 @@ export function mountReference(
       syncPins();
     } else if (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) $<HTMLButtonElement>("#back")!.click();
     else if (e.key === "t") openPicker();
+    else if (e.key === "l" || e.key === "L") openLb();
     else if (/^[1-9]$/.test(e.key)) {
       if (pickerOpen()) return; // the picker's digits pick operations, never callouts
       const i = +e.key - 1;
@@ -556,6 +558,30 @@ export function mountReference(
   signal.addEventListener("abort", () => {
     closePicker();
     tagOpen.remove();
+  });
+
+  // ---------- the minimal lightbox (Plan 2 Task 10): "Open lightbox" on the plate, or the L key ----------
+  let lightbox: { close(): void } | null = null;
+  function openLb() {
+    const ref = focusRef();
+    if (!ref || document.querySelector(".lightbox")) return;
+    closePicker(); // a margin picker would sit behind the modal
+    lightbox = openLightbox(api, store, ref.id, {
+      openPicker: (opts) => {
+        closePicker();
+        // Docked inside the modal so it can be reached and focus stays trapped.
+        // ponytail: found by class; Plan 4's lightbox chrome owns this slot.
+        const slot = document.querySelector<HTMLElement>(".lightbox .lb-side") ?? $(".margin")!;
+        picker = mountPicker(slot, api, store, { ...opts, onDone: closePicker });
+      },
+    });
+  }
+  $("#lab")!.insertAdjacentHTML("beforeend", `<button type="button" class="lb-open" aria-keyshortcuts="l">Open lightbox</button>`);
+  const lbOpen = $<HTMLButtonElement>("#lab .lb-open")!;
+  lbOpen.addEventListener("click", openLb, { signal });
+  signal.addEventListener("abort", () => {
+    lightbox?.close();
+    lbOpen.remove();
   });
 
   // ---------- the Store ----------
