@@ -58,23 +58,35 @@ pub enum Edit {
     Batch(Vec<Edit>),
     // The inverses of the removes: they put items back at their original positions, which the
     // appending `Add*` variants cannot. They restore a state that existed, so they check
-    // positions only; the `Add*` variants do the validating.
+    // positions only; the `Add*` variants do the validating. `Sealed` keeps code outside this
+    // module from building one: it can only pass along an inverse `apply` returned.
     /// Final positions, ascending.
     InsertTags {
         ref_id: String,
         tags: Vec<(usize, Tag)>,
+        sealed: Sealed,
     },
     /// Final positions, ascending.
     InsertReferences {
         refs: Vec<(usize, Reference)>,
+        sealed: Sealed,
     },
     /// `links` carry their final positions in `branch_techniques`, ascending.
     InsertTechnique {
         index: usize,
         technique: Technique,
         links: Vec<(usize, BranchTechnique)>,
+        sealed: Sealed,
     },
 }
+
+/// Only `edit.rs` can construct this, so only it can build an `Insert*` edit.
+///
+/// ```compile_fail
+/// let _ = horus_lib::edit::Sealed(());
+/// ```
+#[derive(Clone, Debug, PartialEq)]
+pub struct Sealed(());
 
 impl Edit {
     pub fn touches_taxonomy(&self) -> bool {
@@ -177,6 +189,18 @@ pub fn apply(data: &mut LibraryData, tax: &mut Taxonomy, e: Edit) -> Result<Appl
     run(data, tax, e, true)
 }
 
+// ponytail: Task 2's History is the only caller; drop the allow once it lands.
+#[allow(dead_code)]
+/// Undo and redo: applies an inverse (or the inverse of one) with `check: false`, because it
+/// restores a state that existed, stale tags included.
+pub(crate) fn apply_inverse(
+    data: &mut LibraryData,
+    tax: &mut Taxonomy,
+    edit: Edit,
+) -> Result<Applied, EditError> {
+    run(data, tax, edit, false)
+}
+
 /// `check: false` skips tag validation and the `InUse` scan. A batch unwinds with it, because
 /// an inverse restores a state that existed, and the unwind must not fail on a stale tag.
 fn run(
@@ -212,9 +236,14 @@ fn run(
             let len = r.tags.len();
             let tags = tags.into_iter().enumerate();
             let tags = tags.map(|(i, t)| (len + i, t)).collect();
-            return run(data, tax, Edit::InsertTags { ref_id, tags }, check);
+            let insert = Edit::InsertTags {
+                ref_id,
+                tags,
+                sealed: Sealed(()),
+            };
+            return run(data, tax, insert, check);
         }
-        Edit::InsertTags { ref_id, tags } => {
+        Edit::InsertTags { ref_id, tags, .. } => {
             let i = ref_index(data, &ref_id)?;
             let r = &mut data.references[i];
             check_insert(r.tags.len(), &tags).map_err(|t| EditError::UnknownTag(t.id.clone()))?;
@@ -238,6 +267,7 @@ fn run(
             Edit::InsertTags {
                 ref_id,
                 tags: removed,
+                sealed: Sealed(()),
             }
         }
         Edit::ReplaceTag {
@@ -296,9 +326,13 @@ fn run(
             let len = data.references.len();
             let refs = refs.into_iter().enumerate();
             let refs = refs.map(|(i, r)| (len + i, r)).collect();
-            return run(data, tax, Edit::InsertReferences { refs }, check);
+            let insert = Edit::InsertReferences {
+                refs,
+                sealed: Sealed(()),
+            };
+            return run(data, tax, insert, check);
         }
-        Edit::InsertReferences { refs } => {
+        Edit::InsertReferences { refs, .. } => {
             check_insert(data.references.len(), &refs)
                 .map_err(|r| EditError::UnknownReference(r.id.clone()))?;
             for (i, r) in refs.iter().cloned() {
@@ -314,11 +348,18 @@ fn run(
                 data.references.remove(*i);
             }
             touched.removed_ref_ids = removed.iter().map(|(_, r)| r.id.clone()).collect();
-            Edit::InsertReferences { refs: removed }
+            Edit::InsertReferences {
+                refs: removed,
+                sealed: Sealed(()),
+            }
         }
         Edit::AddTechnique { technique, links } => {
             let id = &technique.id;
-            if tax.techniques.iter().any(|t| &t.id == id) {
+            // An orphan link (one taxonomy.json may hold) also claims the id; letting it in would
+            // give the inverse more links than it expects.
+            if tax.techniques.iter().any(|t| &t.id == id)
+                || tax.branch_techniques.iter().any(|l| &l.technique_id == id)
+            {
                 return Err(EditError::DuplicateId(id.clone()));
             }
             // EditError has no technique variant; a bad link is reported as an invalid tag.
@@ -342,6 +383,7 @@ fn run(
                 index,
                 technique,
                 links,
+                sealed: Sealed(()),
             };
             return run(data, tax, insert, check);
         }
@@ -349,6 +391,7 @@ fn run(
             index,
             technique,
             links,
+            ..
         } => {
             let bad = || EditError::UnknownTag(format!("technique {}", technique.id));
             if index > tax.techniques.len() {
@@ -400,6 +443,7 @@ fn run(
                 index,
                 technique,
                 links: actual,
+                sealed: Sealed(()),
             }
         }
     };
@@ -896,5 +940,92 @@ mod tests {
             assert_eq!(parts[0], "tag");
             assert!(base36(parts[1]) && base36(parts[2]), "{id}");
         }
+    }
+
+    // Fix round 1: undo and unwinds restore states that existed, even stale ones.
+
+    /// An edit that always fails, to force a batch to unwind.
+    fn failing() -> Edit {
+        Edit::AddTags {
+            ref_id: "nope".into(),
+            tags: vec![],
+        }
+    }
+
+    /// `r2.t2` names a technique the taxonomy does not have (SeedReadOnly keeps such ids).
+    fn with_stale_tag() -> (LibraryData, Taxonomy, Tag) {
+        let (mut data, tax) = fixture();
+        let stale = technique_tag("t2", "differentiate", "gone", "differentiate.feature");
+        data.references[1].tags[1] = stale.clone();
+        (data, tax, stale)
+    }
+
+    #[test]
+    fn undo_replace_of_stale_tag() {
+        let (mut data, mut tax, stale) = with_stale_tag();
+        let snapshot = data.clone();
+        let replace = Edit::ReplaceTag {
+            ref_id: "r2".into(),
+            before: stale,
+            after: partial("t2", "infer"),
+        };
+        let inverse = apply(&mut data, &mut tax, replace.clone()).unwrap().inverse;
+        assert!(matches!(
+            apply(&mut data.clone(), &mut tax.clone(), inverse.clone()),
+            Err(EditError::InvalidTag(_))
+        ));
+        let redo = apply_inverse(&mut data, &mut tax, inverse).unwrap().inverse;
+        assert_eq!(data, snapshot);
+        apply_inverse(&mut data, &mut tax, redo).unwrap();
+        assert_eq!(data.references[1].tags[1], partial("t2", "infer"));
+
+        // The batch unwind takes the same path.
+        let mut data = snapshot.clone();
+        let result = apply(&mut data, &mut tax, Edit::Batch(vec![replace, failing()]));
+        assert_eq!(result, Err(EditError::UnknownReference("nope".into())));
+        assert_eq!(data, snapshot);
+    }
+
+    #[test]
+    fn undo_add_technique_with_orphan_tags() {
+        let (mut data, mut tax) = fixture();
+        // An orphan tag already names the id the new technique takes.
+        data.references[0].tags.push(technique_tag(
+            "o1",
+            "differentiate",
+            "my-trick",
+            "differentiate.feature",
+        ));
+        let (data0, tax0) = (data.clone(), tax.clone());
+        let (technique, links) = custom_technique("my-trick");
+        let add = Edit::AddTechnique { technique, links };
+        let inverse = apply(&mut data, &mut tax, add.clone()).unwrap().inverse;
+        assert!(matches!(
+            apply(&mut data.clone(), &mut tax.clone(), inverse.clone()),
+            Err(EditError::InUse(_))
+        ));
+        apply_inverse(&mut data, &mut tax, inverse).unwrap();
+        assert_eq!((&data, &tax), (&data0, &tax0));
+
+        let result = apply(&mut data, &mut tax, Edit::Batch(vec![add, failing()]));
+        assert_eq!(result, Err(EditError::UnknownReference("nope".into())));
+        assert_eq!((data, tax), (data0, tax0));
+    }
+
+    #[test]
+    fn orphan_link_blocks_add_technique() {
+        let (mut data, mut tax) = fixture();
+        let (technique, links) = custom_technique("my-trick");
+        // taxonomy.json may hold a link to a technique it lacks; open only warns.
+        tax.branch_techniques.push(links[0].clone());
+        let (data0, tax0) = (data.clone(), tax.clone());
+        let add = Edit::AddTechnique { technique, links };
+        let dup = Err(EditError::DuplicateId("my-trick".into()));
+        assert_eq!(apply(&mut data, &mut tax, add.clone()), dup);
+        assert_eq!(
+            apply(&mut data, &mut tax, Edit::Batch(vec![add, failing()])),
+            dup
+        );
+        assert_eq!((data, tax), (data0, tax0));
     }
 }
