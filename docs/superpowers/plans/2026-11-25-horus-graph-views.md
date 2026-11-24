@@ -197,7 +197,7 @@
   - `app/src/reference/view.test.ts` (extended).
 
 **Interfaces:**
-- Consumes `mountReference` (Plan 1 Task 8), and `LibraryView` and `Taxonomy`. `staticSource` builds `refs` from `view.references` and keeps `links`, so the Reference view can read it too. `inScope` is always true until Plan 4's `storeSource` supplies board scope (Cross-plan audit row 10).
+- Consumes `mountReference` (Plan 1 Task 8), and `LibraryView` and `Taxonomy`. `staticSource` builds `refs` from `view.references` and keeps `links`, so the Reference view can read it too. `inScope` is always true until Plan 4's `storeSource` supplies board scope (Cross-plan audit row 10). `taxonomyReadOnly` comes from `LibraryView.taxonomyReadOnly` (Plan 2), and is `false` if the field is absent.
 - **The Reference view (audit row 28):**
   - Library loading moves out of `mountReference` and into `main.ts`.
   - Its signature becomes `mountReference(root, api, data: DataSource)`, still returning `{ show, ready, destroy }`.
@@ -207,6 +207,7 @@
   ```ts
   // data.ts — the one seam between the views and where library data comes from
   export type Snapshot = { refs: Map<string, Reference>; links: Link[]; tax: Taxonomy; version: number;
+    taxonomyReadOnly: boolean;   // Plan 2: LibraryView/Store.taxonomyReadOnly (seed fallback after a damaged taxonomy.json)
     inScope(refId: string): boolean };   // maps 1:1 onto Plan 2's Store; inScope = Plan 4 board scope (always true here)
   export interface DataSource { get(): Snapshot; subscribe(fn: (s: Snapshot) => void): () => void }
   export function staticSource(view: LibraryView, tax: Taxonomy): DataSource & { replace(view: LibraryView, tax: Taxonomy): void };
@@ -758,6 +759,10 @@
     - `color` must be `None` or one of `EXTRA_INKS` (`Err("UnknownInk")`). A seed operation may keep `None`, because `opInk` maps it by id.
   - **Domains:** names must be unique, and `icon` must be one of `DOMAIN_ICONS` or a seed value (`Err("UnknownIcon")`).
   - **A move target** must differ from the item being deleted.
+  - **Read-only taxonomy (Plan 2 Task 5):**
+    - When `Taxonomy::load_with_fallback` returned `TaxSource::SeedReadOnly`, Plan 2's shared mutating-command recipe refuses any `Edit` that would set `Touched.taxonomy`, with `Err("TaxonomyReadOnly")`.
+    - Every Task 9 command goes through that recipe, so it adds **no check of its own**.
+    - Test: `read_only_taxonomy_refuses_edits`.
   - **`validate_seed` stays seed-only.** Every edited taxonomy is checked with `validate()` (Plan 1 Task 3 split). Each command calls `validate()` after `apply` and before `record`; on failure it reverts with the inverse and returns the error.
 - **Plan 1 Task 3 deferred minor:** add the table-driven `validate()` mutation tests here, because this is the first plan to change taxonomy structure.
 
@@ -789,6 +794,7 @@
   - `add_domain_with_op_is_one_step`: `add_domain("Rhythm", "…", None, Some("sequence"))` creates the domain and `sequence.rhythm`. One `undo` removes both.
   - `multi_branch_batch_indices`: deleting an operation with 3 branches and 7 links, some of them adjacent in `branchTechniques`, removes exactly those items. The inverse restores `branches`, `branchTechniques` and `techniques` in their original order, value-equal.
   - `reink_seed_operation`: `update_operation("differentiate", { color: Some("rose") })` stores `"rose"`, and `{ color: None }` (explicit) clears it. Omitting `color` leaves it unchanged.
+  - `read_only_taxonomy_refuses_edits`: open a library whose `taxonomy.json` and `taxonomy.bak.json` are both damaged, so `load_with_fallback` returns `SeedReadOnly`. Then each of `update_technique`, `add_operation` and `delete_domain` returns `Err("TaxonomyReadOnly")`. `undo()` reports `can_undo: false`, and `taxonomy.json` is byte-identical afterwards.
   - `op_move_json_camel`: `OpMove::Operation` serialises as `{"kind":"operation","operationId":…}`.
 
 - [ ] **Step 2: Run, then implement, then run again**
@@ -824,13 +830,17 @@
 - Consumes the Task 9 commands through `api`; `Store`, `Change` and `store.subscribe` from Plan 2 Task 7; and `renderInspector` (Task 6).
 - Produces:
   ```ts
-  export function storeSource(store: Store): DataSource;   // version bumps on every applied Change; inScope from Plan 4's store.inScope when present
+  export function storeSource(store: Store): DataSource;   // version bumps on every applied Change; inScope from Plan 4's store.inScope when present; taxonomyReadOnly from store.taxonomyReadOnly
   export function openMoveBranches(host: HTMLElement, ctx: { s: Snapshot; kind: "op" | "domain"; id: string }):
     Promise<OpMove | DomainMove | null>;
   export function mountTechniqueForm(host: HTMLElement, api: Api, branchId: string): void;   // calls api.addTechnique({ name, description, operationId, domainId }, null)
   export function openMoveTags(host: HTMLElement, ctx: { s: Snapshot; techId: string; branchId?: string /* unlink */ }):
     Promise<TagMove | null>;   // null = cancelled
   ```
+- **Read-only taxonomy (Plan 2's fallback):**
+  - When `snapshot.taxonomyReadOnly` is true, the Tree renders the inspector with `editable: false`. Inline editing, the ink and icon pickers, every "Delete…" button, the "+" on the bands and drag-to-re-link are all absent or disabled, and dragging a technique pans instead.
+  - A note at the top of the inspector reads "The technique list is read-only because taxonomy.json is damaged." (Plan 2's copy). With `role="status"`, it is announced once.
+  - Any edit command that still returns `Err("TaxonomyReadOnly")` (a race with a reload) shows the same sentence as a toast, and the UI state is left unchanged.
 - **With `editable: true`, the inspector offers:**
   - **Name:** click to edit inline. Enter saves through `updateTechnique` or `updateDomain`; Esc cancels. A `NameTaken:<id>` error shows "That name is taken by <Name>." beside the field.
   - **Definition:** a textarea that saves on blur.
@@ -871,6 +881,12 @@
   - `new_operation_flow`: "New operation…" with name "Unsettle" and label "Make it uneasy" calls `addOperation("Unsettle", "Make it uneasy", "", null)`. The button is disabled when 9 operations exist.
   - `ink_picker_lists_free_inks`: with Teal taken, the picker offers Olive, Rose, Indigo and Umber, plus the current ink. Choosing Rose calls `updateOperation(id, { color: "rose" })`.
   - `delete_operation_dialog`: in-use deletion shows both options with counts. Neither is pre-selected, and choosing "Move… to Stand out" calls `deleteOperation(id, { kind: "operation", operationId: "differentiate" })`.
+  - `read_only_disables_editing`: with `taxonomyReadOnly: true`:
+    - the inspector shows the read-only note;
+    - it has no enabled `input`, `textarea`, "Delete…" or "+" controls;
+    - `setDraggable` is never true for `tech:` nodes;
+    - when the source flips to `false`, the controls return.
+  - `read_only_error_toast`: when the fake api rejects `updateTechnique` with `"TaxonomyReadOnly"`, the toast shows "The technique list is read-only because taxonomy.json is damaged.", and the inline field reverts to the stored name.
   - `technique_form_calls_add`: the form calls `api.addTechnique({ name, description, operationId, domainId }, null)` with the fixed branch's operation and domain.
   - `inks_contrast_and_distinct`, in `inks.test.ts`, parses `styles.css`. For all 9 inks (4 seed and 5 extra), in both themes:
     - `-text` against `--panel` is at least 4.5:1;

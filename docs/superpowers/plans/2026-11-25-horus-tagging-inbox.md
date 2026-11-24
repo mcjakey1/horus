@@ -495,7 +495,7 @@
 - Produces:
   ```ts
   // store.ts
-  export type Store = { refs: Map<string, Reference>; tax: Taxonomy; links: Link[]; canUndo: boolean; canRedo: boolean;
+  export type Store = { refs: Map<string, Reference>; tax: Taxonomy; links: Link[]; canUndo: boolean; canRedo: boolean; taxonomyReadOnly: boolean;
     apply(c: Change): void; reset(view: LibraryView, tax: Taxonomy): void;   // reset: library switch; notifies with { reset: true }
     subscribe(fn: (c: Change & { reset?: boolean }) => void): () => void; inbox(): Reference[] };
   export function createStore(view: LibraryView, tax: Taxonomy): Store;
