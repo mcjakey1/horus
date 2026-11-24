@@ -30,7 +30,7 @@ pub struct Library {
 impl Library {
     pub fn create(root: &Path, seed_taxonomy: &Path) -> Result<Library, LibraryError> {
         // Never lose work: refuse before touching anything.
-        if root.join(DATA).exists() {
+        if root.join(DATA).exists() || root.join(BACKUP).exists() {
             return Err(LibraryError::AlreadyALibrary);
         }
         for sub in ["images", "thumbs/256", "thumbs/1024"] {
@@ -53,12 +53,20 @@ impl Library {
 
     pub fn open(root: &Path) -> Result<Library, LibraryError> {
         let path = root.join(DATA);
-        if !path.is_file() {
+        let backup = root.join(BACKUP);
+        if !path.is_file() && !backup.is_file() {
             return Err(LibraryError::NotALibrary);
         }
-        let (data, recovered_from_backup) = match serde_json::from_slice(&fs::read(&path)?) {
-            Ok(data) => (data, false),
-            Err(_) => match parse(&root.join(BACKUP)) {
+        // A missing library.json (quarantined, or a non-atomic replace on FAT32/exFAT) falls
+        // back to the backup exactly like a corrupt one.
+        let primary = if path.is_file() {
+            serde_json::from_slice(&fs::read(&path)?).ok()
+        } else {
+            None
+        };
+        let (data, recovered_from_backup) = match primary {
+            Some(data) => (data, false),
+            None => match parse(&backup) {
                 Some(data) => (data, true),
                 None => {
                     return Err(LibraryError::Corrupt {
@@ -251,6 +259,46 @@ mod tests {
             serde_json::from_slice(&fs::read(dir.path().join("library.bak.json")).unwrap())
                 .unwrap();
         assert_eq!(backup, good);
+    }
+
+    #[test]
+    fn missing_json_recovers_from_backup() {
+        let (dir, mut lib) = new_lib();
+        add_board(&mut lib, "b1");
+        lib.save().unwrap();
+        add_board(&mut lib, "b2");
+        lib.save().unwrap(); // backup now holds the library with b1
+        let backup: LibraryData =
+            serde_json::from_slice(&fs::read(dir.path().join("library.bak.json")).unwrap())
+                .unwrap();
+        fs::remove_file(dir.path().join("library.json")).unwrap();
+        let opened = Library::open(dir.path()).unwrap();
+        assert!(opened.recovered_from_backup);
+        assert_eq!(opened.data, backup);
+
+        let empty = tempfile::tempdir().unwrap();
+        assert!(matches!(
+            Library::open(empty.path()),
+            Err(LibraryError::NotALibrary)
+        ));
+    }
+
+    #[test]
+    fn create_refuses_backup_only_folder() {
+        let (dir, mut lib) = new_lib();
+        add_board(&mut lib, "b1");
+        lib.save().unwrap(); // library.bak.json now exists
+        fs::remove_file(dir.path().join("library.json")).unwrap();
+        let before = fs::read(dir.path().join("library.bak.json")).unwrap();
+        assert!(matches!(
+            Library::create(dir.path(), &seed()),
+            Err(LibraryError::AlreadyALibrary)
+        ));
+        assert_eq!(
+            fs::read(dir.path().join("library.bak.json")).unwrap(),
+            before
+        );
+        assert!(!dir.path().join("library.json").exists());
     }
 
     #[test]
