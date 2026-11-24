@@ -6,6 +6,7 @@ use image::{
     DynamicImage, GenericImageView, ImageDecoder, ImageError, ImageReader, Rgb, RgbImage,
     RgbaImage, imageops,
 };
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -16,7 +17,9 @@ use walkdir::WalkDir;
 
 pub const MAX_BYTES: u64 = 500 * 1024 * 1024;
 
-#[derive(Debug, Clone, PartialEq)]
+/// Over IPC: `{"kind": "tooLarge", "detail": 123}`.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
 pub enum Skip {
     Unsupported(String),
     Unreadable(String),
@@ -24,7 +27,9 @@ pub enum Skip {
     WriteFailed(String),
 }
 
-#[derive(Debug, Default)]
+/// Paths serialise as strings, tuples as arrays: `duplicates: [[path, existingId]]`.
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ImportReport {
     pub added: Vec<String>,
     pub duplicates: Vec<(PathBuf, String)>,

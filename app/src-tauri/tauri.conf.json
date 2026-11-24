@@ -10,7 +10,6 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Horus",
@@ -19,7 +18,10 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true
+      }
     }
   },
   "bundle": {
