@@ -315,7 +315,12 @@ export function mountPicker(
   }
 
   // ---------- events ----------
+  // Pointer focus lands on mousedown; repainting then would detach the target and drop its click.
+  let pointer = false;
+  el.addEventListener("pointerdown", () => void (pointer = true));
+
   el.addEventListener("keydown", (e) => {
+    pointer = false;
     if (e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return; // Ctrl+Z and the IME pass through
     const t = e.target as HTMLElement;
     const text = isTextEntry(t);
@@ -364,6 +369,8 @@ export function mountPicker(
 
   // A card reached by Tab (or any focus) is the highlighted one, so Enter, Space and the arrows act on it.
   el.addEventListener("focusin", (e) => {
+    const byPointer = pointer;
+    pointer = false; // one press, one focus
     const card = (e.target as Element).closest<HTMLElement>(".pk-card");
     if (!card) return;
     const i = [...grid.querySelectorAll(".pk-card")].indexOf(card);
@@ -371,7 +378,7 @@ export function mountPicker(
     const shown = i === hiIndex(); // already highlighted: record it, never repaint (that would drop the focus)
     S.nav = true;
     S.hi = i;
-    if (!shown) renderCards();
+    if (!shown && !byPointer) renderCards(); // a click repaints in its own handler
   });
 
   el.addEventListener("input", (e) => {
@@ -394,6 +401,7 @@ export function mountPicker(
   });
 
   el.addEventListener("click", (e) => {
+    pointer = false;
     const t = e.target as HTMLElement;
     const op = t.closest<HTMLElement>(".pk-op");
     if (op) return chooseOp(op.dataset.op!);

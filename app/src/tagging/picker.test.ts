@@ -239,6 +239,41 @@ describe("technique picker", () => {
     expect(document.activeElement).toBe(hi(el));
   });
 
+  const pointerdown = (t: Element) => t.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+
+  it("pointer_focus_on_a_tick_box_does_not_repaint_before_the_click (fix round 2, I3)", () => {
+    const { el } = mount();
+    key(row(el), "1");
+    const box = el.querySelectorAll<HTMLInputElement>(".pk-card[data-tech] .pk-tick")[1];
+    pointerdown(box);
+    box.focus(); // the browser focuses on mousedown
+    expect(box.isConnected).toBe(true); // a detached mousedown target loses its click
+    box.click();
+    expect([...el.querySelectorAll<HTMLElement>(".pk-card.is-ticked")].map((c) => c.dataset.tech)).toEqual([cards(el)[1]]);
+  });
+
+  it("pointer_focus_on_new_technique_does_not_repaint_before_the_click (fix round 2, I3)", () => {
+    const { el } = mount();
+    key(row(el), "1");
+    type(el, "Halo glow");
+    const card = newCard(el)!;
+    expect(card.classList.contains("is-hi")).toBe(false);
+    pointerdown(card);
+    card.focus();
+    expect(card.isConnected).toBe(true);
+    card.click();
+    expect(el.querySelector(".pk-form")).not.toBeNull();
+  });
+
+  it("keyboard_focus_after_a_pointer_press_still_highlights (fix round 2, I3)", () => {
+    const { el } = mount();
+    key(row(el), "1");
+    pointerdown(el.querySelector(".pk-search")!); // a press that never became a click
+    key(search(el), "Tab"); // the next keydown clears it
+    el.querySelector<HTMLElement>(".pk-card[data-tech]")!.focus();
+    expect(hi(el)?.dataset.tech).toBe(cards(el)[0]);
+  });
+
   it("space_on_a_domain_radio_is_left_to_the_radio (fix round 1, I2)", () => {
     const { el, api } = mount({}, { tax: withTexture() });
     key(row(el), "1");
