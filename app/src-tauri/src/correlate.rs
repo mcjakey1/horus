@@ -35,6 +35,7 @@ impl Index {
     /// N = references with ≥1 technique tag; idf = ln(1 + N/df), raw and unscaled.
     pub fn build(data: &LibraryData) -> Index {
         let mut df: HashMap<&str, usize> = HashMap::new();
+        // N = references with at least one technique tag (SPEC §4, decided 2026-11-25).
         let mut n = 0usize;
         for r in &data.references {
             let techs: BTreeSet<&str> = r

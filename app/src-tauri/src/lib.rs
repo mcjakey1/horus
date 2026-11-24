@@ -43,6 +43,17 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    /// Imports catch a decoder panic per file; `panic = "abort"` would kill the app instead.
+    #[test]
+    fn release_profile_unwinds() {
+        let cargo = include_str!("../Cargo.toml");
+        assert!(
+            !cargo
+                .lines()
+                .any(|l| l.replace(' ', "") == "panic=\"abort\"")
+        );
+    }
+
     #[test]
     fn csp_is_strict_except_styles() {
         let conf: serde_json::Value =

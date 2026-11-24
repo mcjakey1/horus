@@ -36,10 +36,18 @@ export function summaryHTML(r: ImportReport): string {
   const skipped = r.skipped
     .map(([p, why]) => `<li><span class="mono">${esc(fileName(p))}</span> ${esc(reason(why))}</li>`)
     .join("");
-  return `<p>${esc(line)}</p>${skipped ? `<ul>${skipped}</ul>` : ""}`;
+  // Imported, but with a caveat (e.g. an ICC profile that could not be applied).
+  const warned = (r.warnings ?? [])
+    .map(([p, why]) => `<li><span class="mono">${esc(fileName(p))}</span> imported with a warning: ${esc(why)}</li>`)
+    .join("");
+  return `<p>${esc(line)}</p>${skipped ? `<ul>${skipped}</ul>` : ""}${warned ? `<ul>${warned}</ul>` : ""}`;
 }
 
-export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, signal?: AbortSignal): void {
+/** `LibraryView.warning` (backup recovery, seed or taxonomy problems) for the notice. */
+export const warningHTML = (w?: string | null) => (w ? `<p>${esc(w)}</p>` : "");
+
+/** Returns `say`, which shows HTML in the `#import-notice` box (it has a Dismiss button). */
+export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, signal?: AbortSignal): (html: string) => void {
   const notice = root.querySelector<HTMLElement>("#import-notice")!;
   const body = notice.querySelector<HTMLElement>("[data-body]")!;
   const buttons = [...root.querySelectorAll<HTMLButtonElement>("[data-import]")];
@@ -57,8 +65,9 @@ export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, sig
     say(`<p>Importing…</p>`);
     try {
       const report = await api.importPaths(paths);
-      hooks.onLibrary(await api.openLibrary(lib));
-      say(summaryHTML(report));
+      const fresh = await api.openLibrary(lib);
+      hooks.onLibrary(fresh);
+      say(summaryHTML(report) + warningHTML(fresh.warning));
     } catch (err) {
       say(`<p>The import did not finish: ${esc(String(err))}</p>`);
     } finally {
@@ -76,4 +85,5 @@ export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, sig
       });
     else if ((e.target as Element).closest("#import-dismiss")) notice.hidden = true;
   }, { signal });
+  return say;
 }

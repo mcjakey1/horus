@@ -1,7 +1,7 @@
 // The Reference view, ported 1:1 from prototype/app.js (show / render*). Correlation comes from
 // the Rust `related` command; names come from the library's taxonomy (tags carry ids only).
 import type { Api, LibraryView, Link, Reference, Scored, Settings, Tag, Taxonomy } from "../api";
-import { mountImport } from "../importer";
+import { mountImport, warningHTML } from "../importer";
 import { mountSearch } from "../search";
 import { drawLeaders, highlight } from "./leaders";
 import { tileHTML } from "./tile";
@@ -406,7 +406,7 @@ export function mountReference(
     onReference: (id) => show(id),
   }, signal);
 
-  mountImport(root, api, {
+  const notify = mountImport(root, api, {
     libraryRoot: () => S.root,
     onLibrary: (lib) => {
       apply(lib);
@@ -441,7 +441,10 @@ export function mountReference(
       return;
     }
     try {
-      apply(initial ?? (await api.openLibrary(S.settings.lastLibrary!)));
+      const lib = initial ?? (await api.openLibrary(S.settings.lastLibrary!));
+      apply(lib);
+      // After an import the reopen's warning goes out with the summary (importer.ts).
+      if (lib.warning) notify(warningHTML(lib.warning));
       S.tax = await api.getTaxonomy();
     } catch (err) {
       S.source = `Could not open the library: ${String(err)}`;

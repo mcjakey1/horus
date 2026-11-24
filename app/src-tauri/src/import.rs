@@ -10,6 +10,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::NamedTempFile;
@@ -82,7 +83,7 @@ pub fn import_paths(
         for entry in walk {
             match entry {
                 Ok(e) if e.file_type().is_file() => {
-                    import_one(root, known_hashes, &mut batch, e.path(), &mut out)
+                    guarded_import_one(root, known_hashes, &mut batch, e.path(), &mut out)
                 }
                 Ok(_) => {}
                 Err(e) => {
@@ -95,6 +96,26 @@ pub fn import_paths(
         }
     }
     out
+}
+
+/// A decoder panic on one file (a malformed image can trip one) skips that file and the
+/// batch goes on. Unwinding drops the temp copy and `Thumbs` removes partial thumbnails.
+fn guarded_import_one(
+    root: &Path,
+    known: &HashMap<String, String>,
+    batch: &mut HashMap<String, String>,
+    src: &Path,
+    out: &mut ImportOutcome,
+) {
+    let warned = out.report.warnings.len();
+    let run = || import_one(root, known, batch, src, out);
+    // AssertUnwindSafe: on a panic nothing for this file has been pushed yet except
+    // warnings (trimmed below); `batch` only changes after a successful store.
+    if panic::catch_unwind(AssertUnwindSafe(run)).is_err() {
+        out.report.warnings.truncate(warned);
+        let why = Skip::Unreadable("the image decoder failed on this file".into());
+        out.report.skipped.push((src.to_path_buf(), why));
+    }
 }
 
 fn import_one(
@@ -164,7 +185,8 @@ fn copy_and_hash(src: &Path, dir: &Path) -> Result<(NamedTempFile, String), Skip
 }
 
 /// Decodes the temp copy, writes both thumbnails, then fsyncs and renames the copy to
-/// `images/<hash>.<ext>`. Any failure removes the thumbnails; the temp file deletes itself.
+/// `images/<hash>.<ext>`. Any failure or panic removes the thumbnails (`Thumbs`); the temp
+/// file deletes itself.
 fn store(
     root: &Path,
     src: &Path,
@@ -204,6 +226,11 @@ fn store(
     drop(rgba);
 
     let file = format!("{hash}.{}", format.extensions_str()[0]);
+    let mut thumbs = Thumbs {
+        root,
+        hash,
+        keep: false,
+    };
     let written = THUMB_SIZES
         .iter()
         .try_for_each(|&size| {
@@ -215,6 +242,10 @@ fn store(
                 small = imageops::thumbnail(&rgb, tw, th);
                 &small
             };
+            #[cfg(test)]
+            if size == THUMB_SIZES[1] && src.file_stem() == Some(tests::PANIC_STEM.as_ref()) {
+                panic!("injected decoder panic"); // after the first thumbnail is on disk
+            }
             write_thumb(&thumb_path_in(root, hash, size), thumb)
         })
         .and_then(|()| tmp.as_file().sync_all())
@@ -224,11 +255,9 @@ fn store(
                 .map_err(|e| e.error)
         });
     if let Err(e) = written {
-        for size in THUMB_SIZES {
-            let _ = fs::remove_file(thumb_path_in(root, hash, size));
-        }
         return Err(Skip::WriteFailed(e.to_string()));
     }
+    thumbs.keep = true;
 
     let since_epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -251,6 +280,27 @@ fn store(
         added_at: iso_utc(since_epoch.as_secs()),
         tags: vec![],
     })
+}
+
+/// Removes a hash's thumbnails and their `.tmp` files when dropped, unless `keep` is set:
+/// a failed write or a panic never leaves a partial thumbnail set behind.
+struct Thumbs<'a> {
+    root: &'a Path,
+    hash: &'a str,
+    keep: bool,
+}
+
+impl Drop for Thumbs<'_> {
+    fn drop(&mut self) {
+        if self.keep {
+            return;
+        }
+        for size in THUMB_SIZES {
+            let thumb = thumb_path_in(self.root, self.hash, size);
+            let _ = fs::remove_file(thumb.with_extension("jpg.tmp"));
+            let _ = fs::remove_file(thumb);
+        }
+    }
 }
 
 /// JPEG has no alpha: composite onto white so cut-outs don't sit on black.
@@ -348,6 +398,9 @@ fn iso_utc(secs: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A source file with this stem panics inside `store`, after its first thumbnail is written.
+    pub(super) const PANIC_STEM: &str = "panic_in_decoder";
 
     fn fixture(name: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -552,6 +605,34 @@ mod tests {
         }
         let left: Vec<_> = fs::read_dir(dir.path().join("images")).unwrap().collect();
         assert_eq!(left.len(), 1, "only the blocker remains, no .tmp");
+    }
+
+    #[test]
+    fn decoder_panic_is_skipped_and_batch_continues() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap(); // sources live outside the library
+        let bad = outside.path().join(format!("{PANIC_STEM}.png"));
+        image::RgbImage::new(300, 200).save(&bad).unwrap();
+        let bad_hash = blake3::hash(&fs::read(&bad).unwrap()).to_hex().to_string();
+        let out = import(dir.path(), &[bad.clone(), fixture("small.jpg")]);
+        assert_eq!(
+            out.report.skipped,
+            vec![(
+                bad,
+                Skip::Unreadable("the image decoder failed on this file".into())
+            )]
+        );
+        assert_eq!(out.references.len(), 1);
+        assert_eq!(out.references[0].title, "small");
+        for size in THUMB_SIZES {
+            let thumb = thumb_path_in(dir.path(), &bad_hash, size);
+            assert!(!thumb.exists(), "{}", thumb.display());
+            assert!(!thumb.with_extension("jpg.tmp").exists());
+            let left = fs::read_dir(thumb.parent().unwrap()).unwrap().count();
+            assert_eq!(left, 1, "only small.jpg's thumbnail");
+        }
+        let left: Vec<_> = fs::read_dir(dir.path().join("images")).unwrap().collect();
+        assert_eq!(left.len(), 1, "only small.jpg, no temp copy");
     }
 
     #[test]

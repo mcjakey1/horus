@@ -68,8 +68,18 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 
 fn library_error(e: LibraryError) -> String {
     match e {
-        LibraryError::AlreadyALibrary => "That folder already contains a Horus library.".into(),
+        LibraryError::AlreadyALibrary => {
+            "That folder already contains a Horus library. Use Open an existing library instead."
+                .into()
+        }
         LibraryError::NotALibrary => "That folder is not a Horus library.".into(),
+        LibraryError::SubfolderNotEmpty => concat!(
+            "That folder has other files in it, so Horus would put the library in its ",
+            "\"Horus Library\" subfolder, but that subfolder already holds other files. ",
+            "Choose an empty folder."
+        )
+        .into(),
+        LibraryError::NewerVersion => "This library was saved by a newer version of Horus.".into(),
         LibraryError::Corrupt { .. } => {
             "The library file is damaged and its backup could not be read either.".into()
         }
@@ -89,8 +99,8 @@ fn update_settings(st: &AppState, patch: SettingsPatch) -> Result<(), String> {
     settings::save(&st.config_dir, &s).map_err(|e| format!("Could not save settings: {e}"))
 }
 
-/// Shared tail of create and open: load and check the taxonomy, index, allow the library
-/// in the asset scope, remember it as the last library, and make it the open one.
+/// Shared tail of create and open: load and check the taxonomy, index, allow the library's
+/// image folders in the asset scope, remember it as the last library, and make it the open one.
 fn install<R: Runtime>(
     app: &AppHandle<R>,
     lib: Library,
@@ -110,11 +120,14 @@ fn install<R: Runtime>(
     if let Err(errs) = tax.validate() {
         warnings.push(format!("The taxonomy has problems: {}.", errs.join("; ")));
     }
-    // ponytail: a previously opened library stays in the scope until restart; forbid it on
-    // switch if that ever matters.
-    app.asset_protocol_scope()
-        .allow_directory(&lib.root, true)
-        .map_err(|e| format!("Could not give the window access to the library: {e}"))?;
+    // Only the image folders: the window never needs library.json, taxonomy.json or anything
+    // else in or beside the root. ponytail: a previously opened library stays in the scope
+    // until restart; forbid it on switch if that ever matters.
+    for dir in ["images", "thumbs"] {
+        app.asset_protocol_scope()
+            .allow_directory(lib.root.join(dir), true)
+            .map_err(|e| format!("Could not give the window access to the library: {e}"))?;
+    }
     let last = SettingsPatch {
         last_library: Some(lib.root.to_string_lossy().into_owned()),
         ..SettingsPatch::default()
@@ -149,6 +162,8 @@ fn install<R: Runtime>(
 // `async` keeps that wait off the main thread.
 // The demo seed runs on the new, not yet installed library: no state lock is held while it
 // copies files, and `install` swaps it in under the lock, as `run_import` commits.
+// `path` is the picked folder; the library may land in its "Horus Library" subfolder, and
+// `LibraryView.root` (also saved as lastLibrary) is where it went.
 // IPC args: `{ path, seedDemo }` (Tauri camelCases `seed_demo`).
 #[tauri::command(async)]
 pub fn create_library<R: Runtime>(
@@ -162,14 +177,21 @@ pub fn create_library<R: Runtime>(
     let mut lib = Library::create(&root, &st.seed_taxonomy).map_err(library_error)?;
     let mut seed_warnings = vec![];
     if seed_demo {
-        // From here the library exists, so a seed problem is a warning, never an error.
+        // From here the library exists, so a seed problem is a warning, except a failed
+        // save: then the error is returned and `lib`, never installed, drops with its unsaved
+        // demo references (the in-memory rollback). The empty library stays on disk.
         match Taxonomy::load(&lib.root.join("taxonomy.json")) {
             Ok(tax) => {
                 let (refs, warnings) = demo::seed(&lib.root, &tax, &st.demo_dir);
                 seed_warnings = warnings;
                 lib.data.references.extend(refs);
                 if let Err(e) = lib.save() {
-                    seed_warnings.push(format!("The demo set was not saved: {}", library_error(e)));
+                    return Err(format!(
+                        "The library was created at {}, but the demo set could not be saved. \
+                         Open the library to use it without the demo set. {}",
+                        lib.root.display(),
+                        library_error(e)
+                    ));
                 }
             }
             Err(e) => seed_warnings.push(format!("The demo set was not added: {e}")),
@@ -237,9 +259,15 @@ fn run_import(st: &AppState, paths: Vec<String>) -> Result<ImportReport, String>
             "Another library was opened during the import, so nothing was added to it.".into(),
         );
     };
+    let before = lib.data.references.len();
     lib.data.references.extend(out.references);
+    if let Err(e) = lib.save() {
+        // Memory must match disk: drop what was not saved. The index is rebuilt only after a
+        // good save, so it still describes the rolled-back references.
+        lib.data.references.truncate(before);
+        return Err(library_error(e));
+    }
     *index = Index::build(&lib.data);
-    lib.save().map_err(library_error)?;
     Ok(out.report)
 }
 
@@ -494,7 +522,7 @@ mod tests {
         let e = created();
         assert_eq!(
             create_library(e.handle(), e.lib.clone(), false).unwrap_err(),
-            "That folder already contains a Horus library."
+            "That folder already contains a Horus library. Use Open an existing library instead."
         );
         let empty = Path::new(&e.lib)
             .join("images")
@@ -508,6 +536,121 @@ mod tests {
         assert_eq!(
             fresh.import("small.jpg").unwrap_err(),
             "No library is open."
+        );
+    }
+
+    /// A picked folder that already holds the user's own files: `<tmp>/Pictures/mine.jpg` and
+    /// `<tmp>/Pictures/Photos/small.jpg`.
+    fn pictures(e: &Env) -> PathBuf {
+        let pics = Path::new(&e.lib).with_file_name("Pictures");
+        fs::create_dir_all(pics.join("Photos")).unwrap();
+        fs::copy(fixture("small.jpg"), pics.join("mine.jpg")).unwrap();
+        fs::copy(fixture("rotated.jpg"), pics.join("Photos/small.jpg")).unwrap();
+        pics
+    }
+
+    #[test]
+    fn create_refuses_existing_library_with_open_hint() {
+        let e = created();
+        let hint =
+            "That folder already contains a Horus library. Use Open an existing library instead.";
+        assert_eq!(
+            create_library(e.handle(), e.lib.clone(), false).unwrap_err(),
+            hint
+        );
+        // The same answer when the library sits in the "Horus Library" subfolder.
+        let pics = pictures(&e).to_string_lossy().into_owned();
+        create_library(e.handle(), pics.clone(), false).unwrap();
+        assert_eq!(create_library(e.handle(), pics, false).unwrap_err(), hint);
+    }
+
+    #[test]
+    fn scope_allows_only_images_and_thumbs() {
+        let e = env();
+        let pics = pictures(&e);
+        let view = create_library(e.handle(), pics.to_string_lossy().into_owned(), false).unwrap();
+        e.import("small.jpg").unwrap();
+        let view = open_library(e.handle(), view.root.to_string_lossy().into_owned()).unwrap();
+        let r = &view.references[0];
+        let scope = e.app.asset_protocol_scope();
+        assert!(scope.is_allowed(&r.thumb256) && scope.is_allowed(&r.thumb1024));
+        assert!(scope.is_allowed(view.root.join("images").join(&r.reference.file)));
+        for denied in [
+            view.root.join("library.json"),
+            view.root.join("library.bak.json"),
+            view.root.join("taxonomy.json"),
+            pics.join("mine.jpg"),
+            pics.join("Photos/small.jpg"),
+        ] {
+            assert!(denied.is_file(), "{}", denied.display());
+            assert!(!scope.is_allowed(&denied), "{}", denied.display());
+        }
+    }
+
+    #[test]
+    fn import_from_parent_of_subfolder_library_works() {
+        let e = env();
+        let pics = pictures(&e);
+        let view = create_library(e.handle(), pics.to_string_lossy().into_owned(), false).unwrap();
+        assert_eq!(view.root, pics.join("Horus Library"));
+        let sibling = pics.join("Photos").to_string_lossy().into_owned();
+        let r = tauri::async_runtime::block_on(import_paths(e.handle(), vec![sibling])).unwrap();
+        assert_eq!(r.added.len(), 1, "{:?}", r.skipped);
+        // The picked folder itself: its own image is added, the library inside is not walked.
+        let parent = pics.to_string_lossy().into_owned();
+        let r = tauri::async_runtime::block_on(import_paths(e.handle(), vec![parent])).unwrap();
+        assert_eq!((r.added.len(), r.duplicates.len()), (1, 1));
+        assert!(r.skipped.is_empty(), "{:?}", r.skipped);
+        let settings_root = e.settings().last_library.unwrap();
+        assert_eq!(Path::new(&settings_root), view.root);
+    }
+
+    #[test]
+    fn open_refuses_newer_version() {
+        let e = created();
+        e.import("small.jpg").unwrap(); // a good v1 library.bak.json now exists
+        let path = Path::new(&e.lib).join("library.json");
+        let mut data: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        data["version"] = 2.into();
+        data["references"] = "a shape this version cannot read".into();
+        fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+        assert_eq!(
+            open_library(e.handle(), e.lib.clone()).unwrap_err(),
+            "This library was saved by a newer version of Horus."
+        );
+    }
+
+    #[test]
+    fn import_save_failure_rolls_back_memory() {
+        let e = created();
+        // A folder squatting on the fixed temp name makes `save` fail.
+        let blocker = Path::new(&e.lib).join("library.json.tmp");
+        fs::create_dir(&blocker).unwrap();
+        let err = e.import("small.jpg").unwrap_err();
+        assert!(
+            err.starts_with("Could not read or write the library"),
+            "{err}"
+        );
+        {
+            let st = e.app.state::<AppState>();
+            let open = lock(&st.open);
+            assert!(open.as_ref().unwrap().0.data.references.is_empty());
+        }
+        let hits = search(e.handle(), "small".into()).unwrap();
+        assert!(
+            !hits.iter().any(|h| matches!(h, Hit::Reference { .. })),
+            "{hits:?}"
+        );
+        // Once the disk is writable again the same file imports cleanly, once.
+        fs::remove_dir(&blocker).unwrap();
+        assert_eq!(e.import("small.jpg").unwrap().added.len(), 1);
+        assert_eq!(
+            open_library(e.handle(), e.lib.clone())
+                .unwrap()
+                .references
+                .len(),
+            1
         );
     }
 

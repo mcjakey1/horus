@@ -80,6 +80,7 @@ export function firstRun(
   </div>`;
   root.append(el);
   const $ = <T extends HTMLElement = HTMLElement>(s: string) => el.querySelector<T>(s)!;
+  $('[data-pick="create"]').focus(); // the rest of the window is inert, so focus moves in
   const demo = $<HTMLInputElement>("#fr-demo");
   const go = $<HTMLButtonElement>("#fr-go");
   const status = $("#fr-status");

@@ -1,11 +1,14 @@
 use crate::model::{LibraryData, Reference};
 use std::fs;
-use std::io::Write;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 const DATA: &str = "library.json";
 const BACKUP: &str = "library.bak.json";
 const TMP: &str = "library.json.tmp";
+const SUBFOLDER: &str = "Horus Library";
+/// The `library.json` format this build writes; `open` refuses anything newer.
+const VERSION: u32 = 1;
 
 #[derive(Debug, thiserror::Error)]
 pub enum LibraryError {
@@ -17,6 +20,10 @@ pub enum LibraryError {
     NotALibrary,
     #[error("folder already holds a Horus library")]
     AlreadyALibrary,
+    #[error("the Horus Library subfolder is not empty and is not a Horus library")]
+    SubfolderNotEmpty,
+    #[error("library.json was saved by a newer version of Horus")]
+    NewerVersion,
 }
 
 pub struct Library {
@@ -28,19 +35,27 @@ pub struct Library {
 }
 
 impl Library {
-    pub fn create(root: &Path, seed_taxonomy: &Path) -> Result<Library, LibraryError> {
-        // Never lose work: refuse before touching anything.
-        if root.join(DATA).exists() || root.join(BACKUP).exists() {
-            return Err(LibraryError::AlreadyALibrary);
-        }
+    /// `chosen` is the folder the user picked. The library goes there if it is missing or
+    /// empty, otherwise into `<chosen>/Horus Library`, so the user's own files never share the
+    /// library root (import refuses everything under the root).
+    /// `Library::root` is where it actually went.
+    pub fn create(chosen: &Path, seed_taxonomy: &Path) -> Result<Library, LibraryError> {
+        // Never lose work: pick and check the root before touching anything.
+        let root = &new_root(chosen)?;
         for sub in ["images", "thumbs/256", "thumbs/1024"] {
             fs::create_dir_all(root.join(sub))?;
         }
-        fs::copy(seed_taxonomy, root.join("taxonomy.json"))?;
+        // create_new: never overwrite a taxonomy.json, even one that appeared since the check.
+        let mut seed = fs::File::open(seed_taxonomy)?;
+        let mut tax = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(root.join("taxonomy.json"))?;
+        io::copy(&mut seed, &mut tax)?;
         let lib = Library {
             root: root.to_path_buf(),
             data: LibraryData {
-                version: 1,
+                version: VERSION,
                 references: vec![],
                 links: vec![],
                 boards: vec![],
@@ -60,13 +75,18 @@ impl Library {
         // A missing library.json (quarantined, or a non-atomic replace on FAT32/exFAT) falls
         // back to the backup exactly like a corrupt one.
         let primary = if path.is_file() {
-            serde_json::from_slice(&fs::read(&path)?).ok()
+            check(&fs::read(&path)?)?
         } else {
             None
         };
         let (data, recovered_from_backup) = match primary {
             Some(data) => (data, false),
-            None => match parse(&backup) {
+            None => match fs::read(&backup)
+                .ok()
+                .map(|b| check(&b))
+                .transpose()?
+                .flatten()
+            {
                 Some(data) => (data, true),
                 None => {
                     return Err(LibraryError::Corrupt {
@@ -125,6 +145,53 @@ pub fn thumb_path_in(root: &Path, hash: &str, size: u32) -> PathBuf {
     root.join("thumbs")
         .join(size.to_string())
         .join(format!("{hash}.jpg"))
+}
+
+fn is_library(dir: &Path) -> bool {
+    dir.join(DATA).exists() || dir.join(BACKUP).exists()
+}
+
+/// A missing folder counts as empty: `create` makes it.
+fn is_empty(dir: &Path) -> io::Result<bool> {
+    match fs::read_dir(dir) {
+        Ok(mut entries) => Ok(entries.next().is_none()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(true),
+        Err(e) => Err(e),
+    }
+}
+
+fn new_root(chosen: &Path) -> Result<PathBuf, LibraryError> {
+    if is_library(chosen) {
+        return Err(LibraryError::AlreadyALibrary);
+    }
+    if is_empty(chosen)? {
+        return Ok(chosen.to_path_buf());
+    }
+    let sub = chosen.join(SUBFOLDER);
+    if is_library(&sub) {
+        return Err(LibraryError::AlreadyALibrary);
+    }
+    if is_empty(&sub)? {
+        Ok(sub)
+    } else {
+        Err(LibraryError::SubfolderNotEmpty)
+    }
+}
+
+/// Parses one library file: `Ok(None)` if it is not valid library JSON, an error if it is
+/// from a newer Horus (checked first, so a newer shape never falls back to the backup).
+fn check(bytes: &[u8]) -> Result<Option<LibraryData>, LibraryError> {
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+        return Ok(None);
+    };
+    if value
+        .get("version")
+        .and_then(serde_json::Value::as_u64)
+        .is_some_and(|v| v > u64::from(VERSION))
+    {
+        return Err(LibraryError::NewerVersion);
+    }
+    Ok(serde_json::from_value(value).ok())
 }
 
 fn parse(p: &Path) -> Option<LibraryData> {
@@ -308,6 +375,63 @@ mod tests {
             before
         );
         assert!(!dir.path().join("library.json").exists());
+    }
+
+    #[test]
+    fn create_in_nonempty_folder_uses_subfolder() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("holiday.jpg"), b"mine").unwrap();
+        let lib = Library::create(dir.path(), &seed()).unwrap();
+        assert!(
+            lib.root.ends_with("Horus Library"),
+            "{}",
+            lib.root.display()
+        );
+        assert_eq!(lib.root, dir.path().join("Horus Library"));
+        assert!(lib.root.join("library.json").is_file());
+        assert_eq!(fs::read(dir.path().join("holiday.jpg")).unwrap(), b"mine");
+        let mut top: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        top.sort();
+        assert_eq!(top, ["Horus Library", "holiday.jpg"]);
+    }
+
+    #[test]
+    fn create_uses_empty_subfolder_and_refuses_nonempty_one() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("holiday.jpg"), b"mine").unwrap();
+        let sub = dir.path().join("Horus Library");
+        fs::create_dir(&sub).unwrap();
+        assert_eq!(Library::create(dir.path(), &seed()).unwrap().root, sub);
+
+        let other = tempfile::tempdir().unwrap();
+        fs::write(other.path().join("holiday.jpg"), b"mine").unwrap();
+        let sub = other.path().join("Horus Library");
+        fs::create_dir(&sub).unwrap();
+        fs::write(sub.join("notes.txt"), b"keep").unwrap();
+        assert!(matches!(
+            Library::create(other.path(), &seed()),
+            Err(LibraryError::SubfolderNotEmpty)
+        ));
+        assert_eq!(fs::read_dir(&sub).unwrap().count(), 1);
+        assert_eq!(fs::read(sub.join("notes.txt")).unwrap(), b"keep");
+    }
+
+    #[test]
+    fn create_never_overwrites_taxonomy_json() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("taxonomy.json"), b"my own taxonomy").unwrap();
+        let lib = Library::create(dir.path(), &seed()).unwrap();
+        assert_eq!(
+            fs::read(dir.path().join("taxonomy.json")).unwrap(),
+            b"my own taxonomy"
+        );
+        assert_eq!(
+            fs::read(lib.root.join("taxonomy.json")).unwrap(),
+            fs::read(seed()).unwrap()
+        );
     }
 
     #[test]

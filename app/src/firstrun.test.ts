@@ -4,7 +4,8 @@ import html from "../index.html?raw";
 import type { Api, LibraryView } from "./api";
 import { boot, FIND_SIMILAR_COPY } from "./firstrun";
 
-const lib: LibraryView = { root: "C:\Références", references: [], links: [], warning: null, seedWarnings: [] };
+// The library may land in a "Horus Library" subfolder of the picked folder.
+const lib: LibraryView = { root: "C:\\Références\\Horus Library", references: [], links: [], warning: null, seedWarnings: [] };
 
 function fakeApi(lastLibrary: string | null): Api {
   return {
@@ -19,7 +20,7 @@ function fakeApi(lastLibrary: string | null): Api {
     getSettings: vi.fn(async () => ({ lastLibrary, theme: "light" as const, findSimilar: "unset" as const })),
     setSettings: vi.fn(async () => {}),
     systemRamGb: vi.fn(async () => 16),
-    pickFolder: vi.fn(async () => "C:\Références"),
+    pickFolder: vi.fn(async () => "C:\\Références"),
     pickImages: vi.fn(async () => []),
     assetUrl: (p: string) => p,
   };
@@ -44,6 +45,7 @@ describe("first run", () => {
     expect(fr.textContent).toContain("16 GB of RAM");
     expect($<HTMLInputElement>("#fr-demo").checked).toBe(true);
     expect([...fr.querySelectorAll("[data-fs]")].map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false"]);
+    expect(document.activeElement).toBe($('[data-pick="create"]')); // focus moves into the dialog
 
     $<HTMLButtonElement>('[data-pick="create"]').click();
     await tick();
@@ -51,15 +53,20 @@ describe("first run", () => {
     $<HTMLButtonElement>('[data-fs="off"]').click();
     expect(api.setSettings).toHaveBeenCalledWith({ findSimilar: "off" });
     $<HTMLButtonElement>("#fr-go").click();
-    await done;
-    expect(api.createLibrary).toHaveBeenCalledWith("C:\Références", true);
+    const view = await done;
+    expect(api.createLibrary).toHaveBeenCalledWith("C:\\Références", true);
     expect(document.querySelector(".firstrun")).toBeNull();
+    // The view runs on the root Rust returned, not the picked folder; Rust saves lastLibrary.
+    await view.ready;
+    expect($("#data-source").textContent).toBe("Library: Horus Library");
+    expect($("#data-source").title).toBe("C:\\Références\\Horus Library");
+    expect(api.setSettings).not.toHaveBeenCalledWith(expect.objectContaining({ lastLibrary: expect.anything() }));
   });
 
   it("shows first run with a readable message when lastLibrary fails to open", async () => {
-    void boot(document.body, fakeApi("D:\moved"));
+    void boot(document.body, fakeApi("D:\\moved"));
     await tick();
     await tick();
-    expect($(".fr-error").textContent).toContain("could not open your last library at D:\moved");
+    expect($(".fr-error").textContent).toContain("could not open your last library at D:\\moved");
   });
 });

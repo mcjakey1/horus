@@ -38,7 +38,7 @@ tauri = { version = "2", features = ["protocol-asset", "test"] }
 codegen-units = 1
 lto = true
 opt-level = 3
-panic = "abort"
+# No panic = "abort": imports catch a decoder panic per file (import.rs).
 strip = true
 
 # ponytail: the image pipeline (generic `image` code is compiled into this crate) is ~8x

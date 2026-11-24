@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import html from "../../index.html?raw";
 import type { Api, Hit, LibraryView, Reference, Scored, Tag, Taxonomy } from "../api";
+import { summaryHTML } from "../importer";
 import { mountReference } from "./view";
 
 const tag = (id: string, operationId: string, techniqueId?: string, branchId?: string): Tag => ({
@@ -165,5 +166,61 @@ describe("Reference view", () => {
     resolve([{ kind: "technique", id: "silhouette", operationId: "differentiate", count: 2 }]);
     await settle();
     expect(document.querySelector<HTMLUListElement>("#q-results")!.hidden).toBe(true);
+  });
+});
+
+describe("notices", () => {
+  beforeEach(() => {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+  });
+
+  it("open_warning_is_shown_in_notice", async () => {
+    const api = fakeApi();
+    const warning = "library.json could not be read, so Horus opened its backup <b>library.bak.json</b>.";
+    vi.mocked(api.openLibrary).mockResolvedValue({ ...library, warning });
+    const view = mountReference(document.body, api);
+    await view.ready;
+    const notice = document.querySelector<HTMLElement>("#import-notice")!;
+    expect(notice.hidden).toBe(false);
+    expect(notice.getAttribute("role")).toBe("status");
+    expect(notice.querySelector("[data-body]")!.textContent).toContain(warning); // escaped, not markup
+    expect(notice.querySelector("b")).toBeNull();
+    document.querySelector<HTMLButtonElement>("#import-dismiss")!.click();
+    expect(notice.hidden).toBe(true);
+
+    // Every reopen shows it again: after an import, next to the import summary.
+    vi.mocked(api.pickImages).mockResolvedValueOnce(["C:/in/x.jpg"]);
+    vi.mocked(api.importPaths).mockResolvedValueOnce({ added: ["d"], duplicates: [], skipped: [] });
+    document.querySelector<HTMLButtonElement>('[data-import="files"]')!.click();
+    await settle();
+    expect(notice.hidden).toBe(false);
+    expect(notice.textContent).toContain("Added 1 reference");
+    expect(notice.textContent).toContain(warning);
+    view.destroy();
+  });
+
+  it("open_warning_is_shown_in_notice for a library handed over by first run", async () => {
+    const api = fakeApi();
+    const view = mountReference(document.body, api, { ...library, warning: "Demo image d07 was not imported." });
+    await view.ready;
+    const notice = document.querySelector<HTMLElement>("#import-notice")!;
+    expect(notice.hidden).toBe(false);
+    expect(notice.textContent).toContain("Demo image d07 was not imported.");
+    view.destroy();
+  });
+
+  it("import_warnings_are_listed", () => {
+    const out = summaryHTML({
+      added: ["d"],
+      duplicates: [],
+      skipped: [],
+      warnings: [["C:\\in\\p3 <red>.png", "ICC profile could not be parsed; colours left unconverted"]],
+    });
+    const el = document.createElement("div");
+    el.innerHTML = out;
+    expect(el.textContent).toContain("Added 1 reference");
+    expect(el.textContent).toContain("p3 <red>.png");
+    expect(el.textContent).toContain("ICC profile could not be parsed; colours left unconverted");
+    expect(el.querySelector("red")).toBeNull();
   });
 });
