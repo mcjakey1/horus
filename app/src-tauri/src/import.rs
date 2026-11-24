@@ -52,8 +52,29 @@ pub fn import_paths(
         report: ImportReport::default(),
     };
     let mut batch: HashMap<String, String> = HashMap::new();
+    // Never walk into the library itself (e.g. the user drops its parent folder), or its
+    // thumbnails get imported as new references on every run. Created first so it can be
+    // canonicalised; both sides are compared canonical (`\\?\` on Windows).
+    let _ = fs::create_dir_all(root);
+    let library = fs::canonicalize(root).ok();
+    let inside = |p: &Path| {
+        library
+            .as_ref()
+            .is_some_and(|lib| fs::canonicalize(p).is_ok_and(|c| c.starts_with(lib)))
+    };
     for path in paths {
-        for entry in WalkDir::new(path).follow_links(true).sort_by_file_name() {
+        if inside(path) {
+            let why = Skip::Unsupported("inside the library".into());
+            out.report.skipped.push((path.clone(), why));
+            continue;
+        }
+        // Only folders need the check: a file can only be inside the library via a pruned one.
+        let walk = WalkDir::new(path)
+            .follow_links(true)
+            .sort_by_file_name()
+            .into_iter()
+            .filter_entry(|e| !(e.file_type().is_dir() && inside(e.path())));
+        for entry in walk {
             match entry {
                 Ok(e) if e.file_type().is_file() => {
                     import_one(root, known_hashes, &mut batch, e.path(), &mut out)
@@ -360,7 +381,8 @@ mod tests {
     #[test]
     fn thumbs_downscale_keeping_aspect() {
         let dir = tempfile::tempdir().unwrap();
-        let src = dir.path().join("wide.png");
+        let outside = tempfile::tempdir().unwrap(); // sources live outside the library
+        let src = outside.path().join("wide.png");
         image::RgbImage::new(1000, 500).save(&src).unwrap();
         let out = import(dir.path(), &[src]);
         let hash = &out.references[0].hash;
@@ -373,7 +395,8 @@ mod tests {
     #[test]
     fn dedupes_same_bytes() {
         let dir = tempfile::tempdir().unwrap();
-        let copy = dir.path().join("copy_of_small.jpg");
+        let outside = tempfile::tempdir().unwrap(); // sources live outside the library
+        let copy = outside.path().join("copy_of_small.jpg");
         fs::copy(fixture("small.jpg"), &copy).unwrap();
         let out = import(dir.path(), &[fixture("small.jpg"), copy.clone()]);
         assert_eq!(out.references.len(), 1);
@@ -416,7 +439,8 @@ mod tests {
     #[test]
     fn too_large_is_skipped_without_reading() {
         let dir = tempfile::tempdir().unwrap();
-        let big = dir.path().join("big.jpg");
+        let outside = tempfile::tempdir().unwrap(); // sources live outside the library
+        let big = outside.path().join("big.jpg");
         fs::File::create(&big)
             .unwrap()
             .set_len(MAX_BYTES + 1)
@@ -492,7 +516,8 @@ mod tests {
     #[test]
     fn transparent_png_on_white() {
         let dir = tempfile::tempdir().unwrap();
-        let src = dir.path().join("cutout.png");
+        let outside = tempfile::tempdir().unwrap(); // sources live outside the library
+        let src = outside.path().join("cutout.png");
         image::RgbaImage::new(8, 8).save(&src).unwrap(); // all (0, 0, 0, 0)
         let out = import(dir.path(), &[src]);
         let t = image::open(thumb_path_in(dir.path(), &out.references[0].hash, 256))
@@ -527,7 +552,8 @@ mod tests {
     #[test]
     fn stored_file_matches_its_hash() {
         let dir = tempfile::tempdir().unwrap();
-        let copy = dir.path().join("copy.jpg");
+        let outside = tempfile::tempdir().unwrap(); // sources live outside the library
+        let copy = outside.path().join("copy.jpg");
         fs::copy(fixture("small.jpg"), &copy).unwrap();
         let out = import(dir.path(), &[fixture("small.jpg"), copy]);
         let r = &out.references[0];
@@ -536,6 +562,42 @@ mod tests {
         // The duplicate's copy-and-hash temp file is gone.
         let left: Vec<_> = fs::read_dir(dir.path().join("images")).unwrap().collect();
         assert_eq!(left.len(), 1);
+    }
+
+    #[test]
+    fn parent_folder_import_skips_library() {
+        let dir = tempfile::tempdir().unwrap();
+        let lib = dir.path().join("Horus");
+        fs::copy(fixture("small.jpg"), dir.path().join("outside.jpg")).unwrap();
+        let first = import(&lib, &[dir.path().to_path_buf()]);
+        assert_eq!(first.references.len(), 1);
+        assert!(
+            first.report.skipped.is_empty(),
+            "{:?}",
+            first.report.skipped
+        );
+        let known: HashMap<_, _> = first
+            .references
+            .iter()
+            .map(|r| (r.hash.clone(), r.id.clone()))
+            .collect();
+        // Second run: the library now holds images/ and thumbs/, which must not be walked.
+        let second = import_paths(&lib, &known, &[dir.path().to_path_buf()]);
+        assert!(second.references.is_empty(), "{:?}", second.report.added);
+        assert_eq!(second.report.duplicates.len(), 1);
+        assert!(
+            second.report.skipped.is_empty(),
+            "{:?}",
+            second.report.skipped
+        );
+        // A file inside the library passed directly is refused.
+        let thumb = thumb_path_in(&lib, &first.references[0].hash, 256);
+        let direct = import(&lib, std::slice::from_ref(&thumb));
+        assert!(direct.references.is_empty());
+        assert!(matches!(
+            direct.report.skipped.as_slice(),
+            [(p, Skip::Unsupported(_))] if p == &thumb
+        ));
     }
 
     #[test]
