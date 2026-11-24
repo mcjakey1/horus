@@ -143,7 +143,9 @@ export function openLightbox(
     if (t.closest(".picker")) return; // the picker owns its keys, Esc included (it closes itself)
     if (e.key === "Escape") {
       e.preventDefault();
-      return draft && !from ? showDraft(null) : close();
+      if (!from && !draft) return close();
+      from = null; // a drag or a draft in progress is cancelled first
+      return showDraft(null);
     }
     if (e.ctrlKey || e.metaKey || e.altKey) return; // Ctrl+Z and friends reach the undo keys
     if (e.key === "v" && !isTextEntry(t)) return void el.classList.toggle("is-value");
@@ -172,8 +174,12 @@ export function openLightbox(
   document.addEventListener("focusin", (e) => {
     if (!el.contains(e.target as Node)) stage.focus();
   }, { signal });
-  const keepFocus = new MutationObserver(() => {
-    if (!closed && !el.contains(document.activeElement)) stage.focus();
+  const isPicker = (n: Node) => n instanceof Element && (n.matches(".picker") || !!n.querySelector(".picker"));
+  const keepFocus = new MutationObserver((records) => {
+    if (closed) return;
+    // A picker that left without saving (its Esc) leaves no region being tagged.
+    if (records.some((r) => [...r.removedNodes].some(isPicker)) && !el.querySelector(".picker")) showPending(null);
+    if (!el.contains(document.activeElement)) stage.focus();
   });
   keepFocus.observe(el, { childList: true, subtree: true });
   const resize = typeof ResizeObserver !== "undefined" ? new ResizeObserver(layout) : null;

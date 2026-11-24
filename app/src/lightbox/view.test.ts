@@ -107,6 +107,31 @@ describe("openLightbox", () => {
     expect(marker.hidden).toBe(true); // the saved tag outlines it now
   });
 
+  it("picker_cancel_clears_the_marker", async () => {
+    openPicker.mockImplementation(() => {
+      $(".lb-side").innerHTML = `<section class="picker"><input></section>`;
+      $(".lb-side input").focus();
+    });
+    pointer("pointerdown", at(0.1, 0.1));
+    pointer("pointerup", at(0.4, 0.5));
+    await tick();
+    expect($(".lb-pending").hidden).toBe(false); // the picker is open for it
+    $(".lb-side").innerHTML = ""; // Esc in the picker: it closes itself, nothing saved
+    await tick();
+    expect($(".lb-pending").hidden).toBe(true);
+    expect(document.activeElement).toBe($(".lb-stage"));
+  });
+
+  it("esc_mid_drag_cancels_the_drag_only", () => {
+    pointer("pointerdown", at(0.1, 0.1));
+    pointer("pointermove", at(0.4, 0.5));
+    key("Escape", {}, $(".lb-stage"));
+    expect(document.querySelector(".lightbox")).not.toBeNull();
+    expect($(".lb-draft").hidden).toBe(true);
+    pointer("pointerup", at(0.4, 0.5));
+    expect(openPicker).not.toHaveBeenCalled();
+  });
+
   it("tiny_or_cancelled_drag_opens_nothing", () => {
     pointer("pointerdown", at(0.1, 0.1));
     pointer("pointerup", { clientX: at(0.1, 0.1).clientX + 2, clientY: at(0.1, 0.1).clientY + 2 });
