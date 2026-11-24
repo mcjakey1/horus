@@ -4,7 +4,7 @@
 // Change, which goes through the store. Sections re-render on their own, so the search keeps focus.
 import type { Api, Change, DemoExample, NewTag, Region, Tag, TagFor, Technique } from "../api";
 import { esc } from "../esc";
-import { isTextEntry } from "../keys";
+import { digitOf, isTextEntry } from "../keys";
 import { opInk, opLabel } from "../ops";
 import type { Store } from "../store";
 import { domainChoice, examplesFor, matchesQuery, techniquesFor } from "./model";
@@ -349,9 +349,10 @@ export function mountPicker(
     const chip = t.closest<HTMLElement>(".pk-chip");
     if (chip && e.key === "Delete") return void (e.preventDefault(), removeTag(chip.dataset.tag!));
     if (t.closest(".pk-chips, .pk-msg") && (e.key === "Enter" || e.key === " ")) return; // their own buttons
-    if (/^[1-9]$/.test(e.key) && !text) {
+    const digit = text ? null : digitOf(e);
+    if (digit) {
       e.preventDefault(); // out of range is swallowed too, never typed
-      const op = tax().operations[+e.key - 1];
+      const op = tax().operations[digit - 1];
       if (op) chooseOp(op.id);
       return;
     }

@@ -50,7 +50,10 @@ function sourceUrlOf(dt: DataTransfer): string | undefined {
     .find((l) => !l.startsWith("#") && isHttp(l));
 }
 
-export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps): () => void {
+/** Call it to unwire. `idle()` resolves once every queued intake has finished (I3). */
+export type Intake = (() => void) & { idle(): Promise<void> };
+
+export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps): Intake {
   const { api, store } = deps;
   // The latest notice's import, for its note field and duplicate rows; gone after a library switch.
   let last: { report: ImportReport; meta: IntakeMeta; saved?: string } | null = null;
@@ -177,11 +180,18 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
     if (c.reset) last = null; // the old library's ids mean nothing now
   });
 
+  /** Waits until the queue stops growing; `runNow` never rejects. */
+  async function idle() {
+    let q;
+    do await (q = queue);
+    while (q !== queue);
+  }
+
   doc.addEventListener("paste", onPaste);
   doc.addEventListener("submit", onSubmit);
   doc.addEventListener("click", onClick);
   doc.addEventListener(IMPORTED, onImported);
-  return () => {
+  const off = () => {
     void unlisten?.then((f) => f());
     unsubscribe();
     doc.removeEventListener("paste", onPaste);
@@ -189,4 +199,5 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
     doc.removeEventListener("click", onClick);
     doc.removeEventListener(IMPORTED, onImported);
   };
+  return Object.assign(off, { idle });
 }

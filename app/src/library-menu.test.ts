@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Api, LibraryView, Taxonomy } from "./api";
+import type { Api, ImportResult, LibraryView, Reference, Taxonomy } from "./api";
+import { noticeIn } from "./importer";
+import { wireIntake } from "./intake";
 import { mountLibraryMenu } from "./library-menu";
 import { createStore } from "./store";
 
@@ -92,5 +94,49 @@ describe("Library menu", () => {
     await flush();
     expect(api.createLibrary).toHaveBeenCalledWith("D:/C", false);
     expect(store.root).toBe("D:/C");
+  });
+
+  it("a paste queued behind an import lands in the old library before a switch (I3)", async () => {
+    document.body.innerHTML = `<header><button id="library-menu">Library</button></header>
+      <aside id="import-notice" hidden><div data-body></div></aside>`;
+    const order: string[] = [];
+    const pasted = (id: string): ImportResult => ({
+      report: { added: [id], duplicates: [], skipped: [] },
+      change: { references: [{ id, title: id, file: "", hash: id, width: 1, height: 1, addedAt: "", tags: [], thumb256: "", thumb1024: "" } as Reference], removed: [], canUndo: true, canRedo: false },
+    });
+    let finish!: (r: ImportResult) => void;
+    const api = {
+      importBytes: vi
+        .fn()
+        .mockImplementationOnce(() => new Promise<ImportResult>((r) => (finish = r)))
+        .mockImplementationOnce(async () => (order.push("paste p2"), pasted("p2"))),
+      pickFolder: vi.fn(async () => "D:/B"),
+      openLibrary: vi.fn(async (p: string) => (order.push("open"), view(p))),
+      createLibrary: vi.fn(async (p: string) => (order.push("create"), view(p))),
+      getTaxonomy: vi.fn(async () => tax),
+    } as unknown as Api;
+    const store = createStore(view("D:/A"), tax);
+    const notice = noticeIn(document.body);
+    const intake = wireIntake(null, document, { api, store, notice, openPicker: () => {} });
+    const btn = document.getElementById("library-menu")!;
+    mountLibraryMenu(btn, api, store, notice, intake.idle);
+    const png = (n: string) => new File([new Uint8Array([1])], n, { type: "image/png" });
+    for (const n of ["one.png", "two.png"]) {
+      const e = new Event("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(e, "clipboardData", {
+        value: { items: [{ kind: "file", type: "image/png", getAsFile: () => png(n) }], getData: () => "" },
+      });
+      document.dispatchEvent(e);
+    }
+    btn.click();
+    document.querySelector<HTMLButtonElement>('[data-lib="open"]')!.click();
+    for (let i = 0; i < 4; i++) await flush();
+    expect(api.openLibrary).not.toHaveBeenCalled(); // the switch waits for the queued intake
+    order.push("paste p1 done");
+    finish(pasted("p1"));
+    for (let i = 0; i < 6; i++) await flush();
+    expect(order).toEqual(["paste p1 done", "paste p2", "open"]);
+    expect(store.root).toBe("D:/B");
+    intake();
   });
 });

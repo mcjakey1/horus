@@ -93,6 +93,7 @@ function fakeApi(): Api {
     exitWithoutSaving: vi.fn(async () => {}),
     onSaveStatus: vi.fn(async () => () => {}),
     onSaveFailed: vi.fn(async () => () => {}),
+    onCloseWaiting: vi.fn(async () => () => {}),
   };
 }
 
@@ -351,6 +352,12 @@ describe("Reference view", () => {
     picker.querySelector("input")!.dispatchEvent(new KeyboardEvent("keydown", { key: "2", bubbles: true }));
     expect(pins()).toEqual(["false", "false"]);
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "2", bubbles: true }));
+    expect(pins()).toEqual(["false", "true"]);
+  });
+
+  it("azerty_digit_pins: the unshifted é on Digit2 pins callout 2 (M3)", () => {
+    const pins = () => [...document.querySelectorAll(".pin")].map((p) => p.getAttribute("aria-pressed"));
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "é", code: "Digit2", bubbles: true }));
     expect(pins()).toEqual(["false", "true"]);
   });
 

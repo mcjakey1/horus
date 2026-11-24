@@ -162,6 +162,8 @@ export interface Api {
   onSaveStatus(cb: (s: SaveStatus) => void): Promise<() => void>;
   /** The window's close was stopped because the final save failed. */
   onSaveFailed(cb: (message: string) => void): Promise<() => void>;
+  /** The window's close waits for a running import; Rust closes it when that ends. */
+  onCloseWaiting(cb: () => void): Promise<() => void>;
 }
 
 const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "tif", "tiff", "gif"];
@@ -200,4 +202,5 @@ export const tauriApi: Api = {
   exitWithoutSaving: () => invoke("exit_without_saving"),
   onSaveStatus: (cb) => listen<SaveStatus>("save-status", (e) => cb(e.payload)),
   onSaveFailed: (cb) => listen<{ message: string }>("save-failed", (e) => cb(e.payload.message)),
+  onCloseWaiting: (cb) => listen("close-waiting", () => cb()),
 };

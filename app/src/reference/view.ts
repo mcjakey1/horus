@@ -4,6 +4,7 @@
 import type { Api, Reference, Scored, Settings, Tag } from "../api";
 import { esc } from "../esc";
 import { mountImport, warningHTML } from "../importer";
+import { digitOf } from "../keys";
 import { openLightbox } from "../lightbox/view";
 import { opInk, opLabel } from "../ops";
 import { mountSearch } from "../search";
@@ -504,9 +505,9 @@ export function mountReference(
     } else if (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) $<HTMLButtonElement>("#back")!.click();
     else if (e.key === "t") openPicker();
     else if (e.key === "l" || e.key === "L") openLb();
-    else if (/^[1-9]$/.test(e.key)) {
+    else if (digitOf(e)) {
       if (pickerOpen()) return; // the picker's digits pick operations, never callouts
-      const i = +e.key - 1;
+      const i = digitOf(e)! - 1;
       if (focusRef()?.tags[i]) {
         S.pinned = i;
         hot(i);

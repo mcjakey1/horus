@@ -49,6 +49,7 @@ function fakeApi(lastLibrary: string | null): Api {
     exitWithoutSaving: vi.fn(async () => {}),
     onSaveStatus: vi.fn(async () => () => {}),
     onSaveFailed: vi.fn(async () => () => {}),
+    onCloseWaiting: vi.fn(async () => () => {}),
   };
 }
 

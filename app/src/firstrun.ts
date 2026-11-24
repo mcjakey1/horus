@@ -34,11 +34,11 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   }
   lib ??= await firstRun(root, api, { error, askFindSimilar: (settings?.findSimilar ?? "unset") === "unset" });
   const store = createStore(lib, await api.getTaxonomy());
-  const unwire = wireUndoKeys(document, api, store);
+  const notice = noticeIn(root);
+  const unwire = wireUndoKeys(document, api, store, notice);
   const view = mountReference(root, api, store);
 
   // Task 9: the Inbox, intake, the view toggle and the Library menu.
-  const notice = noticeIn(root);
   const inboxRoot = root.querySelector<HTMLElement>("#inbox")!;
   let dock: ReturnType<typeof dockPicker> | null = null;
   const inbox = mountInbox(inboxRoot, api, store, { openPicker: (o) => dock?.(o) });
@@ -63,7 +63,7 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
       landOn = null;
     },
   });
-  const menu = mountLibraryMenu(root.querySelector<HTMLElement>("#library-menu")!, api, store, notice);
+  const menu = mountLibraryMenu(root.querySelector<HTMLElement>("#library-menu")!, api, store, notice, unIntake.idle);
   const unmountSaveDialog = mountSaveDialog(root, api);
   const unwireSaveStatus = wireSaveStatus(root, api);
   return {

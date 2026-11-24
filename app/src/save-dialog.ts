@@ -4,12 +4,20 @@ import type { Api } from "./api";
 import { esc } from "./esc";
 
 /** A failed background save is shown at once, not only at close (SPEC §9, §11); the next good save
- * clears it. Only our own notice is cleared: an import summary shown since stays. */
+ * clears it. Only our own notice is cleared: an import summary shown since stays. A close that
+ * waits for a running import says so (I1). */
 export function wireSaveStatus(root: HTMLElement, api: Api): () => void {
   const notice = root.querySelector<HTMLElement>("#import-notice")!;
   const body = notice.querySelector<HTMLElement>("[data-body]")!;
-  let off: (() => void) | null = null;
+  const offs: (() => void)[] = [];
   let gone = false;
+  const keep = (u: () => void) => (gone ? u() : offs.push(u));
+  void api
+    .onCloseWaiting(() => {
+      body.innerHTML = `<p data-close-waiting>Finishing the import before closing.</p>`;
+      notice.hidden = false;
+    })
+    .then(keep);
   void api
     .onSaveStatus((s) => {
       if (!s.ok) {
@@ -21,10 +29,10 @@ export function wireSaveStatus(root: HTMLElement, api: Api): () => void {
         notice.hidden = true;
       }
     })
-    .then((u) => (gone ? u() : (off = u)));
+    .then(keep);
   return () => {
     gone = true;
-    off?.();
+    offs.forEach((u) => u());
   };
 }
 

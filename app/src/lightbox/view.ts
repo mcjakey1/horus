@@ -234,7 +234,7 @@ export function openLightbox(
       const pre = new Image();
       pre.addEventListener("load", () => void (!closed && img.setAttribute("src", url)), { once: true });
       pre.src = url; // ponytail: on error the thumbnail simply stays
-    }, () => {}); // imagePath refused (Task 5 not landed): keep the thumbnail
+    }, () => {}); // imagePath refused (an unknown or hidden reference): keep the thumbnail
   document.body.append(el);
   renderBoxes();
   layout();

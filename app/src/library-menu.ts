@@ -1,6 +1,7 @@
 // The "Library" menu at the left of the top bar: open another library, or make a new one.
 // Rust flushes the current library first and refuses the switch if that fails (Task 5), so on an
-// error the current library simply stays open.
+// error the current library simply stays open. A paste or drop still queued in intake lands in
+// the current library first (`idle`, I3).
 import type { Api, LibraryView } from "./api";
 import { esc } from "./esc";
 import type { Store } from "./store";
@@ -10,6 +11,7 @@ export function mountLibraryMenu(
   api: Api,
   store: Store,
   notice: (html: string) => void,
+  idle: () => Promise<void> = async () => {},
 ): { destroy(): void } {
   const menu = document.createElement("div");
   menu.className = "lib-menu";
@@ -45,6 +47,7 @@ export function mountLibraryMenu(
     if (busy) return;
     busy = true;
     try {
+      await idle();
       const view = await open();
       store.reset(view, await api.getTaxonomy()); // the views show view.warning, if any
       show(false);

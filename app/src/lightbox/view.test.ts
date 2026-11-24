@@ -311,7 +311,7 @@ describe("openLightbox", () => {
     pending.dispatchEvent(new Event("load")); // a load after close changes nothing
     lb = openLightbox(api, store, "r", { openPicker });
     preloads.mockRestore();
-    vi.mocked(api.imagePath).mockRejectedValueOnce("not built"); // Task 5 not landed yet
+    vi.mocked(api.imagePath).mockRejectedValueOnce("Unknown reference"); // an unknown or hidden reference
     reopen();
     await tick();
     expect(src()).toBe(api.assetUrl(R.thumb1024));

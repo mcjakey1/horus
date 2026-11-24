@@ -71,13 +71,18 @@ describe("background save status (merge ruling A)", () => {
 
   function statusApi() {
     let fire!: (s: SaveStatus) => void;
+    let waiting!: () => void;
     const api = {
       onSaveStatus: vi.fn(async (cb: (s: SaveStatus) => void) => {
         fire = cb;
         return () => {};
       }),
+      onCloseWaiting: vi.fn(async (cb: () => void) => {
+        waiting = cb;
+        return () => {};
+      }),
     } as unknown as Api;
-    return { api, status: (s: SaveStatus) => fire(s) };
+    return { api, status: (s: SaveStatus) => fire(s), waiting: () => waiting() };
   }
   const notice = () => $("#import-notice");
 
@@ -106,5 +111,16 @@ describe("background save status (merge ruling A)", () => {
     expect(notice().hidden).toBe(false);
     status({ ok: false }); // no reason given
     expect(notice().textContent).toContain("Couldn't save your last changes: an unknown error.");
+  });
+
+  it("a close during an import says it is finishing first, and a good save keeps that (I1)", async () => {
+    const { api, status, waiting } = statusApi();
+    wireSaveStatus(document.body, api);
+    await tick();
+    waiting();
+    expect(notice().hidden).toBe(false);
+    expect(notice().textContent).toBe("Finishing the import before closing.");
+    status({ ok: true });
+    expect(notice().textContent).toBe("Finishing the import before closing.");
   });
 });

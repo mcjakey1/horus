@@ -11,8 +11,9 @@ let off = () => {};
 function setup() {
   const api = { undo: vi.fn(async () => undone), redo: vi.fn(async () => redone) } as unknown as Api;
   const store = { apply: vi.fn() } as unknown as Store;
-  off = wireUndoKeys(document, api, store);
-  return { api, store };
+  const notice = vi.fn<(html: string) => void>();
+  off = wireUndoKeys(document, api, store, notice);
+  return { api, store, notice };
 }
 const press = (el: EventTarget, init: KeyboardEventInit) => {
   const e = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
@@ -93,11 +94,55 @@ describe("undo keys", () => {
     expect(api.undo).toHaveBeenCalledTimes(1);
   });
 
-  it("a refused undo (nothing to undo) changes nothing and does not throw", async () => {
-    const { api, store } = setup();
-    vi.mocked(api.undo).mockRejectedValueOnce("NothingToUndo");
+  it("non_latin_layouts: Cyrillic я on KeyZ undoes, and Shift or н on KeyY redoes (I2)", async () => {
+    const { api } = setup();
+    expect(press(document.body, { key: "я", code: "KeyZ", ctrlKey: true }).defaultPrevented).toBe(true);
+    await tick();
+    expect(api.undo).toHaveBeenCalledTimes(1);
+    press(document.body, { key: "Я", code: "KeyZ", ctrlKey: true, shiftKey: true });
+    press(document.body, { key: "н", code: "KeyY", ctrlKey: true });
+    await tick();
+    expect(api.redo).toHaveBeenCalledTimes(2);
+    expect(press(document.body, { key: "ч", code: "KeyX", ctrlKey: true }).defaultPrevented).toBe(false);
+  });
+
+  it("latin_layouts_keep_their_letters: QWERTZ y on KeyZ redoes, AZERTY z on KeyW undoes", async () => {
+    const { api } = setup();
+    press(document.body, { key: "y", code: "KeyZ", ctrlKey: true });
+    press(document.body, { key: "z", code: "KeyW", ctrlKey: true });
+    await tick();
+    expect(api.redo).toHaveBeenCalledTimes(1);
+    expect(api.undo).toHaveBeenCalledTimes(1);
+  });
+
+  it("non_latin_text_fields_keep_their_own_undo", async () => {
+    const { api } = setup();
+    document.body.innerHTML = `<input id="i">`;
+    expect(press(document.getElementById("i")!, { key: "я", code: "KeyZ", ctrlKey: true }).defaultPrevented).toBe(false);
+    await tick();
+    expect(api.undo).not.toHaveBeenCalled();
+  });
+
+  it("a refused undo changes nothing and says why in plain words (M4)", async () => {
+    const { api, store, notice } = setup();
+    vi.mocked(api.undo).mockRejectedValueOnce("No library is open.");
+    vi.mocked(api.redo).mockRejectedValueOnce("<b>locked</b>");
     press(document.body, { key: "z", ctrlKey: true });
+    press(document.body, { key: "y", ctrlKey: true });
     await tick();
     expect(store.apply).not.toHaveBeenCalled();
+    expect(notice.mock.calls.map(([h]) => h)).toEqual([
+      "<p>Couldn't undo: No library is open.</p>",
+      "<p>Couldn't redo: &lt;b&gt;locked&lt;/b&gt;.</p>",
+    ]);
+  });
+
+  it("a refused undo leaves a save-failed notice showing (M4)", async () => {
+    const { api, notice } = setup();
+    document.body.innerHTML = `<aside id="import-notice"><div data-body><p data-save-failed>Couldn't save your last changes</p></div></aside>`;
+    vi.mocked(api.undo).mockRejectedValueOnce("No library is open.");
+    press(document.body, { key: "z", ctrlKey: true });
+    await tick();
+    expect(notice).not.toHaveBeenCalled();
   });
 });

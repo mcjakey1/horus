@@ -117,6 +117,14 @@ describe("technique picker", () => {
     expect(cards(el)).toEqual(techniquesFor(seed, "group").map((t) => t.id));
   });
 
+  it("azerty_digits: the unshifted & on Digit1 picks the first operation (M3)", () => {
+    const { el } = mount();
+    expect(key(row(el), "&", { code: "Digit1" }).defaultPrevented).toBe(true);
+    expect(chosen(el)).toBe(ops(el)[0].dataset.op);
+    key(row(el), "é", { code: "Digit2" });
+    expect(chosen(el)).toBe(ops(el)[1].dataset.op);
+  });
+
   it("dynamic_operations: 5, 9 and 1 operations", () => {
     let { el } = mount({}, { tax: opsTax(5) });
     expect(ops(el)).toHaveLength(5);
