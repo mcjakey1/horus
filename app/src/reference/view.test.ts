@@ -91,6 +91,12 @@ describe("Reference view", () => {
     expect(document.querySelectorAll("#pane-callouts .call")).toHaveLength(2);
   });
 
+  it("shows the library folder name, with the full path in the tooltip", () => {
+    const src = document.querySelector<HTMLElement>("#data-source")!;
+    expect([src.textContent, src.title]).toEqual(["Library: lib", "C:\\lib"]);
+    expect(document.querySelector<HTMLElement>("#ref-id")!.title).toBe("a");
+  });
+
   it("labels the partial callout", () => {
     const calls = document.querySelectorAll("#pane-callouts .call");
     expect(calls[1].textContent).toContain("technique not chosen yet");

@@ -101,6 +101,8 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .box.is-whole .num { top: 2px; left: auto; right: -40px; }
 .lab-meta { position: absolute; left: 16px; bottom: 14px; margin: 0; padding: 5px 10px; font-size: 12px; background: var(--panel); color: var(--ink-2); letter-spacing: .02em; }
 .lab-meta span { white-space: nowrap; }
+/* one line, inside the 48px below the specimen: never over the plate */
+.lab-meta { max-width: calc(100% - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lab-meta span:not(:last-child)::after { content: " · "; white-space: pre; }
 .leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .leaders path { fill: none; stroke: var(--card-ink); stroke-width: 1; opacity: 0; transition: opacity .2s; } /* at rest: no lines over the art */
@@ -152,6 +154,8 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .status { display: flex; align-items: center; gap: 14px; padding: 0 20px; border-top: 1px solid var(--line); background: var(--panel); font-size: 13px; }
 .status .sep { width: 1px; height: 16px; background: var(--line-2); }
 .status .grow { flex: 1; }
+.status > * { flex: none; white-space: nowrap; }
+.status .source { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .toggle input { accent-color: var(--ink); }
 .settings { color: var(--ink); text-underline-offset: 3px; margin-left: 4px; }
@@ -173,7 +177,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
   .work { grid-template-columns: 1fr; }
   .lab { margin: 16px; height: auto; display: flex; flex-direction: column; align-items: center; padding: 28px 16px 16px; gap: 16px; }
   .specimen { width: min(100%, calc(58vh * var(--ar, .75))); max-width: calc(100% - 40px); height: auto; max-height: none; }
-  .lab-meta { position: static; align-self: stretch; display: flex; flex-wrap: wrap; }
+  .lab-meta { position: static; align-self: stretch; display: flex; flex-wrap: wrap; max-width: none; }
   .box.is-whole .num { right: -31px; }
   .margin { margin: 0; border-left: 0; border-top: 1px solid var(--line); }
   .leaders { display: none; }

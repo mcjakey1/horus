@@ -43,6 +43,7 @@ export function mountReference(
     ranked: [] as string[],
     filter: null as string | null,
     source: "",
+    sourceTitle: "",
     paintTimer: 0 as ReturnType<typeof setTimeout> | 0,
     nav: 0, // drops stale show() calls
   };
@@ -111,6 +112,7 @@ export function mountReference(
     $("#lib-count")!.textContent = `${S.refs.length} references`;
     $("#inbox-count")!.textContent = String(S.refs.filter((r) => !r.tags.length).length);
     $("#data-source")!.textContent = S.source;
+    $("#data-source")!.title = S.sourceTitle || S.source;
     $("#find-similar")!.textContent = `Find similar: ${S.settings.findSimilar === "on" ? "on" : "off"}`;
   }
 
@@ -241,7 +243,9 @@ export function mountReference(
       c.querySelector("[data-v]")!.textContent = val || "";
       return c;
     };
-    $("#ref-id")!.textContent = ref.id;
+    // Ids are 64-hex BLAKE3 hashes: show 8, keep the full id in the tooltip.
+    $("#ref-id")!.textContent = ref.id.slice(0, 8);
+    $("#ref-id")!.title = ref.id;
     set("ref", ref.title);
     const cells: [string, string | undefined][] = [
       ["op", tag ? opName(tag.operationId) : undefined],
@@ -418,7 +422,9 @@ export function mountReference(
     S.refs = lib.references;
     S.links = lib.links;
     S.byId = new Map(S.refs.map((r) => [r.id, r]));
-    S.source = [`Library: ${lib.root}`, lib.warning].filter(Boolean).join(" · ");
+    const folder = lib.root.split(/[\\/]/).filter(Boolean).pop() ?? lib.root;
+    S.source = [`Library: ${folder}`, lib.warning].filter(Boolean).join(" · ");
+    S.sourceTitle = [lib.root, lib.warning].filter(Boolean).join(" · ");
   }
   const start = () => S.refs.find((r) => r.tags.length >= 3) ?? S.refs.find((r) => r.tags.length) ?? S.refs[0];
 
