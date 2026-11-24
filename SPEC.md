@@ -123,6 +123,7 @@ A library is a folder that holds:
 - `thumbs/256/` and `thumbs/1024/`.
 - `taxonomy.json`
 - `library.bak.json`
+- `taxonomy.bak.json`: the last good copy of `taxonomy.json` (Plan 2)
 - `embeddings.bin`: only if search option B ships (§5a).
 
 ---
