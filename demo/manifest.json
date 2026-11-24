@@ -1,0 +1,2199 @@
+[
+  {
+    "id": "lautrec-divan-japonais",
+    "file": "images/lautrec-divan-japonais.jpg",
+    "title": "Divan Japonais",
+    "creator": "Henri de Toulouse-Lautrec",
+    "year": "1893",
+    "medium": "Color lithograph on cream wove paper",
+    "category": "poster",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/67166",
+    "imageUrl": "https://www.artic.edu/iiif/2/56008e6a-8647-b265-8a42-cff562c560f8/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/67166)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Henri de Toulouse-Lautrec. Divan Japonais, 1893. The Art Institute of Chicago.",
+    "width": 1203,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Silhouette",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.15,
+          "y": 0.3,
+          "w": 0.7,
+          "h": 0.7
+        }
+      },
+      {
+        "technique": "Crop at the edge",
+        "operation": "Infer",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0,
+          "y": 0,
+          "w": 0.25,
+          "h": 0.35
+        }
+      },
+      {
+        "technique": "Genre quotation",
+        "operation": "Infer",
+        "domain": "Cultural",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "lautrec-ambassadeurs-aristide-bruant",
+    "file": "images/lautrec-ambassadeurs-aristide-bruant.jpg",
+    "title": "Ambassadeurs: Aristide Bruant",
+    "creator": "Henri de Toulouse-Lautrec",
+    "year": "1892",
+    "medium": "Color lithograph on tan wove paper",
+    "category": "poster",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/63620",
+    "imageUrl": "https://www.artic.edu/iiif/2/73c2c773-f730-efb8-2af6-886298b7ff8b/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/63620)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Henri de Toulouse-Lautrec. Ambassadeurs: Aristide Bruant, 1892. The Art Institute of Chicago.",
+    "width": 843,
+    "height": 1232,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Pop-out",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.1,
+          "y": 0.33,
+          "w": 0.6,
+          "h": 0.35
+        }
+      },
+      {
+        "technique": "Color blocking",
+        "operation": "Group",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Size hierarchy",
+        "operation": "Sequence",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.55,
+          "y": 0.6,
+          "w": 0.42,
+          "h": 0.2
+        }
+      }
+    ]
+  },
+  {
+    "id": "lautrec-moulin-rouge-la-goulue",
+    "file": "images/lautrec-moulin-rouge-la-goulue.jpg",
+    "title": "Moulin Rouge, La Goulue",
+    "creator": "Henri de Toulouse-Lautrec",
+    "year": "1891",
+    "medium": "Color lithograph on tan wove paper",
+    "category": "poster",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/82287",
+    "imageUrl": "https://www.artic.edu/iiif/2/1d82da66-d99e-f4f6-d5fc-56b22b6678ba/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/82287)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Henri de Toulouse-Lautrec. Moulin Rouge, La Goulue, 1891. The Art Institute of Chicago.",
+    "width": 843,
+    "height": 1379,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Silhouette",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0,
+          "y": 0.3,
+          "w": 1,
+          "h": 0.15
+        }
+      },
+      {
+        "technique": "Center placement",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.25,
+          "y": 0.33,
+          "w": 0.35,
+          "h": 0.35
+        }
+      },
+      {
+        "technique": "Size hierarchy",
+        "operation": "Sequence",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 0.25
+        }
+      }
+    ]
+  },
+  {
+    "id": "lautrec-jane-avril",
+    "file": "images/lautrec-jane-avril.jpg",
+    "title": "Jane Avril",
+    "creator": "Henri de Toulouse-Lautrec",
+    "year": "1893",
+    "medium": "Color lithograph on tan wove paper",
+    "category": "poster",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/67170",
+    "imageUrl": "https://www.artic.edu/iiif/2/4d57383a-0f32-20d0-b09a-afb9c81357d3/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/67170)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Henri de Toulouse-Lautrec. Jane Avril, 1893. The Art Institute of Chicago.",
+    "width": 1182,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Frame within a frame",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.5,
+          "y": 0.1,
+          "w": 0.5,
+          "h": 0.85
+        }
+      },
+      {
+        "technique": "Good continuation",
+        "operation": "Sequence",
+        "domain": "Grouping",
+        "suggested": true
+      },
+      {
+        "technique": "Saturation blocking",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.08,
+          "y": 0.25,
+          "w": 0.25,
+          "h": 0.27
+        }
+      }
+    ]
+  },
+  {
+    "id": "mucha-zodiaque",
+    "file": "images/mucha-zodiaque.jpg",
+    "title": "Zodiaque (\"La Plume\")",
+    "creator": "Alphonse Marie Mucha",
+    "year": "1896–97",
+    "medium": "Color lithograph from multiple stones on tan wove paper",
+    "category": "poster",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/111986",
+    "imageUrl": "https://www.artic.edu/iiif/2/119dba14-acf2-cdcd-e9e6-b9cd38bc3aad/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/111986)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Alphonse Marie Mucha. Zodiaque (\"La Plume\"), 1896–97. The Art Institute of Chicago.",
+    "width": 1192,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Frame within a frame",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.2,
+          "y": 0.12,
+          "w": 0.6,
+          "h": 0.42
+        }
+      },
+      {
+        "technique": "Good continuation",
+        "operation": "Group",
+        "domain": "Grouping",
+        "suggested": true
+      },
+      {
+        "technique": "Genre quotation",
+        "operation": "Infer",
+        "domain": "Cultural",
+        "suggested": true
+      },
+      {
+        "technique": "Symmetry",
+        "operation": "Group",
+        "domain": "Grouping",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "wpa-whos-who-in-the-zoo",
+    "file": "images/wpa-whos-who-in-the-zoo.jpg",
+    "title": "Who's who in the zoo Illustrated natural history prepared by the WPA Federal Writers Project : On sale at all book stores, zoos, and museums",
+    "creator": "Unidentified artist (Federal Art Project)",
+    "year": "1936 or 1937",
+    "medium": "1 print on board (poster) : silkscreen, color.",
+    "category": "poster",
+    "institution": "Library of Congress, Prints and Photographs Division",
+    "sourceUrl": "https://www.loc.gov/item/98514973/",
+    "imageUrl": "https://tile.loc.gov/storage-services/master/pnp/cph/3b40000/3b48000/3b48800/3b48858u.tif",
+    "rights": "No known restrictions on publication.",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Unidentified artist (Federal Art Project). Who's who in the zoo Illustrated natural history prepared by the WPA Federal Writers Project : On sale at all book stores, zoos, and museums, 1936 or 1937. Library of Congress, Prints and Photographs Division.",
+    "width": 1001,
+    "height": 1536,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Silhouette",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.2,
+          "y": 0.3,
+          "w": 0.75,
+          "h": 0.55
+        }
+      },
+      {
+        "technique": "Isolation in void",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "wpa-see-america-arch",
+    "file": "images/wpa-see-america-arch.jpg",
+    "title": "See America",
+    "creator": "Frank S. Nicholson",
+    "year": "between 1936 and 1939",
+    "medium": "1 print on board (poster) : silkscreen, color ; sheet 71.3 x 56 cm",
+    "category": "poster",
+    "institution": "Library of Congress, Prints and Photographs Division",
+    "sourceUrl": "https://www.loc.gov/item/93505613/",
+    "imageUrl": "https://tile.loc.gov/storage-services/master/pnp/cph/3b40000/3b48000/3b48700/3b48731u.tif",
+    "rights": "No known restrictions on publication.",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Frank S. Nicholson. See America, between 1936 and 1939. Library of Congress, Prints and Photographs Division.",
+    "width": 1198,
+    "height": 1536,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Frame within a frame",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.42,
+          "y": 0.18,
+          "w": 0.3,
+          "h": 0.3
+        }
+      },
+      {
+        "technique": "Scale disparity",
+        "operation": "Infer",
+        "domain": "Semantic",
+        "suggested": true,
+        "region": {
+          "x": 0.1,
+          "y": 0.6,
+          "w": 0.3,
+          "h": 0.15
+        }
+      }
+    ]
+  },
+  {
+    "id": "wpa-see-america-cavern",
+    "file": "images/wpa-see-america-cavern.jpg",
+    "title": "See America",
+    "creator": "Alexander Dux",
+    "year": "between 1936 and 1939",
+    "medium": "1 print on board (poster) : silkscreen, color.",
+    "category": "poster",
+    "institution": "Library of Congress, Prints and Photographs Division",
+    "sourceUrl": "https://www.loc.gov/item/96503125/",
+    "imageUrl": "https://tile.loc.gov/storage-services/master/pnp/cph/3g00000/3g04000/3g04200/3g04243u.tif",
+    "rights": "No known restrictions on publication.",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Alexander Dux. See America, between 1936 and 1939. Library of Congress, Prints and Photographs Division.",
+    "width": 927,
+    "height": 1274,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Scale disparity",
+        "operation": "Infer",
+        "domain": "Semantic",
+        "suggested": true,
+        "region": {
+          "x": 0.3,
+          "y": 0.66,
+          "w": 0.16,
+          "h": 0.14
+        }
+      },
+      {
+        "technique": "Silhouette",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.3,
+          "y": 0.66,
+          "w": 0.16,
+          "h": 0.14
+        }
+      }
+    ],
+    "note": "Cropped to the poster edge to remove the scanning colour target."
+  },
+  {
+    "id": "wpa-federal-theatre-rur",
+    "file": "images/wpa-federal-theatre-rur.jpg",
+    "title": "Federal Theatre - Marionette Theatre presents \"RUR\" Remo Bufano director",
+    "creator": "Charles Verschuuren",
+    "year": "between 1936 and 1939",
+    "medium": "1 print on board : silkscreen, color.",
+    "category": "poster",
+    "institution": "Library of Congress, Prints and Photographs Division",
+    "sourceUrl": "https://www.loc.gov/item/96524672/",
+    "imageUrl": "https://tile.loc.gov/storage-services/master/pnp/cph/3g00000/3g05000/3g05000/3g05045u.tif",
+    "rights": "No known restrictions on publication.",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Charles Verschuuren. Federal Theatre - Marionette Theatre presents \"RUR\" Remo Bufano director, between 1936 and 1939. Library of Congress, Prints and Photographs Division.",
+    "width": 800,
+    "height": 1255,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Saturation blocking",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Color blocking",
+        "operation": "Group",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Silhouette",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.45,
+          "y": 0.1,
+          "w": 0.55,
+          "h": 0.9
+        }
+      }
+    ],
+    "note": "Cropped to the poster edge to remove the scanning colour target."
+  },
+  {
+    "id": "wpa-horse-eats-hat",
+    "file": "images/wpa-horse-eats-hat.jpg",
+    "title": "WPA Federal Theatre Project 891 presents \"Horse eats hat\" Maxine Elliott's Theatre",
+    "creator": "Unidentified artist (Federal Art Project)",
+    "year": "between 1936 and 1941",
+    "medium": "1 print on board (poster) : silkscreen, color.",
+    "category": "poster",
+    "institution": "Library of Congress, Prints and Photographs Division",
+    "sourceUrl": "https://www.loc.gov/item/98513686/",
+    "imageUrl": "https://tile.loc.gov/storage-services/master/pnp/cph/3b40000/3b49000/3b49000/3b49013u.tif",
+    "rights": "No known restrictions on publication.",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Unidentified artist (Federal Art Project). WPA Federal Theatre Project 891 presents \"Horse eats hat\" Maxine Elliott's Theatre, between 1936 and 1941. Library of Congress, Prints and Photographs Division.",
+    "width": 982,
+    "height": 1536,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Closure",
+        "operation": "Infer",
+        "domain": "Grouping",
+        "suggested": true,
+        "region": {
+          "x": 0.1,
+          "y": 0.1,
+          "w": 0.9,
+          "h": 0.75
+        }
+      },
+      {
+        "technique": "Size hierarchy",
+        "operation": "Sequence",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 0.25
+        }
+      }
+    ]
+  },
+  {
+    "id": "wpa-human-interest-photography",
+    "file": "images/wpa-human-interest-photography.jpg",
+    "title": "Human interest photography exhibit, Ottumwa Art Center",
+    "creator": "Unidentified artist (Iowa Art Program, W.P.A.)",
+    "year": "between 1936 and 1941",
+    "medium": "1 print on board (poster) : silkscreen, color.",
+    "category": "poster",
+    "institution": "Library of Congress, Prints and Photographs Division",
+    "sourceUrl": "https://www.loc.gov/item/98510257/",
+    "imageUrl": "https://tile.loc.gov/storage-services/master/pnp/cph/3b40000/3b48000/3b48700/3b48767u.tif",
+    "rights": "No known restrictions on publication.",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Unidentified artist (Iowa Art Program, W.P.A.). Human interest photography exhibit, Ottumwa Art Center, between 1936 and 1941. Library of Congress, Prints and Photographs Division.",
+    "width": 986,
+    "height": 1536,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Closure",
+        "operation": "Infer",
+        "domain": "Grouping",
+        "suggested": true,
+        "region": {
+          "x": 0.05,
+          "y": 0.25,
+          "w": 0.4,
+          "h": 0.5
+        }
+      },
+      {
+        "technique": "Face schema",
+        "operation": "Differentiate",
+        "domain": "Social",
+        "suggested": true,
+        "region": {
+          "x": 0.05,
+          "y": 0.25,
+          "w": 0.4,
+          "h": 0.5
+        }
+      },
+      {
+        "technique": "Leading lines",
+        "operation": "Sequence",
+        "domain": "Space",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "wpa-free-art-classes",
+    "file": "images/wpa-free-art-classes.jpg",
+    "title": "Free art classes for children & adults Under direction of Federal Art Project, WPA",
+    "creator": "Harry Herzog",
+    "year": "between 1936 and 1941",
+    "medium": "1 print on board (poster) : silkscreen, color.",
+    "category": "poster",
+    "institution": "Library of Congress, Prints and Photographs Division",
+    "sourceUrl": "https://www.loc.gov/item/98516131/",
+    "imageUrl": "https://tile.loc.gov/storage-services/master/pnp/cph/3b40000/3b49000/3b49000/3b49028u.tif",
+    "rights": "No known restrictions on publication.",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Harry Herzog. Free art classes for children & adults Under direction of Federal Art Project, WPA, between 1936 and 1941. Library of Congress, Prints and Photographs Division.",
+    "width": 997,
+    "height": 1536,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Figure-ground reversal",
+        "operation": "Infer",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.3,
+          "y": 0.12,
+          "w": 0.43,
+          "h": 0.32
+        }
+      },
+      {
+        "technique": "Form substitution",
+        "operation": "Infer",
+        "domain": "Semantic",
+        "suggested": true,
+        "region": {
+          "x": 0.05,
+          "y": 0.42,
+          "w": 0.85,
+          "h": 0.55
+        }
+      },
+      {
+        "technique": "Color blocking",
+        "operation": "Group",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.3,
+          "y": 0.12,
+          "w": 0.43,
+          "h": 0.32
+        }
+      }
+    ]
+  },
+  {
+    "id": "wpa-velonis-photography-exhibition",
+    "file": "images/wpa-velonis-photography-exhibition.jpg",
+    "title": "Photography exhibition Photographs by the W.P.A. Federal Art Project",
+    "creator": "Anthony Velonis",
+    "year": "1941",
+    "medium": "1 print on board (poster) : silkscreen, color.",
+    "category": "poster",
+    "institution": "Library of Congress, Prints and Photographs Division",
+    "sourceUrl": "https://www.loc.gov/item/98507251/",
+    "imageUrl": "https://tile.loc.gov/storage-services/master/pnp/cph/3b40000/3b48000/3b48800/3b48827u.tif",
+    "rights": "No known restrictions on publication.",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Anthony Velonis. Photography exhibition Photographs by the W.P.A. Federal Art Project, 1941. Library of Congress, Prints and Photographs Division.",
+    "width": 980,
+    "height": 1536,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Frame within a frame",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.25,
+          "y": 0.3,
+          "w": 0.63,
+          "h": 0.38
+        }
+      },
+      {
+        "technique": "Silhouette",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.38,
+          "y": 0.42,
+          "w": 0.4,
+          "h": 0.18
+        }
+      },
+      {
+        "technique": "Leading lines",
+        "operation": "Sequence",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.05,
+          "y": 0.25,
+          "w": 0.7,
+          "h": 0.45
+        }
+      }
+    ]
+  },
+  {
+    "id": "wpa-des-moines-forum-lyman-bryson",
+    "file": "images/wpa-des-moines-forum-lyman-bryson.jpg",
+    "title": "Lyman Bryson, famous forum leader, will discuss \"Are we done with democracy?\" at Roosevelt High 8th year of Des Moines Public Forum",
+    "creator": "Unidentified artist (Iowa Art Program, WPA)",
+    "year": "between 1936 and 1940",
+    "medium": "1 print on board (poster) : silkscreen, color.",
+    "category": "poster",
+    "institution": "Library of Congress, Prints and Photographs Division",
+    "sourceUrl": "https://www.loc.gov/item/98512301/",
+    "imageUrl": "https://tile.loc.gov/storage-services/master/pnp/cph/3f00000/3f05000/3f05200/3f05242u.tif",
+    "rights": "No known restrictions on publication.",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Unidentified artist (Iowa Art Program, WPA). Lyman Bryson, famous forum leader, will discuss \"Are we done with democracy?\" at Roosevelt High 8th year of Des Moines Public Forum, between 1936 and 1940. Library of Congress, Prints and Photographs Division.",
+    "width": 1086,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Common region",
+        "operation": "Group",
+        "domain": "Grouping",
+        "suggested": true,
+        "region": {
+          "x": 0.1,
+          "y": 0.3,
+          "w": 0.8,
+          "h": 0.45
+        }
+      },
+      {
+        "technique": "Size hierarchy",
+        "operation": "Sequence",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Reading path",
+        "operation": "Sequence",
+        "domain": "Cultural",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "wpa-young-mans-opportunity-ccc",
+    "file": "images/wpa-young-mans-opportunity-ccc.jpg",
+    "title": "A young man's opportunity for work, play, study & health",
+    "creator": "Albert M. Bender",
+    "year": "1941",
+    "medium": "1 print on board (poster) : silkscreen, color.",
+    "category": "poster",
+    "institution": "Library of Congress, Prints and Photographs Division",
+    "sourceUrl": "https://www.loc.gov/item/92513367/",
+    "imageUrl": "https://tile.loc.gov/storage-services/master/pnp/cph/3b50000/3b53000/3b53000/3b53090u.tif",
+    "rights": "No known restrictions on publication.",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Albert M. Bender. A young man's opportunity for work, play, study & health, 1941. Library of Congress, Prints and Photographs Division.",
+    "width": 996,
+    "height": 1532,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Body vector",
+        "operation": "Sequence",
+        "domain": "Social",
+        "suggested": true,
+        "region": {
+          "x": 0.05,
+          "y": 0.35,
+          "w": 0.9,
+          "h": 0.3
+        }
+      },
+      {
+        "technique": "Color blocking",
+        "operation": "Group",
+        "domain": "Feature",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "wpa-free-band-concerts",
+    "file": "images/wpa-free-band-concerts.jpg",
+    "title": "WPA Federal Music Project of New York City presents free band concerts [at the] Brooklyn Museum",
+    "creator": "Jerome Henry Rothstein",
+    "year": "between 1936 and 1941",
+    "medium": "1 print on board (poster) : silkscreen, color.",
+    "category": "poster",
+    "institution": "Library of Congress, Prints and Photographs Division",
+    "sourceUrl": "https://www.loc.gov/item/98516715/",
+    "imageUrl": "https://tile.loc.gov/storage-services/master/pnp/cph/3b40000/3b48000/3b48800/3b48832u.tif",
+    "rights": "No known restrictions on publication.",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Jerome Henry Rothstein. WPA Federal Music Project of New York City presents free band concerts [at the] Brooklyn Museum, between 1936 and 1941. Library of Congress, Prints and Photographs Division.",
+    "width": 990,
+    "height": 1536,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Body vector",
+        "operation": "Sequence",
+        "domain": "Social",
+        "suggested": true,
+        "region": {
+          "x": 0.4,
+          "y": 0.15,
+          "w": 0.35,
+          "h": 0.2
+        }
+      },
+      {
+        "technique": "Semantic compounding",
+        "operation": "Infer",
+        "domain": "Semantic",
+        "suggested": true
+      },
+      {
+        "technique": "Color blocking",
+        "operation": "Group",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.35,
+          "y": 0.15,
+          "w": 0.3,
+          "h": 0.7
+        }
+      }
+    ]
+  },
+  {
+    "id": "stieglitz-hand-of-man",
+    "file": "images/stieglitz-hand-of-man.jpg",
+    "title": "The Hand of Man",
+    "creator": "Alfred Stieglitz",
+    "year": "1902, printed 1920/39",
+    "medium": "Gelatin silver print",
+    "category": "photograph",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/66303",
+    "imageUrl": "https://www.artic.edu/iiif/2/7ae8cca1-a81b-9d01-5246-316b82602a13/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/66303)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Alfred Stieglitz. The Hand of Man, 1902, printed 1920/39. The Art Institute of Chicago.",
+    "width": 843,
+    "height": 635,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Leading lines",
+        "operation": "Sequence",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.15,
+          "y": 0.45,
+          "w": 0.85,
+          "h": 0.55
+        }
+      },
+      {
+        "technique": "Good continuation",
+        "operation": "Sequence",
+        "domain": "Grouping",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "le-gray-great-wave-sete",
+    "file": "images/le-gray-great-wave-sete.jpg",
+    "title": "The Great Wave, Sète",
+    "creator": "Gustave Le Gray",
+    "year": "1857",
+    "medium": "Albumen print, No. 17 from the Vistas del Mar album",
+    "category": "photograph",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/36848",
+    "imageUrl": "https://www.artic.edu/iiif/2/2eb727fe-0e5f-24fc-d07e-463e8cce57d0/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/36848)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Gustave Le Gray. The Great Wave, Sète, 1857. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1304,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Chiaroscuro",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Rim light",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.5,
+          "y": 0,
+          "w": 0.5,
+          "h": 0.4
+        }
+      }
+    ]
+  },
+  {
+    "id": "cameron-julia-jackson",
+    "file": "images/cameron-julia-jackson.jpg",
+    "title": "Julia Jackson",
+    "creator": "Julia Margaret Cameron",
+    "year": "1867",
+    "medium": "Albumen print",
+    "category": "photograph",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/29230",
+    "imageUrl": "https://www.artic.edu/iiif/2/7582416c-67cd-3682-bf97-5f9883bdd972/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/29230)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Julia Margaret Cameron. Julia Jackson, 1867. The Art Institute of Chicago.",
+    "width": 1269,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Face schema",
+        "operation": "Differentiate",
+        "domain": "Social",
+        "suggested": true,
+        "region": {
+          "x": 0.28,
+          "y": 0.15,
+          "w": 0.45,
+          "h": 0.55
+        }
+      },
+      {
+        "technique": "Chiaroscuro",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Selective focus",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.28,
+          "y": 0.15,
+          "w": 0.45,
+          "h": 0.55
+        }
+      }
+    ]
+  },
+  {
+    "id": "muybridge-animal-locomotion-319",
+    "file": "images/muybridge-animal-locomotion-319.jpg",
+    "title": "Animal Locomotion, Plate 319",
+    "creator": "Eadweard Muybridge",
+    "year": "1887",
+    "medium": "Collotype, from \"Animal Locomotion\"",
+    "category": "photograph",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/195558",
+    "imageUrl": "https://www.artic.edu/iiif/2/dfe9128c-e9cd-e9fd-48ea-64be128d23cd/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/195558)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Eadweard Muybridge. Animal Locomotion, Plate 319, 1887. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 463,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Temporal synthesis",
+        "operation": "Sequence",
+        "domain": "Grouping",
+        "suggested": true
+      },
+      {
+        "technique": "Reading path",
+        "operation": "Sequence",
+        "domain": "Cultural",
+        "suggested": true
+      },
+      {
+        "technique": "Common region",
+        "operation": "Group",
+        "domain": "Grouping",
+        "suggested": true,
+        "region": {
+          "x": 0,
+          "y": 0,
+          "w": 0.085,
+          "h": 0.5
+        }
+      }
+    ]
+  },
+  {
+    "id": "atget-marchand-abat-jours",
+    "file": "images/atget-marchand-abat-jours.jpg",
+    "title": "Marchand abat-jours",
+    "creator": "Jean-Eugène-Auguste Atget",
+    "year": "1899/1900",
+    "medium": "Albumen print",
+    "category": "photograph",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/70742",
+    "imageUrl": "https://www.artic.edu/iiif/2/f218d011-5c7d-91e7-f7a3-dabb0b5ccfff/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/70742)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Jean-Eugène-Auguste Atget. Marchand abat-jours, 1899/1900. The Art Institute of Chicago.",
+    "width": 1249,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Leading lines",
+        "operation": "Sequence",
+        "domain": "Space",
+        "suggested": true
+      },
+      {
+        "technique": "Center placement",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.33,
+          "y": 0.28,
+          "w": 0.32,
+          "h": 0.62
+        }
+      }
+    ]
+  },
+  {
+    "id": "hine-sadie-pfeifer",
+    "file": "images/hine-sadie-pfeifer.jpg",
+    "title": "Sadie Pfeifer, a Cotton Mill Spinner, Lancaster, South Carolina",
+    "creator": "Lewis Wickes Hine",
+    "year": "1908",
+    "medium": "Gelatin silver print",
+    "category": "photograph",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/11344",
+    "imageUrl": "https://www.artic.edu/iiif/2/f9ba3edb-ffee-783f-cd4c-eb7925455a20/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/11344)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Lewis Wickes Hine. Sadie Pfeifer, a Cotton Mill Spinner, Lancaster, South Carolina, 1908. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1201,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Pattern break",
+        "operation": "Differentiate",
+        "domain": "Grouping",
+        "suggested": true,
+        "region": {
+          "x": 0.5,
+          "y": 0.3,
+          "w": 0.15,
+          "h": 0.6
+        }
+      },
+      {
+        "technique": "Leading lines",
+        "operation": "Sequence",
+        "domain": "Space",
+        "suggested": true
+      },
+      {
+        "technique": "Scale disparity",
+        "operation": "Infer",
+        "domain": "Semantic",
+        "suggested": true,
+        "region": {
+          "x": 0.5,
+          "y": 0.3,
+          "w": 0.15,
+          "h": 0.6
+        }
+      }
+    ]
+  },
+  {
+    "id": "hine-breaker-boys",
+    "file": "images/hine-breaker-boys.jpg",
+    "title": "Breaker Boys",
+    "creator": "Lewis Wickes Hine",
+    "year": "1909",
+    "medium": "Gelatin silver print",
+    "category": "photograph",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/23288",
+    "imageUrl": "https://www.artic.edu/iiif/2/28712849-741b-59f8-b8e1-b61a38a974c3/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/23288)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Lewis Wickes Hine. Breaker Boys, 1909. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1155,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Proximity clustering",
+        "operation": "Group",
+        "domain": "Grouping",
+        "suggested": true,
+        "region": {
+          "x": 0.05,
+          "y": 0.15,
+          "w": 0.9,
+          "h": 0.65
+        }
+      },
+      {
+        "technique": "Face schema",
+        "operation": "Group",
+        "domain": "Social",
+        "suggested": true
+      },
+      {
+        "technique": "Leading lines",
+        "operation": "Sequence",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.1,
+          "y": 0.75,
+          "w": 0.85,
+          "h": 0.2
+        }
+      }
+    ]
+  },
+  {
+    "id": "day-ebony-and-ivory",
+    "file": "images/day-ebony-and-ivory.jpg",
+    "title": "Ebony and Ivory, No. 8 from the portfolio \"American Pictorial Photography, Series I\" (1899); edition 146/150",
+    "creator": "F. Holland Day",
+    "year": "1897",
+    "medium": "Photogravure",
+    "category": "photograph",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/103518",
+    "imageUrl": "https://www.artic.edu/iiif/2/641f0b2f-ff88-12a7-31d7-754acaff18c6/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/103518)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "F. Holland Day. Ebony and Ivory, No. 8 from the portfolio \"American Pictorial Photography, Series I\" (1899); edition 146/150, 1897. The Art Institute of Chicago.",
+    "width": 1391,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Semantic contrast",
+        "operation": "Differentiate",
+        "domain": "Semantic",
+        "suggested": true,
+        "region": {
+          "x": 0.25,
+          "y": 0.2,
+          "w": 0.17,
+          "h": 0.3
+        }
+      },
+      {
+        "technique": "Pop-out",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.25,
+          "y": 0.2,
+          "w": 0.17,
+          "h": 0.3
+        }
+      },
+      {
+        "technique": "Chiaroscuro",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "kasebier-the-manger",
+    "file": "images/kasebier-the-manger.jpg",
+    "title": "The Manger",
+    "creator": "Gertrude Käsebier",
+    "year": "1899",
+    "medium": "Platinum print",
+    "category": "photograph",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/43908",
+    "imageUrl": "https://www.artic.edu/iiif/2/76ef2a2c-d854-88db-cc24-698b5dcc16db/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/43908)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Gertrude Käsebier. The Manger, 1899. The Art Institute of Chicago.",
+    "width": 843,
+    "height": 1134,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Rim light",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.25,
+          "y": 0.25,
+          "w": 0.55,
+          "h": 0.7
+        }
+      },
+      {
+        "technique": "Center placement",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "kasebier-blessed-art-thou",
+    "file": "images/kasebier-blessed-art-thou.jpg",
+    "title": "Blessed Art Thou Among Women, from \"American Pictorial Photography, Series II\" (1901); edition 34/150",
+    "creator": "Gertrude Käsebier",
+    "year": "1899",
+    "medium": "Photogravure",
+    "category": "photograph",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/103529",
+    "imageUrl": "https://www.artic.edu/iiif/2/60b6fdba-b20a-cdb5-32b0-602ba51ce3f6/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/103529)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Gertrude Käsebier. Blessed Art Thou Among Women, from \"American Pictorial Photography, Series II\" (1901); edition 34/150, 1899. The Art Institute of Chicago.",
+    "width": 843,
+    "height": 1458,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Frame within a frame",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.1,
+          "y": 0.05,
+          "w": 0.8,
+          "h": 0.93
+        }
+      },
+      {
+        "technique": "Gaze cue",
+        "operation": "Sequence",
+        "domain": "Social",
+        "suggested": true,
+        "region": {
+          "x": 0.4,
+          "y": 0.15,
+          "w": 0.25,
+          "h": 0.12
+        }
+      }
+    ]
+  },
+  {
+    "id": "white-sunlight",
+    "file": "images/white-sunlight.jpg",
+    "title": "Sunlight",
+    "creator": "Clarence H. White",
+    "year": "1899, printed 1901",
+    "medium": "Platinum print",
+    "category": "photograph",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/66765",
+    "imageUrl": "https://www.artic.edu/iiif/2/29bde5a2-60a4-580e-bdbe-4bb99b0e9a71/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/66765)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Clarence H. White. Sunlight, 1899, printed 1901. The Art Institute of Chicago.",
+    "width": 843,
+    "height": 1099,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Rim light",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.1,
+          "y": 0,
+          "w": 0.55,
+          "h": 0.45
+        }
+      },
+      {
+        "technique": "Selective focus",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "lange-toward-los-angeles",
+    "file": "images/lange-toward-los-angeles.jpg",
+    "title": "Toward Los Angeles, Calif",
+    "creator": "Dorothea Lange",
+    "year": "1937 Mar",
+    "medium": "1 photographic print : gelatin silver ; 22.6 x 23.4 cm (9 x 9 1/4 in.)",
+    "category": "photograph",
+    "institution": "Library of Congress, Prints and Photographs Division",
+    "sourceUrl": "https://www.loc.gov/item/2004681694/",
+    "imageUrl": "https://tile.loc.gov/storage-services/master/pnp/cph/3g00000/3g08000/3g08100/3g08174u.tif",
+    "rights": "No known restrictions on publication.",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Dorothea Lange. Toward Los Angeles, Calif, 1937 Mar. Library of Congress, Prints and Photographs Division.",
+    "width": 1100,
+    "height": 1063,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Semantic contrast",
+        "operation": "Differentiate",
+        "domain": "Semantic",
+        "suggested": true,
+        "region": {
+          "x": 0.55,
+          "y": 0.29,
+          "w": 0.37,
+          "h": 0.14
+        }
+      },
+      {
+        "technique": "Leading lines",
+        "operation": "Sequence",
+        "domain": "Space",
+        "suggested": true
+      }
+    ],
+    "note": "Cropped to the photographic print to remove the scan border and colour target."
+  },
+  {
+    "id": "hokusai-great-wave",
+    "file": "images/hokusai-great-wave.jpg",
+    "title": "Under the Wave off Kanagawa (Kanagawa oki nami ura), also known as The Great Wave, from the series \"Thirty-Six Views of Mount Fuji (Fugaku sanjūrokkei)\"",
+    "creator": "Katsushika Hokusai",
+    "year": "1830/33",
+    "medium": "Color woodblock print; oban",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/24645",
+    "imageUrl": "https://www.artic.edu/iiif/2/b3974542-b9b4-7568-fc4b-966738f61d78/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/24645)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Katsushika Hokusai. Under the Wave off Kanagawa (Kanagawa oki nami ura), also known as The Great Wave, from the series \"Thirty-Six Views of Mount Fuji (Fugaku sanjūrokkei)\", 1830/33. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1096,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Scale disparity",
+        "operation": "Infer",
+        "domain": "Semantic",
+        "suggested": true,
+        "region": {
+          "x": 0.57,
+          "y": 0.65,
+          "w": 0.14,
+          "h": 0.13
+        }
+      },
+      {
+        "technique": "Good continuation",
+        "operation": "Sequence",
+        "domain": "Grouping",
+        "suggested": true
+      },
+      {
+        "technique": "Frame within a frame",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.0,
+          "y": 0.05,
+          "w": 0.72,
+          "h": 0.8
+        }
+      }
+    ]
+  },
+  {
+    "id": "hokusai-fujimigahara",
+    "file": "images/hokusai-fujimigahara.jpg",
+    "title": "Fujimigahara in Owari Province (Bishu Fujimigahara), from the series \"Thirty-six views of Mount Fuji (Fugaku sanjurokkei)\"",
+    "creator": "Katsushika Hokusai",
+    "year": "c. 1830/33",
+    "medium": "Color woodblock print; oban",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/24573",
+    "imageUrl": "https://www.artic.edu/iiif/2/ebd253f2-a87d-7c95-fa40-a3046a3c45f1/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/24573)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Katsushika Hokusai. Fujimigahara in Owari Province (Bishu Fujimigahara), from the series \"Thirty-six views of Mount Fuji (Fugaku sanjurokkei)\", c. 1830/33. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1100,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Frame within a frame",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.29,
+          "y": 0.09,
+          "w": 0.5,
+          "h": 0.84
+        }
+      },
+      {
+        "technique": "Scale disparity",
+        "operation": "Infer",
+        "domain": "Semantic",
+        "suggested": true,
+        "region": {
+          "x": 0.5,
+          "y": 0.4,
+          "w": 0.08,
+          "h": 0.08
+        }
+      }
+    ]
+  },
+  {
+    "id": "hiroshige-plum-garden-kameido",
+    "file": "images/hiroshige-plum-garden-kameido.jpg",
+    "title": "Plum Garden at Kameido (Kameido Umeyashiki), from the series \"One Hundred Famous Views of Edo (Meisho Edo hyakkei)\"",
+    "creator": "Utagawa Hiroshige",
+    "year": "1857",
+    "medium": "Color woodblock print; ōban",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/26577",
+    "imageUrl": "https://www.artic.edu/iiif/2/89a2332f-be15-8e05-bc79-778738fdc1ef/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/26577)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Utagawa Hiroshige. Plum Garden at Kameido (Kameido Umeyashiki), from the series \"One Hundred Famous Views of Edo (Meisho Edo hyakkei)\", 1857. The Art Institute of Chicago.",
+    "width": 1086,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Forced perspective",
+        "operation": "Infer",
+        "domain": "Space",
+        "suggested": true
+      },
+      {
+        "technique": "Crop at the edge",
+        "operation": "Infer",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0,
+          "y": 0.35,
+          "w": 0.6,
+          "h": 0.65
+        }
+      },
+      {
+        "technique": "Occlusion",
+        "operation": "Infer",
+        "domain": "Space",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "hiroshige-sudden-shower-ohashi",
+    "file": "images/hiroshige-sudden-shower-ohashi.jpg",
+    "title": "Sudden Shower over Shin Ohashi Bridge and Atake (Ohashi Atake no yudachi), from the series \"One Hundred Famous Views of Edo (Meisho Edo hyakkei)\"",
+    "creator": "Utagawa Hiroshige",
+    "year": "1857",
+    "medium": "Color woodblock print; oban",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/26545",
+    "imageUrl": "https://www.artic.edu/iiif/2/cf4a7aa2-6f16-efcf-8702-3bdd663a63ba/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/26545)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Utagawa Hiroshige. Sudden Shower over Shin Ohashi Bridge and Atake (Ohashi Atake no yudachi), from the series \"One Hundred Famous Views of Edo (Meisho Edo hyakkei)\", 1857. The Art Institute of Chicago.",
+    "width": 1065,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Texture against flat",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0,
+          "y": 0,
+          "w": 1,
+          "h": 0.6
+        }
+      },
+      {
+        "technique": "Leading lines",
+        "operation": "Sequence",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0,
+          "y": 0.55,
+          "w": 1,
+          "h": 0.45
+        }
+      }
+    ]
+  },
+  {
+    "id": "vallotton-laziness",
+    "file": "images/vallotton-laziness.jpg",
+    "title": "Laziness",
+    "creator": "Félix Edouard Vallotton",
+    "year": "1896",
+    "medium": "Woodcut printed in black on ivory wove paper",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/60694",
+    "imageUrl": "https://www.artic.edu/iiif/2/e5a039ba-e562-cd56-1159-bce326771378/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/60694)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Félix Edouard Vallotton. Laziness, 1896. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1237,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Texture against flat",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Figure-ground reversal",
+        "operation": "Infer",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.3,
+          "y": 0.1,
+          "w": 0.5,
+          "h": 0.45
+        }
+      }
+    ]
+  },
+  {
+    "id": "rembrandt-three-crosses",
+    "file": "images/rembrandt-three-crosses.jpg",
+    "title": "Christ Crucified between the Two Thieves: \"The Three Crosses\"",
+    "creator": "Rembrandt van Rijn",
+    "year": "1653",
+    "medium": "Drypoint and burin on paper",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/80077",
+    "imageUrl": "https://www.artic.edu/iiif/2/72238441-3c93-f0f9-3ab3-f290dc60f256/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/80077)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Rembrandt van Rijn. Christ Crucified between the Two Thieves: \"The Three Crosses\", 1653. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1363,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Chiaroscuro",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Center placement",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.4,
+          "y": 0.15,
+          "w": 0.15,
+          "h": 0.3
+        }
+      }
+    ]
+  },
+  {
+    "id": "piranesi-giant-wheel",
+    "file": "images/piranesi-giant-wheel.jpg",
+    "title": "The Giant Wheel, plate 9 from Imaginary Prisons",
+    "creator": "Giovanni Battista Piranesi",
+    "year": "1761",
+    "medium": "Etching and engraving on heavy ivory laid paper",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/7364",
+    "imageUrl": "https://www.artic.edu/iiif/2/6a1f1c8a-d515-6ba7-3b18-2b21c2d48806/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/7364)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Giovanni Battista Piranesi. The Giant Wheel, plate 9 from Imaginary Prisons, 1761. The Art Institute of Chicago.",
+    "width": 1206,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Forced perspective",
+        "operation": "Infer",
+        "domain": "Space",
+        "suggested": true
+      },
+      {
+        "technique": "Scale disparity",
+        "operation": "Infer",
+        "domain": "Semantic",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "goya-sleep-of-reason",
+    "file": "images/goya-sleep-of-reason.jpg",
+    "title": "The Sleep of Reason Produces Monsters, plate 43 from Los Caprichos",
+    "creator": "Francisco José de Goya y Lucientes",
+    "year": "1797/99",
+    "medium": "Etching and aquatint on ivory laid paper",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/44743",
+    "imageUrl": "https://www.artic.edu/iiif/2/b2272f4e-1221-9321-6973-2d93d5babbf0/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/44743)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Francisco José de Goya y Lucientes. The Sleep of Reason Produces Monsters, plate 43 from Los Caprichos, 1797/99. The Art Institute of Chicago.",
+    "width": 1040,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Contextual metaphor",
+        "operation": "Infer",
+        "domain": "Semantic",
+        "suggested": true,
+        "region": {
+          "x": 0.2,
+          "y": 0.1,
+          "w": 0.6,
+          "h": 0.45
+        }
+      },
+      {
+        "technique": "Chiaroscuro",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "daumier-can-you-see-the-comet",
+    "file": "images/daumier-can-you-see-the-comet.jpg",
+    "title": "\"- Can you see the comet?... just there, at the tip of my finger ... don't lose sight of my finger tip!,\" plate 5 from La Comète De 1857",
+    "creator": "Honoré-Victorin Daumier",
+    "year": "1857",
+    "medium": "Lithograph in black on ivory wove paper",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/3394",
+    "imageUrl": "https://www.artic.edu/iiif/2/29f7d263-beab-44e2-bb1e-fca9fa2bd5a9/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/3394)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Honoré-Victorin Daumier. \"- Can you see the comet?... just there, at the tip of my finger ... don't lose sight of my finger tip!,\" plate 5 from La Comète De 1857, 1857. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1139,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Gaze cue",
+        "operation": "Sequence",
+        "domain": "Social",
+        "suggested": true,
+        "region": {
+          "x": 0.25,
+          "y": 0.15,
+          "w": 0.4,
+          "h": 0.2
+        }
+      },
+      {
+        "technique": "Body vector",
+        "operation": "Sequence",
+        "domain": "Social",
+        "suggested": true,
+        "region": {
+          "x": 0.15,
+          "y": 0.15,
+          "w": 0.25,
+          "h": 0.2
+        }
+      },
+      {
+        "technique": "Caricatural exaggeration",
+        "operation": "Infer",
+        "domain": "Social",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "daumier-nadar-elevating-photography",
+    "file": "images/daumier-nadar-elevating-photography.jpg",
+    "title": "Nadar Elevating Photography to the Heights of Art, plate 367 from Souvenirs d’artistes",
+    "creator": "Honoré-Victorin Daumier",
+    "year": "1862",
+    "medium": "Lithograph in black on white wove paper",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/13617",
+    "imageUrl": "https://www.artic.edu/iiif/2/7116ac83-4ae5-0e5d-80f7-30b0d65fa205/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/13617)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Honoré-Victorin Daumier. Nadar Elevating Photography to the Heights of Art, plate 367 from Souvenirs d’artistes, 1862. The Art Institute of Chicago.",
+    "width": 1125,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Caricatural exaggeration",
+        "operation": "Infer",
+        "domain": "Social",
+        "suggested": true,
+        "region": {
+          "x": 0.15,
+          "y": 0.15,
+          "w": 0.65,
+          "h": 0.5
+        }
+      },
+      {
+        "technique": "Contextual metaphor",
+        "operation": "Infer",
+        "domain": "Semantic",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "durer-melencolia",
+    "file": "images/durer-melencolia.jpg",
+    "title": "Melencolia I",
+    "creator": "Albrecht Dürer",
+    "year": "1514",
+    "medium": "Engraving in black on ivory laid paper",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/28260",
+    "imageUrl": "https://www.artic.edu/iiif/2/509681b4-1348-6335-f7e5-9a30b62d3b27/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/28260)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Albrecht Dürer. Melencolia I, 1514. The Art Institute of Chicago.",
+    "width": 843,
+    "height": 1085,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Semantic compounding",
+        "operation": "Infer",
+        "domain": "Semantic",
+        "suggested": true
+      },
+      {
+        "technique": "Contextual metaphor",
+        "operation": "Infer",
+        "domain": "Semantic",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "pether-gladiator-by-candlelight",
+    "file": "images/pether-gladiator-by-candlelight.jpg",
+    "title": "Three Persons Viewing the Gladiator by Candlelight",
+    "creator": "William Pether",
+    "year": "1769",
+    "medium": "Mezzotint in black on off-white laid paper",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/137059",
+    "imageUrl": "https://www.artic.edu/iiif/2/a1c1eadd-350f-ce39-2147-632e1a37f95c/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/137059)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "William Pether. Three Persons Viewing the Gladiator by Candlelight, 1769. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1392,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Rim light",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.3,
+          "y": 0.2,
+          "w": 0.3,
+          "h": 0.45
+        }
+      },
+      {
+        "technique": "Chiaroscuro",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Visual quotation",
+        "operation": "Infer",
+        "domain": "Cultural",
+        "suggested": true,
+        "region": {
+          "x": 0.3,
+          "y": 0.2,
+          "w": 0.3,
+          "h": 0.45
+        }
+      }
+    ]
+  },
+  {
+    "id": "edouart-church-brothers-silhouette",
+    "file": "images/edouart-church-brothers-silhouette.jpg",
+    "title": "Henry L. and Myron H. Church",
+    "creator": "Auguste Edouart",
+    "year": "September 23, 1841",
+    "medium": "Cut paper silhouette",
+    "category": "print",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/45498",
+    "imageUrl": "https://www.artic.edu/iiif/2/8c5b868f-3d50-dc11-ca87-3d7b7c61f801/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/45498)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Auguste Edouart. Henry L. and Myron H. Church, September 23, 1841. The Art Institute of Chicago.",
+    "width": 1229,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Silhouette",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.1,
+          "y": 0.1,
+          "w": 0.8,
+          "h": 0.75
+        }
+      },
+      {
+        "technique": "Symmetry",
+        "operation": "Group",
+        "domain": "Grouping",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "caillebotte-paris-street-rainy-day",
+    "file": "images/caillebotte-paris-street-rainy-day.jpg",
+    "title": "Paris Street; Rainy Day",
+    "creator": "Gustave Caillebotte",
+    "year": "1877",
+    "medium": "Oil on canvas",
+    "category": "painting",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/20684",
+    "imageUrl": "https://www.artic.edu/iiif/2/f8fd76e9-c396-5678-36ed-6a348c904d27/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/20684)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Gustave Caillebotte. Paris Street; Rainy Day, 1877. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1242,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Leading lines",
+        "operation": "Sequence",
+        "domain": "Space",
+        "suggested": true
+      },
+      {
+        "technique": "Crop at the edge",
+        "operation": "Infer",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.9,
+          "y": 0.25,
+          "w": 0.1,
+          "h": 0.75
+        }
+      },
+      {
+        "technique": "Occlusion",
+        "operation": "Infer",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.55,
+          "y": 0.2,
+          "w": 0.45,
+          "h": 0.35
+        }
+      }
+    ]
+  },
+  {
+    "id": "van-gogh-bedroom",
+    "file": "images/van-gogh-bedroom.jpg",
+    "title": "The Bedroom",
+    "creator": "Vincent van Gogh",
+    "year": "1889",
+    "medium": "Oil on canvas",
+    "category": "painting",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/28560",
+    "imageUrl": "https://www.artic.edu/iiif/2/6644829f-f292-c5c4-a73c-0356a6fdbf0d/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/28560)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Vincent van Gogh. The Bedroom, 1889. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1253,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Complementary pairing",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Forced perspective",
+        "operation": "Infer",
+        "domain": "Space",
+        "suggested": true
+      },
+      {
+        "technique": "Visible facture",
+        "operation": "Infer",
+        "domain": "Cultural",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "seurat-grande-jatte",
+    "file": "images/seurat-grande-jatte.jpg",
+    "title": "A Sunday on La Grande Jatte — 1884",
+    "creator": "Georges Seurat",
+    "year": "1884–86, border added 1888–89",
+    "medium": "Oil on canvas",
+    "category": "painting",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/27992",
+    "imageUrl": "https://www.artic.edu/iiif/2/2d484387-2509-5e8e-2c43-22f9981972eb/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/27992)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Georges Seurat. A Sunday on La Grande Jatte — 1884, 1884–86, border added 1888–89. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1072,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Visible facture",
+        "operation": "Infer",
+        "domain": "Cultural",
+        "suggested": true
+      },
+      {
+        "technique": "Simultaneous contrast",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Proximity clustering",
+        "operation": "Group",
+        "domain": "Grouping",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "lautrec-at-the-moulin-rouge",
+    "file": "images/lautrec-at-the-moulin-rouge.jpg",
+    "title": "At the Moulin Rouge",
+    "creator": "Henri de Toulouse-Lautrec",
+    "year": "1892–95",
+    "medium": "Oil on canvas",
+    "category": "painting",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/61128",
+    "imageUrl": "https://www.artic.edu/iiif/2/defb4004-b500-218d-3d9b-9a02423f097d/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/61128)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Henri de Toulouse-Lautrec. At the Moulin Rouge, 1892–95. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 1398,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Crop at the edge",
+        "operation": "Infer",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.85,
+          "y": 0.3,
+          "w": 0.15,
+          "h": 0.5
+        }
+      },
+      {
+        "technique": "Simultaneous contrast",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true,
+        "region": {
+          "x": 0.86,
+          "y": 0.32,
+          "w": 0.14,
+          "h": 0.2
+        }
+      },
+      {
+        "technique": "Occlusion",
+        "operation": "Infer",
+        "domain": "Space",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "zurbaran-crucifixion",
+    "file": "images/zurbaran-crucifixion.jpg",
+    "title": "The Crucifixion",
+    "creator": "Francisco de Zurbarán",
+    "year": "1627",
+    "medium": "Oil on canvas",
+    "category": "painting",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/80084",
+    "imageUrl": "https://www.artic.edu/iiif/2/c8ee825f-bc8c-c76b-1f05-5d692d9a6b47/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/80084)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Francisco de Zurbarán. The Crucifixion, 1627. The Art Institute of Chicago.",
+    "width": 907,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Isolation in void",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true
+      },
+      {
+        "technique": "Chiaroscuro",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Center placement",
+        "operation": "Differentiate",
+        "domain": "Space",
+        "suggested": true,
+        "region": {
+          "x": 0.2,
+          "y": 0.05,
+          "w": 0.6,
+          "h": 0.85
+        }
+      }
+    ]
+  },
+  {
+    "id": "cassatt-childs-bath",
+    "file": "images/cassatt-childs-bath.jpg",
+    "title": "The Child's Bath",
+    "creator": "Mary Cassatt",
+    "year": "1893",
+    "medium": "Oil on canvas",
+    "category": "painting",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/111442",
+    "imageUrl": "https://www.artic.edu/iiif/2/3b885ae0-4d46-5fe4-d70a-00474827f02c/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/111442)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Mary Cassatt. The Child's Bath, 1893. The Art Institute of Chicago.",
+    "width": 1055,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Gaze cue",
+        "operation": "Sequence",
+        "domain": "Social",
+        "suggested": true,
+        "region": {
+          "x": 0.28,
+          "y": 0.05,
+          "w": 0.45,
+          "h": 0.22
+        }
+      },
+      {
+        "technique": "Body vector",
+        "operation": "Group",
+        "domain": "Social",
+        "suggested": true
+      },
+      {
+        "technique": "Proximity clustering",
+        "operation": "Group",
+        "domain": "Grouping",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "monet-stacks-of-wheat-end-of-summer",
+    "file": "images/monet-stacks-of-wheat-end-of-summer.jpg",
+    "title": "Stacks of Wheat (End of Summer)",
+    "creator": "Claude Monet",
+    "year": "1890–91",
+    "medium": "Oil on canvas",
+    "category": "painting",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/64818",
+    "imageUrl": "https://www.artic.edu/iiif/2/a38e2828-ec6f-ece1-a30f-70243449197b/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/64818)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Claude Monet. Stacks of Wheat (End of Summer), 1890–91. The Art Institute of Chicago.",
+    "width": 1600,
+    "height": 945,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Warm and cool split",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Complementary pairing",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Visible facture",
+        "operation": "Infer",
+        "domain": "Cultural",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "kyosai-night-procession-of-goblins",
+    "file": "images/kyosai-night-procession-of-goblins.jpg",
+    "title": "Night Procession of Goblins (Hyakki yagyo no zu)",
+    "creator": "Kawanabe Kyôsai",
+    "year": "c.1865",
+    "medium": "Handscroll; Ink and colors on paper",
+    "category": "painting",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/20624",
+    "imageUrl": "https://www.artic.edu/iiif/2/5bae42a0-6a4d-40a3-d8ef-065b055c675a/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/20624)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Kawanabe Kyôsai. Night Procession of Goblins (Hyakki yagyo no zu), c.1865. The Art Institute of Chicago.",
+    "width": 843,
+    "height": 450,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Anthropomorphism",
+        "operation": "Infer",
+        "domain": "Social",
+        "suggested": true,
+        "region": {
+          "x": 0.4,
+          "y": 0.1,
+          "w": 0.4,
+          "h": 0.85
+        }
+      },
+      {
+        "technique": "Caricatural exaggeration",
+        "operation": "Infer",
+        "domain": "Social",
+        "suggested": true
+      }
+    ]
+  },
+  {
+    "id": "tanner-two-disciples-at-the-tomb",
+    "file": "images/tanner-two-disciples-at-the-tomb.jpg",
+    "title": "The Two Disciples at the Tomb",
+    "creator": "Henry Ossawa Tanner",
+    "year": "c. 1906",
+    "medium": "Oil on canvas",
+    "category": "painting",
+    "institution": "Art Institute of Chicago",
+    "sourceUrl": "https://www.artic.edu/artworks/87643",
+    "imageUrl": "https://www.artic.edu/iiif/2/46ff0699-8905-a7d7-92f3-5210c2cc5e51/full/1686,/0/default.jpg",
+    "rights": "\"is_public_domain\": true (api.artic.edu/api/v1/artworks/87643)",
+    "rightsCheckedAt": "2026-11-24",
+    "credit": "Henry Ossawa Tanner. The Two Disciples at the Tomb, c. 1906. The Art Institute of Chicago.",
+    "width": 1310,
+    "height": 1600,
+    "suggestedTechniquesStatus": "draft",
+    "suggestedTechniques": [
+      {
+        "technique": "Chiaroscuro",
+        "operation": "Differentiate",
+        "domain": "Feature",
+        "suggested": true
+      },
+      {
+        "technique": "Gaze cue",
+        "operation": "Sequence",
+        "domain": "Social",
+        "suggested": true,
+        "region": {
+          "x": 0.4,
+          "y": 0.15,
+          "w": 0.5,
+          "h": 0.3
+        }
+      }
+    ]
+  }
+]
