@@ -84,6 +84,7 @@ fn library_error(e: LibraryError) -> String {
             "The library file is damaged and its backup could not be read either.".into()
         }
         LibraryError::Io(e) => format!("Could not read or write the library: {e}"),
+        LibraryError::InvalidFile(_) => "That image file name is not valid.".into(),
     }
 }
 
@@ -141,12 +142,15 @@ fn install<R: Runtime>(
             .data
             .references
             .iter()
-            .map(|r| ReferenceView {
-                reference: r.clone(),
-                thumb256: thumb_path_in(&lib.root, &r.hash, 256),
-                thumb1024: thumb_path_in(&lib.root, &r.hash, 1024),
+            .map(|r| {
+                Ok(ReferenceView {
+                    reference: r.clone(),
+                    thumb256: thumb_path_in(&lib.root, &r.hash, 256)?,
+                    thumb1024: thumb_path_in(&lib.root, &r.hash, 1024)?,
+                })
             })
-            .collect(),
+            .collect::<Result<_, LibraryError>>()
+            .map_err(library_error)?,
         links: lib.data.links.clone(),
         warning: (!warnings.is_empty()).then(|| warnings.join(" ")),
         seed_warnings,

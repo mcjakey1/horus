@@ -6,6 +6,7 @@ pub mod history;
 pub mod import;
 pub mod library;
 pub mod model;
+pub mod saver;
 pub mod search;
 pub mod settings;
 pub mod taxonomy;

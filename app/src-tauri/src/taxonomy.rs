@@ -1,6 +1,7 @@
 //! Seed taxonomy: Operation -> Domain (a Branch) -> Technique, as a DAG.
 //! `validate` checks structure; `validate_seed` adds the rest of `taxonomy/check_taxonomy.py`.
 
+use crate::library::write_atomic;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -161,15 +162,6 @@ fn read_taxonomy(path: &Path) -> Result<Option<Taxonomy>, String> {
 }
 
 /// Atomic write: a temp file in `dir`, fsynced, then renamed over `path`.
-fn write_atomic(dir: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
-    tmp.write_all(bytes)?;
-    tmp.as_file().sync_all()?;
-    tmp.persist(path).map_err(|e| e.error)?;
-    Ok(())
-}
-
 // Seed-pinned constants, mirrored verbatim from check_taxonomy.py; used only by `validate_seed`.
 const NAMES_41: [&str; 41] = [
     "Chiaroscuro",
@@ -268,15 +260,26 @@ impl Taxonomy {
 
     /// Rotates `<dir>/taxonomy.bak.json` from the current file (only if it parses, so a
     /// damaged file never replaces a good backup), then writes this taxonomy atomically.
+    /// An existing file that can't be read (a sync lock) is an `Err`, as in `read_taxonomy`:
+    /// writing anyway would skip the rotation and replace a newer file nothing else holds.
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
         let dir = path.parent().unwrap_or_else(|| Path::new("."));
-        if let Ok(current) = std::fs::read(path)
-            && serde_json::from_slice::<Taxonomy>(&current).is_ok()
-        {
-            write_atomic(dir, &dir.join("taxonomy.bak.json"), &current)?;
+        match std::fs::read(path) {
+            Ok(current) if serde_json::from_slice::<Taxonomy>(&current).is_ok() => {
+                write_atomic(&dir.join("taxonomy.bak.json"), &current)?;
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                return Err(std::io::Error::new(
+                    e.kind(),
+                    format!("Couldn't read {name}: {e}"),
+                ));
+            }
         }
         let bytes = serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?;
-        write_atomic(dir, path, &bytes)
+        write_atomic(path, &bytes)
     }
 
     /// `taxonomy.json`, then `taxonomy.bak.json`, then the bundled seed (read-only). `Err`
@@ -981,5 +984,69 @@ mod tests {
         let link: BranchTechnique =
             serde_json::from_str(r#"{"branchId":"a.b","techniqueId":"t"}"#).unwrap();
         assert_eq!((link.source.as_str(), link.rationale.as_str()), ("", ""));
+    }
+
+    #[test]
+    fn save_refuses_unreadable_current() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("taxonomy.json");
+        // A directory at the file's path: the read fails with a non-NotFound error, as a
+        // sync lock would. Writing anyway would rotate nothing and lose the newer file.
+        std::fs::create_dir(&path).unwrap();
+        let tax = Taxonomy::load(&seed_path()).unwrap();
+        let err = tax.save(&path).unwrap_err().to_string();
+        assert!(err.starts_with("Couldn't read taxonomy.json:"), "{err}");
+        assert!(!dir.path().join("taxonomy.bak.json").exists());
+    }
+
+    #[test]
+    fn rotation_skips_valid_json_of_the_wrong_shape() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("taxonomy.json");
+        let bak = dir.path().join("taxonomy.bak.json");
+        let good = std::fs::read(seed_path()).unwrap();
+        std::fs::write(&bak, &good).unwrap();
+        let tax = Taxonomy::load(&seed_path()).unwrap();
+        for wrong in ["{}", "[]"] {
+            std::fs::write(&path, wrong).unwrap();
+            tax.save(&path).unwrap();
+            assert_eq!(
+                std::fs::read(&bak).unwrap(),
+                good,
+                "{wrong} replaced the backup"
+            );
+        }
+    }
+
+    #[test]
+    fn custom_id_skips_orphan_link() {
+        let mut t = Taxonomy::load(&seed_path()).unwrap();
+        t.branch_techniques.push(BranchTechnique {
+            branch_id: "differentiate.feature".into(),
+            technique_id: "halo-glow".into(),
+            source: "drafted".into(),
+            rationale: String::new(),
+            extra: Map::new(),
+        });
+        let crate::edit::Edit::AddTechnique { technique, .. } = t
+            .custom_technique("Halo glow", "", "differentiate", "feature")
+            .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(technique.id, "halo-glow-2");
+    }
+
+    #[test]
+    fn save_failure_keeps_old_taxonomy() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("taxonomy.json");
+        std::fs::copy(seed_path(), &path).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        std::fs::create_dir(dir.path().join("taxonomy.json.tmp")).unwrap();
+        let mut tax = Taxonomy::load(&seed_path()).unwrap();
+        tax.techniques[0].name = "Renamed".into();
+        assert!(tax.save(&path).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
     }
 }

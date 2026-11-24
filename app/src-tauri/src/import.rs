@@ -1,4 +1,4 @@
-use crate::library::{image_path_in, thumb_path_in};
+use crate::library::{image_path_in, images_dir, thumb_path_in};
 use crate::model::Reference;
 use image::codecs::jpeg::JpegEncoder;
 use image::metadata::Orientation;
@@ -138,7 +138,7 @@ fn import_one(
     if len == 0 {
         return skip(report, Skip::Unreadable("empty file".into()));
     }
-    let (tmp, hash) = match copy_and_hash(src, &image_path_in(root, "")) {
+    let (tmp, hash) = match copy_and_hash(src, &images_dir(root)) {
         Ok(v) => v,
         Err(why) => return skip(report, why),
     };
@@ -246,13 +246,15 @@ fn store(
             if size == THUMB_SIZES[1] && src.file_stem() == Some(tests::PANIC_STEM.as_ref()) {
                 panic!("injected decoder panic"); // after the first thumbnail is on disk
             }
-            write_thumb(&thumb_path_in(root, hash, size), thumb)
+            write_thumb(
+                &thumb_path_in(root, hash, size).map_err(io::Error::other)?,
+                thumb,
+            )
         })
         .and_then(|()| tmp.as_file().sync_all())
         .and_then(|()| {
-            tmp.persist(image_path_in(root, &file))
-                .map(drop)
-                .map_err(|e| e.error)
+            let dest = image_path_in(root, &file).map_err(io::Error::other)?;
+            tmp.persist(dest).map(drop).map_err(|e| e.error)
         });
     if let Err(e) = written {
         return Err(Skip::WriteFailed(e.to_string()));
@@ -296,9 +298,10 @@ impl Drop for Thumbs<'_> {
             return;
         }
         for size in THUMB_SIZES {
-            let thumb = thumb_path_in(self.root, self.hash, size);
-            let _ = fs::remove_file(thumb.with_extension("jpg.tmp"));
-            let _ = fs::remove_file(thumb);
+            if let Ok(thumb) = thumb_path_in(self.root, self.hash, size) {
+                let _ = fs::remove_file(thumb.with_extension("jpg.tmp"));
+                let _ = fs::remove_file(thumb);
+            }
         }
     }
 }
@@ -426,11 +429,11 @@ mod tests {
         assert!(r.added_at.ends_with('Z') && r.added_at.len() == 20);
         assert_eq!(out.report.added, vec![r.id.clone()]);
         assert_eq!(
-            fs::read(image_path_in(dir.path(), &r.file)).unwrap(),
+            fs::read(image_path_in(dir.path(), &r.file).unwrap()).unwrap(),
             fs::read(fixture("small.jpg")).unwrap()
         );
         for size in [256, 1024] {
-            let thumb = image::open(thumb_path_in(dir.path(), &r.hash, size)).unwrap();
+            let thumb = image::open(thumb_path_in(dir.path(), &r.hash, size).unwrap()).unwrap();
             // never upscaled
             assert_eq!((thumb.width(), thumb.height()), (64, 48));
         }
@@ -444,9 +447,9 @@ mod tests {
         image::RgbImage::new(1000, 500).save(&src).unwrap();
         let out = import(dir.path(), &[src]);
         let hash = &out.references[0].hash;
-        let t = image::open(thumb_path_in(dir.path(), hash, 256)).unwrap();
+        let t = image::open(thumb_path_in(dir.path(), hash, 256).unwrap()).unwrap();
         assert_eq!((t.width(), t.height()), (256, 128));
-        let t = image::open(thumb_path_in(dir.path(), hash, 1024)).unwrap();
+        let t = image::open(thumb_path_in(dir.path(), hash, 1024).unwrap()).unwrap();
         assert_eq!((t.width(), t.height()), (1000, 500));
     }
 
@@ -517,7 +520,7 @@ mod tests {
         let out = import(dir.path(), &[fixture("p3_red.png")]);
         assert!(out.report.warnings.is_empty(), "{:?}", out.report.warnings);
         let r = &out.references[0];
-        let thumb = image::open(thumb_path_in(dir.path(), &r.hash, 256))
+        let thumb = image::open(thumb_path_in(dir.path(), &r.hash, 256).unwrap())
             .unwrap()
             .to_rgb8();
         let [red, g, b] = thumb.get_pixel(32, 32).0;
@@ -530,7 +533,7 @@ mod tests {
             (red, g, b)
         );
         assert_eq!(
-            fs::read(image_path_in(dir.path(), &r.file)).unwrap(),
+            fs::read(image_path_in(dir.path(), &r.file).unwrap()).unwrap(),
             fs::read(fixture("p3_red.png")).unwrap()
         );
     }
@@ -545,7 +548,7 @@ mod tests {
         // Rejected by qcms itself, not by the RGB-header guard.
         assert!(out.report.warnings[0].1.contains("could not be parsed"));
         let r = &out.references[0];
-        assert!(thumb_path_in(dir.path(), &r.hash, 256).is_file());
+        assert!(thumb_path_in(dir.path(), &r.hash, 256).unwrap().is_file());
     }
 
     #[test]
@@ -567,7 +570,7 @@ mod tests {
         let out = import(dir.path(), &[fixture("rotated.jpg")]);
         let r = &out.references[0];
         assert_eq!((r.width, r.height), (48, 64));
-        let t = image::open(thumb_path_in(dir.path(), &r.hash, 256)).unwrap();
+        let t = image::open(thumb_path_in(dir.path(), &r.hash, 256).unwrap()).unwrap();
         assert_eq!((t.width(), t.height()), (48, 64));
     }
 
@@ -578,7 +581,7 @@ mod tests {
         let src = outside.path().join("cutout.png");
         image::RgbaImage::new(8, 8).save(&src).unwrap(); // all (0, 0, 0, 0)
         let out = import(dir.path(), &[src]);
-        let t = image::open(thumb_path_in(dir.path(), &out.references[0].hash, 256))
+        let t = image::open(thumb_path_in(dir.path(), &out.references[0].hash, 256).unwrap())
             .unwrap()
             .to_rgb8();
         let px = t.get_pixel(4, 4).0;
@@ -592,7 +595,7 @@ mod tests {
             .to_hex()
             .to_string();
         // A folder squatting on the destination makes the final rename fail.
-        let blocker = image_path_in(dir.path(), &format!("{hash}.jpg"));
+        let blocker = image_path_in(dir.path(), &format!("{hash}.jpg")).unwrap();
         fs::create_dir_all(&blocker).unwrap();
         let out = import(dir.path(), &[fixture("small.jpg")]);
         assert!(out.references.is_empty());
@@ -601,7 +604,7 @@ mod tests {
             [(p, Skip::WriteFailed(_))] if p == &fixture("small.jpg")
         ));
         for size in [256, 1024] {
-            assert!(!thumb_path_in(dir.path(), &hash, size).exists());
+            assert!(!thumb_path_in(dir.path(), &hash, size).unwrap().exists());
         }
         let left: Vec<_> = fs::read_dir(dir.path().join("images")).unwrap().collect();
         assert_eq!(left.len(), 1, "only the blocker remains, no .tmp");
@@ -625,7 +628,7 @@ mod tests {
         assert_eq!(out.references.len(), 1);
         assert_eq!(out.references[0].title, "small");
         for size in THUMB_SIZES {
-            let thumb = thumb_path_in(dir.path(), &bad_hash, size);
+            let thumb = thumb_path_in(dir.path(), &bad_hash, size).unwrap();
             assert!(!thumb.exists(), "{}", thumb.display());
             assert!(!thumb.with_extension("jpg.tmp").exists());
             let left = fs::read_dir(thumb.parent().unwrap()).unwrap().count();
@@ -643,7 +646,7 @@ mod tests {
         fs::copy(fixture("small.jpg"), &copy).unwrap();
         let out = import(dir.path(), &[fixture("small.jpg"), copy]);
         let r = &out.references[0];
-        let stored = fs::read(image_path_in(dir.path(), &r.file)).unwrap();
+        let stored = fs::read(image_path_in(dir.path(), &r.file).unwrap()).unwrap();
         assert_eq!(blake3::hash(&stored).to_hex().as_str(), r.hash);
         // The duplicate's copy-and-hash temp file is gone.
         let left: Vec<_> = fs::read_dir(dir.path().join("images")).unwrap().collect();
@@ -677,7 +680,7 @@ mod tests {
             second.report.skipped
         );
         // A file inside the library passed directly is refused.
-        let thumb = thumb_path_in(&lib, &first.references[0].hash, 256);
+        let thumb = thumb_path_in(&lib, &first.references[0].hash, 256).unwrap();
         let direct = import(&lib, std::slice::from_ref(&thumb));
         assert!(direct.references.is_empty());
         assert!(matches!(
@@ -691,5 +694,36 @@ mod tests {
         assert_eq!(iso_utc(0), "1970-01-01T00:00:00Z");
         assert_eq!(iso_utc(951_825_600), "2000-02-29T12:00:00Z");
         assert_eq!(iso_utc(1_796_000_523), "2026-11-30T01:02:03Z");
+    }
+
+    #[test]
+    fn path_guards() {
+        use crate::library::{LibraryError, images_dir};
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let hash = "a".repeat(64);
+        assert!(matches!(
+            image_path_in(root, "../../evil.jpg"),
+            Err(LibraryError::InvalidFile(_))
+        ));
+        assert!(image_path_in(root, &format!("{hash}.JPG")).is_err());
+        assert!(image_path_in(root, &format!("{hash}.j")).is_err());
+        assert!(image_path_in(root, &format!("{hash}.jpegxl")).is_err());
+        assert!(image_path_in(root, &format!("{}.jpg", "A".repeat(64))).is_err());
+        assert!(image_path_in(root, "").is_err());
+        assert!(thumb_path_in(root, "../x", 256).is_err());
+        assert!(thumb_path_in(root, &hash, 512).is_err());
+        assert_eq!(
+            thumb_path_in(root, &hash, 1024).unwrap(),
+            root.join("thumbs/1024").join(format!("{hash}.jpg"))
+        );
+        assert_eq!(images_dir(root), root.join("images"));
+        let out = import(root, &[fixture("small.jpg")]);
+        let r = &out.references[0];
+        assert_eq!(
+            image_path_in(root, &r.file).unwrap(),
+            root.join("images").join(&r.file)
+        );
+        assert!(thumb_path_in(root, &r.hash, 256).unwrap().is_file());
     }
 }
