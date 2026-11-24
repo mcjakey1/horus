@@ -38,12 +38,12 @@ function setup(refs: Reference[]) {
   const api = fakeApi();
   const store = createStore({ root: "C:\\lib", references: refs, links: [], warning: null, taxonomyReadOnly: false }, seed);
   const root = document.getElementById("inbox")!;
-  let dock: (o: PickerOpts) => void = () => {};
+  let dock!: ReturnType<typeof dockPicker>;
   const openPicker = vi.fn((o: PickerOpts) => dock(o));
   const inbox = mountInbox(root, api, store, { openPicker });
   dock = dockPicker(root.querySelector<HTMLElement>(".inbox-dock")!, api, store);
-  off = () => inbox.destroy();
-  return { api, store, root, inbox, openPicker };
+  off = () => (dock.close(), inbox.destroy());
+  return { api, store, root, inbox, openPicker, dock };
 }
 afterEach(() => {
   off();
@@ -156,6 +156,33 @@ describe("Inbox", () => {
     expect(document.querySelector('img[src="x"]')).toBeNull();
     expect(document.querySelector("#inbox b")).toBeNull();
     expect((window as { __xss?: number }).__xss).toBeUndefined();
+  });
+
+  it("a remembered Tag-like-this preset survives refocusing until the item is tagged (AGY fix)", () => {
+    const { store, inbox, dock } = setup([ref("a"), ref("b")]);
+    const preset = [{ operationId: "differentiate", techniqueId: "chiaroscuro", branchId: "differentiate.feature" }];
+    dock.remember("b", preset);
+    const ticked = () => [...picker()!.querySelectorAll<HTMLElement>(".pk-card.is-ticked")].map((c) => c.dataset.tech);
+    inbox.focus(0); // what switching to the Inbox does first
+    inbox.focus(1);
+    expect(ticked()).toEqual(["chiaroscuro"]);
+    inbox.focus(1); // focusing it again keeps the preset
+    expect(ticked()).toEqual(["chiaroscuro"]);
+    store.apply({ ...none, references: [ref("b", [partial("b1")])] }); // tagged: the preset is spent
+    store.apply({ ...none, references: [ref("b")] }); // undone: back in the Inbox, untagged
+    inbox.focus(1);
+    expect(ticked()).toEqual([]);
+  });
+
+  it("a library switch clears the current item, and dock.close() tears the picker down (AGY fix)", () => {
+    const { store, inbox, dock } = setup([ref("a"), ref("b")]);
+    inbox.focus(1);
+    store.reset({ root: "D:\other", references: [ref("a"), ref("b")], links: [], warning: null, taxonomyReadOnly: false }, seed);
+    expect(cur()).toBeUndefined();
+    inbox.focus(0);
+    expect(picker()).not.toBeNull();
+    dock.close();
+    expect(picker()).toBeNull();
   });
 
   it("an item removed by undo leaves the list, and the picker closes", () => {

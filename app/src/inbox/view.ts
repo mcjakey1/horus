@@ -1,7 +1,7 @@
 // The Inbox (SPEC §5): the references with no tags, derived from the store and never stored,
 // tagged one by one with the picker docked beside the grid. A just-tagged item stays, marked
 // "tagged", until the artist moves on (Review Focus 3); ← and → move, and never wrap.
-import type { Api, Reference } from "../api";
+import type { Api, NewTag, Reference } from "../api";
 import { mountWindowedGrid } from "../grid/windowed";
 import { isTextEntry } from "../keys";
 import type { Store } from "../store";
@@ -11,13 +11,31 @@ const TILE = 160;
 const GAP = 8;
 export const EMPTY_COPY = "Inbox is empty. Drop, paste or open a folder to add references.";
 
-/** An `openPicker` that docks one picker at a time in `dock`. */
-export function dockPicker(dock: HTMLElement, api: Api, store: Store): (o: PickerOpts) => void {
+/** An `openPicker` that docks one picker at a time in `dock`. `remember` holds a "Tag like this"
+ * preset (SPEC §6.5) for a reference until it is tagged or gone, however often it is reopened. */
+export function dockPicker(
+  dock: HTMLElement,
+  api: Api,
+  store: Store,
+): ((o: PickerOpts) => void) & { remember(refId: string, preset: NewTag[]): void; close(): void } {
   let open: ReturnType<typeof mountPicker> | null = null;
-  return (o) => {
+  const presets = new Map<string, NewTag[]>();
+  const unsubscribe = store.subscribe(() => {
+    for (const id of [...presets.keys()]) if (!store.refs.get(id) || store.refs.get(id)!.tags.length) presets.delete(id);
+  });
+  const openPicker = (o: PickerOpts) => {
     open?.close();
-    open = mountPicker(dock, api, store, o);
+    const preset = o.preset ?? presets.get(o.refId);
+    open = mountPicker(dock, api, store, preset ? { ...o, preset } : o);
   };
+  return Object.assign(openPicker, {
+    remember: (refId: string, preset: NewTag[]) => void presets.set(refId, preset),
+    close() {
+      open?.close();
+      open = null;
+      unsubscribe();
+    },
+  });
 }
 
 export function mountInbox(
@@ -121,7 +139,8 @@ export function mountInbox(
     move(e.key === "ArrowRight" ? 1 : -1);
   });
 
-  const unsubscribe = store.subscribe(() => {
+  const unsubscribe = store.subscribe((c) => {
+    if (c.reset) S.cur = null; // another library: the same id is not the same item
     derive();
     render();
   });

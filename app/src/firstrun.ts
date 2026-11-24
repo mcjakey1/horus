@@ -1,7 +1,7 @@
 // Start-up: reopen the last library, or run first-run setup (pick a library, the demo set,
 // the Find similar question), then build the Store on the library that came back (B7) and
 // mount the Reference view on it.
-import type { Api, LibraryView, NewTag } from "./api";
+import type { Api, LibraryView } from "./api";
 import { esc } from "./esc";
 import { noticeIn } from "./importer";
 import { dockPicker, mountInbox } from "./inbox/view";
@@ -10,7 +10,6 @@ import { wireUndoKeys } from "./keys";
 import { mountLibraryMenu } from "./library-menu";
 import { mountReference } from "./reference/view";
 import { createStore } from "./store";
-import type { PickerOpts } from "./tagging/picker";
 import { mountViews } from "./views";
 
 /** SPEC §5a, verbatim. */
@@ -40,16 +39,8 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   // Task 9: the Inbox, intake, the view toggle and the Library menu.
   const notice = noticeIn(root);
   const inboxRoot = root.querySelector<HTMLElement>("#inbox")!;
-  // "Tag like this" presets wait here until the artist reaches that Inbox item.
-  const presets = new Map<string, NewTag[]>();
-  let dock: (o: PickerOpts) => void = () => {};
-  const inbox = mountInbox(inboxRoot, api, store, {
-    openPicker: (o) => {
-      const preset = o.preset ?? presets.get(o.refId);
-      presets.delete(o.refId);
-      dock(preset ? { ...o, preset } : o);
-    },
-  });
+  let dock: ReturnType<typeof dockPicker> | null = null;
+  const inbox = mountInbox(inboxRoot, api, store, { openPicker: (o) => dock?.(o) });
   dock = dockPicker(inboxRoot.querySelector<HTMLElement>(".inbox-dock")!, api, store);
   const views = mountViews(root, { inbox: () => inbox.focus(0) });
   const unIntake = wireIntake(win ?? null, document, {
@@ -60,9 +51,9 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
       views.select("reference");
       view.show(id);
     },
-    // ponytail: several new references each queue their preset; the Inbox lands on the last one
+    // ponytail: several new references each keep their preset; the Inbox lands on the last one
     openPicker: (o) => {
-      if (o.preset?.length) presets.set(o.refId, o.preset);
+      if (o.preset?.length) dock?.remember(o.refId, o.preset);
       views.select("inbox");
       inbox.focus(store.inbox().findIndex((r) => r.id === o.refId));
     },
@@ -71,7 +62,7 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   return {
     ...view,
     store,
-    destroy: () => (unwire(), unIntake(), menu.destroy(), inbox.destroy(), view.destroy()),
+    destroy: () => (unwire(), unIntake(), menu.destroy(), dock?.close(), inbox.destroy(), view.destroy()),
   };
 }
 
