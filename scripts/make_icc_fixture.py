@@ -144,6 +144,12 @@ def main():
     small.putdata([(x * 4, y * 5, 128) for y in range(48) for x in range(64)])
     small.save(OUT / "small.jpg", quality=90)
 
+    # Stored landscape 64x48; EXIF Orientation=6 means "rotate 90 degrees clockwise to view",
+    # so it displays portrait 48x64.
+    exif = Image.Exif()
+    exif[0x0112] = 6
+    small.save(OUT / "rotated.jpg", quality=90, exif=exif.tobytes())
+
     (OUT / "fake.psd").write_bytes(b"8BPS" + bytes(range(256)) * 4)
     (OUT / "empty.jpg").write_bytes(b"")
 

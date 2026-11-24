@@ -1,12 +1,17 @@
 use crate::library::{image_path_in, thumb_path_in};
 use crate::model::Reference;
 use image::codecs::jpeg::JpegEncoder;
-use image::{DynamicImage, GenericImageView, ImageDecoder, ImageError, ImageReader, imageops};
+use image::metadata::Orientation;
+use image::{
+    DynamicImage, GenericImageView, ImageDecoder, ImageError, ImageReader, Rgb, RgbImage,
+    RgbaImage, imageops,
+};
 use std::collections::HashMap;
 use std::fs;
-use std::io;
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tempfile::NamedTempFile;
 use walkdir::WalkDir;
 
 pub const MAX_BYTES: u64 = 500 * 1024 * 1024;
@@ -16,6 +21,7 @@ pub enum Skip {
     Unsupported(String),
     Unreadable(String),
     TooLarge(u64),
+    WriteFailed(String),
 }
 
 #[derive(Debug, Default)]
@@ -85,15 +91,17 @@ fn import_one(
     if len == 0 {
         return skip(report, Skip::Unreadable("empty file".into()));
     }
-    let hash = match hash_file(src) {
-        Ok(h) => h,
-        Err(e) => return skip(report, Skip::Unreadable(e.to_string())),
+    let (tmp, hash) = match copy_and_hash(src, &image_path_in(root, "")) {
+        Ok(v) => v,
+        Err(why) => return skip(report, why),
     };
+    // ponytail: a duplicate costs one copy into a temp file (dropped here), the price of
+    // hashing exactly the bytes we store.
     if let Some(id) = known.get(&hash).or_else(|| batch.get(&hash)) {
         report.duplicates.push((src.to_path_buf(), id.clone()));
         return;
     }
-    match store(root, src, &hash, &mut report.warnings) {
+    match store(root, src, tmp, &hash, &mut report.warnings) {
         Ok(r) => {
             batch.insert(hash, r.id.clone());
             report.added.push(r.id.clone());
@@ -103,49 +111,73 @@ fn import_one(
     }
 }
 
-fn hash_file(src: &Path) -> io::Result<String> {
+/// Copies `src` into a temp file in `dir`, hashing exactly the bytes written, so the stored
+/// file always matches its hash even if the source changes mid-import.
+fn copy_and_hash(src: &Path, dir: &Path) -> Result<(NamedTempFile, String), Skip> {
+    let unreadable = |e: io::Error| Skip::Unreadable(e.to_string());
+    let write_failed = |e: io::Error| Skip::WriteFailed(e.to_string());
+    let mut input = fs::File::open(src).map_err(unreadable)?;
+    fs::create_dir_all(dir).map_err(write_failed)?;
+    let mut tmp = tempfile::Builder::new()
+        .suffix(".tmp")
+        .tempfile_in(dir)
+        .map_err(write_failed)?;
     let mut hasher = blake3::Hasher::new();
-    hasher.update_reader(fs::File::open(src)?)?;
-    Ok(hasher.finalize().to_hex().to_string())
+    let mut buf = vec![0; 1 << 16];
+    loop {
+        let n = match input.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(unreadable(e)),
+        };
+        hasher.update(&buf[..n]);
+        tmp.write_all(&buf[..n]).map_err(write_failed)?;
+    }
+    Ok((tmp, hasher.finalize().to_hex().to_string()))
 }
 
-/// Decodes in memory first, so an unreadable file leaves nothing behind; then writes the
-/// thumbnails and the byte-identical original, each through `.tmp` + rename.
+/// Decodes the temp copy, writes both thumbnails, then fsyncs and renames the copy to
+/// `images/<hash>.<ext>`. Any failure removes the thumbnails; the temp file deletes itself.
 fn store(
     root: &Path,
     src: &Path,
+    tmp: NamedTempFile,
     hash: &str,
     warnings: &mut Vec<(PathBuf, String)>,
 ) -> Result<Reference, Skip> {
     let unreadable = |e: io::Error| Skip::Unreadable(e.to_string());
-    let reader = ImageReader::open(src)
-        .map_err(unreadable)?
+    let mut f: &fs::File = tmp.as_file();
+    f.seek(SeekFrom::Start(0)).map_err(unreadable)?;
+    let reader = ImageReader::new(io::BufReader::new(f))
         .with_guessed_format()
         .map_err(unreadable)?;
     let format = reader
         .format()
         .ok_or_else(|| Skip::Unsupported("unrecognised file type".into()))?;
     let mut decoder = reader.into_decoder().map_err(decode_skip)?;
+    let mut warn = |why: String| warnings.push((src.to_path_buf(), why));
     let icc = decoder.icc_profile().unwrap_or_else(|e| {
-        warnings.push((
-            src.to_path_buf(),
-            format!("could not read ICC profile: {e}"),
-        ));
+        warn(format!("could not read ICC profile: {e}"));
         None
     });
-    let img = DynamicImage::from_decoder(decoder).map_err(decode_skip)?;
+    let orientation = decoder.orientation().unwrap_or_else(|e| {
+        warn(format!("could not read EXIF orientation: {e}"));
+        Orientation::NoTransforms
+    });
+    let mut img = DynamicImage::from_decoder(decoder).map_err(decode_skip)?;
+    img.apply_orientation(orientation);
     let (width, height) = img.dimensions();
     let mut rgba = img.into_rgba8();
     if let Some(icc) = icc
         && let Err(why) = to_srgb(&icc, &mut rgba)
     {
-        warnings.push((src.to_path_buf(), why));
+        warn(why);
     }
-    // ponytail: alpha is dropped, not composited; transparent areas show their stored RGB.
-    let rgb = DynamicImage::ImageRgba8(rgba).into_rgb8();
+    let rgb = on_white(&rgba);
+    drop(rgba);
 
     let file = format!("{hash}.{}", format.extensions_str()[0]);
-    let image_dst = image_path_in(root, &file);
     let written = THUMB_SIZES
         .iter()
         .try_for_each(|&size| {
@@ -157,22 +189,19 @@ fn store(
                 small = imageops::thumbnail(&rgb, tw, th);
                 &small
             };
-            write_atomic(&thumb_path_in(root, hash, size), |tmp| {
-                let w = io::BufWriter::new(fs::File::create(tmp)?);
-                JpegEncoder::new_with_quality(w, 90)
-                    .encode_image(thumb)
-                    .map_err(io::Error::other)
-            })
+            write_thumb(&thumb_path_in(root, hash, size), thumb)
         })
-        .and_then(|()| write_atomic(&image_dst, |tmp| fs::copy(src, tmp).map(drop)));
+        .and_then(|()| tmp.as_file().sync_all())
+        .and_then(|()| {
+            tmp.persist(image_path_in(root, &file))
+                .map(drop)
+                .map_err(|e| e.error)
+        });
     if let Err(e) = written {
         for size in THUMB_SIZES {
             let _ = fs::remove_file(thumb_path_in(root, hash, size));
         }
-        let _ = fs::remove_file(&image_dst);
-        return Err(Skip::Unreadable(format!(
-            "could not write to the library: {e}"
-        )));
+        return Err(Skip::WriteFailed(e.to_string()));
     }
 
     let since_epoch = SystemTime::now()
@@ -195,6 +224,16 @@ fn store(
         height,
         added_at: iso_utc(since_epoch.as_secs()),
         tags: vec![],
+    })
+}
+
+/// JPEG has no alpha: composite onto white so cut-outs don't sit on black.
+fn on_white(rgba: &RgbaImage) -> RgbImage {
+    RgbImage::from_fn(rgba.width(), rgba.height(), |x, y| {
+        let [r, g, b, a] = rgba.get_pixel(x, y).0;
+        let a = u16::from(a);
+        let over = |c: u8| ((u16::from(c) * a + 255 * (255 - a) + 127) / 255) as u8;
+        Rgb([over(r), over(g), over(b)])
     })
 }
 
@@ -233,15 +272,27 @@ fn fit(w: u32, h: u32, size: u32) -> (u32, u32) {
     (scale(w), scale(h))
 }
 
-/// Writes `dst` through `dst.tmp` + rename, so a failure never leaves a partial file.
-fn write_atomic(dst: &Path, write: impl FnOnce(&Path) -> io::Result<()>) -> io::Result<()> {
+/// Writes a JPEG through `dst.tmp`, fsynced, then renamed, so a crash or failure never
+/// leaves a partial or empty thumbnail.
+fn write_thumb(dst: &Path, thumb: &RgbImage) -> io::Result<()> {
     if let Some(dir) = dst.parent() {
         fs::create_dir_all(dir)?;
     }
     let mut tmp = dst.as_os_str().to_owned();
     tmp.push(".tmp");
     let tmp = PathBuf::from(tmp);
-    let result = write(&tmp).and_then(|()| fs::rename(&tmp, dst));
+    let result = (|| {
+        let file = fs::File::create(&tmp)?;
+        let mut w = io::BufWriter::new(&file);
+        JpegEncoder::new_with_quality(&mut w, 90)
+            .encode_image(thumb)
+            .map_err(io::Error::other)?;
+        w.flush()?;
+        drop(w);
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&tmp, dst)
+    })();
     if result.is_err() {
         let _ = fs::remove_file(&tmp);
     }
@@ -425,6 +476,66 @@ mod tests {
         let out = import(&lib, &[dir.path().join("Été")]);
         assert_eq!(out.references.len(), 1);
         assert!(out.report.skipped.is_empty());
+    }
+
+    #[test]
+    fn exif_orientation_applied() {
+        let dir = tempfile::tempdir().unwrap();
+        // Stored 64x48 with EXIF Orientation=6 (rotate 90 degrees clockwise to view).
+        let out = import(dir.path(), &[fixture("rotated.jpg")]);
+        let r = &out.references[0];
+        assert_eq!((r.width, r.height), (48, 64));
+        let t = image::open(thumb_path_in(dir.path(), &r.hash, 256)).unwrap();
+        assert_eq!((t.width(), t.height()), (48, 64));
+    }
+
+    #[test]
+    fn transparent_png_on_white() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("cutout.png");
+        image::RgbaImage::new(8, 8).save(&src).unwrap(); // all (0, 0, 0, 0)
+        let out = import(dir.path(), &[src]);
+        let t = image::open(thumb_path_in(dir.path(), &out.references[0].hash, 256))
+            .unwrap()
+            .to_rgb8();
+        let px = t.get_pixel(4, 4).0;
+        assert!(px.iter().all(|&c| c >= 253), "{px:?}");
+    }
+
+    #[test]
+    fn write_failure_is_reported_and_cleaned_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let hash = blake3::hash(&fs::read(fixture("small.jpg")).unwrap())
+            .to_hex()
+            .to_string();
+        // A folder squatting on the destination makes the final rename fail.
+        let blocker = image_path_in(dir.path(), &format!("{hash}.jpg"));
+        fs::create_dir_all(&blocker).unwrap();
+        let out = import(dir.path(), &[fixture("small.jpg")]);
+        assert!(out.references.is_empty());
+        assert!(matches!(
+            out.report.skipped.as_slice(),
+            [(p, Skip::WriteFailed(_))] if p == &fixture("small.jpg")
+        ));
+        for size in [256, 1024] {
+            assert!(!thumb_path_in(dir.path(), &hash, size).exists());
+        }
+        let left: Vec<_> = fs::read_dir(dir.path().join("images")).unwrap().collect();
+        assert_eq!(left.len(), 1, "only the blocker remains, no .tmp");
+    }
+
+    #[test]
+    fn stored_file_matches_its_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let copy = dir.path().join("copy.jpg");
+        fs::copy(fixture("small.jpg"), &copy).unwrap();
+        let out = import(dir.path(), &[fixture("small.jpg"), copy]);
+        let r = &out.references[0];
+        let stored = fs::read(image_path_in(dir.path(), &r.file)).unwrap();
+        assert_eq!(blake3::hash(&stored).to_hex().as_str(), r.hash);
+        // The duplicate's copy-and-hash temp file is gone.
+        let left: Vec<_> = fs::read_dir(dir.path().join("images")).unwrap().collect();
+        assert_eq!(left.len(), 1);
     }
 
     #[test]
