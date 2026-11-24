@@ -177,8 +177,8 @@ pub fn apply(data: &mut LibraryData, tax: &mut Taxonomy, e: Edit) -> Result<Appl
     run(data, tax, e, true)
 }
 
-/// `check: false` skips tag validation. A batch unwinds with it, because an inverse restores
-/// a state that existed, and the unwind must not fail on a tag the taxonomy no longer allows.
+/// `check: false` skips tag validation and the `InUse` scan. A batch unwinds with it, because
+/// an inverse restores a state that existed, and the unwind must not fail on a stale tag.
 fn run(
     data: &mut LibraryData,
     tax: &mut Taxonomy,
@@ -388,7 +388,7 @@ fn run(
                 return Err(unknown(": the links differ"));
             }
             let mut tags = data.references.iter().flat_map(|r| &r.tags);
-            if tags.any(|t| t.technique_id.as_ref() == Some(id)) {
+            if check && tags.any(|t| t.technique_id.as_ref() == Some(id)) {
                 return Err(EditError::InUse(id.clone()));
             }
             tax.techniques.remove(index);
@@ -602,6 +602,56 @@ mod tests {
         assert_eq!(ids, ["t1", "t3"]);
         apply(&mut data, &mut tax, applied.inverse).unwrap();
         assert_eq!(data, snapshot);
+
+        // References: remove index 0 of 2, restore it, then redo and undo again.
+        let r1 = data.references[0].clone();
+        let applied = apply(
+            &mut data,
+            &mut tax,
+            Edit::RemoveReferences {
+                removed: vec![(0, r1)],
+            },
+        )
+        .unwrap();
+        assert_eq!(applied.touched.removed_ref_ids, ["r1"]);
+        let redo = apply(&mut data, &mut tax, applied.inverse).unwrap().inverse;
+        assert_eq!(data, snapshot);
+        let undo = apply(&mut data, &mut tax, redo).unwrap().inverse;
+        assert_eq!(data.references.len(), 1);
+        apply(&mut data, &mut tax, undo).unwrap();
+        assert_eq!(data, snapshot);
+
+        // Techniques: a seed technique that is not last, with no link at the tail.
+        let tax0 = tax.clone();
+        let last = tax.branch_techniques.len() - 1;
+        let links_of = |id: &str| -> Vec<(usize, BranchTechnique)> {
+            let all = tax.branch_techniques.iter().cloned().enumerate();
+            all.filter(|(_, l)| l.technique_id == id).collect()
+        };
+        let index = (0..tax.techniques.len() - 1)
+            .find(|&i| {
+                let t = &tax.techniques[i];
+                t.id != "pop-out" && links_of(&t.id).iter().all(|(p, _)| *p < last)
+            })
+            .expect("a technique in the middle");
+        let technique = tax.techniques[index].clone();
+        let links = links_of(&technique.id)
+            .into_iter()
+            .map(|(_, l)| l)
+            .collect();
+        let remove = Edit::RemoveTechnique {
+            index,
+            technique,
+            links,
+        };
+        let applied = apply(&mut data, &mut tax, remove.clone()).unwrap();
+        assert!(applied.touched.taxonomy);
+        let redo = apply(&mut data, &mut tax, applied.inverse).unwrap().inverse;
+        assert_eq!(tax, tax0);
+        assert_eq!(redo, remove);
+        let undo = apply(&mut data, &mut tax, redo).unwrap().inverse;
+        apply(&mut data, &mut tax, undo).unwrap();
+        assert_eq!(tax, tax0);
     }
 
     #[test]
@@ -698,20 +748,35 @@ mod tests {
     fn batch_failure_rolls_back() {
         let (mut data, mut tax) = fixture();
         let snapshot = data.clone();
-        let result = apply(
-            &mut data,
-            &mut tax,
-            Edit::Batch(vec![
-                Edit::AddTags {
-                    ref_id: "r1".into(),
-                    tags: vec![partial("n1", "infer")],
-                },
-                Edit::AddTags {
-                    ref_id: "nope".into(),
-                    tags: vec![partial("n2", "infer")],
-                },
-            ]),
-        );
+        let mut parts = vec![
+            Edit::AddTags {
+                ref_id: "r1".into(),
+                tags: vec![partial("n1", "infer")],
+            },
+            Edit::SetField {
+                ref_id: "r1".into(),
+                field: Field::Note,
+                before: None,
+                after: Some("a note".into()),
+            },
+            Edit::ReplaceTag {
+                ref_id: "r2".into(),
+                before: partial("t1", "infer"),
+                after: partial("t1", "sequence"),
+            },
+        ];
+        // The good parts apply on their own.
+        let applied = apply(&mut data, &mut tax, Edit::Batch(parts.clone())).unwrap();
+        assert_eq!(data.references[0].note.as_deref(), Some("a note"));
+        assert_eq!(data.references[1].tags[0].operation_id, "sequence");
+        apply(&mut data, &mut tax, applied.inverse).unwrap();
+        assert_eq!(data, snapshot);
+
+        parts.push(Edit::AddTags {
+            ref_id: "nope".into(),
+            tags: vec![partial("n2", "infer")],
+        });
+        let result = apply(&mut data, &mut tax, Edit::Batch(parts));
         assert_eq!(result, Err(EditError::UnknownReference("nope".into())));
         assert_eq!(data, snapshot);
     }
