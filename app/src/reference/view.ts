@@ -484,6 +484,7 @@ export function mountReference(
     // Ctrl/⌘ combos (paste, copy…) belong to the browser; Alt only for Alt+← (Back).
     if (e.ctrlKey || e.metaKey || (e.altKey && e.key !== "ArrowLeft")) return;
     if ((document.body.dataset.view ?? "reference") !== "reference") return; // another view is showing
+    if (lightbox) return; // the lightbox is modal: a key in a notice or dialog over it never acts behind it
     // The picker, the lightbox and text fields own their keys (Plan 2 Global Constraints).
     if ((e.target as Element).closest?.(".picker, .lightbox, input, textarea, [contenteditable]")) return;
     if (e.key === "/") {
@@ -572,7 +573,17 @@ export function mountReference(
         // Docked inside the modal so it can be reached and focus stays trapped.
         // ponytail: found by class; Plan 4's lightbox chrome owns this slot.
         const slot = document.querySelector<HTMLElement>(".lightbox .lb-side") ?? $(".margin")!;
-        picker = mountPicker(slot, api, store, { ...opts, onDone: closePicker });
+        const mine = mountPicker(slot, api, store, {
+          ...opts,
+          onDone: closePicker,
+          onClose: () => void (picker === mine && (picker = null)), // never null a newer picker
+        });
+        picker = mine;
+      },
+      // A picker docked inside left with the lightbox's DOM: close it so it unsubscribes.
+      onClose: () => {
+        lightbox = null;
+        if (picker && !picker.el.isConnected) closePicker();
       },
     });
   }

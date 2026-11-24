@@ -22,7 +22,7 @@ export function openLightbox(
   api: Api,
   store: Store,
   refId: string,
-  deps: { openPicker(opts: PickerOpts): void },
+  deps: { openPicker(opts: PickerOpts): void; onClose?(): void },
 ): { close(): void } {
   const ref = store.refs.get(refId);
   if (!ref) return { close() {} };
@@ -177,13 +177,17 @@ export function openLightbox(
 
   // Focus never leaves the modal: not by a click behind it, and not when the picker removes itself
   // (after tagging or its own Esc), which would drop focus to <body> where the Reference view's keys act.
+  // Dialogs raised over the lightbox own their focus and keys: Task 9's notices (the duplicate
+  // prompt lives in one) and the save-failure dialog (Task 5). Anything else outside is behind the modal.
+  const OVER = '[role="dialog"]:not(.lightbox), [role="alertdialog"], .notice';
+  const stray = (n: unknown) => !el.contains(n as Node) && !(n as Element | null)?.closest?.(OVER);
   document.addEventListener("focusin", (e) => {
-    if (!el.contains(e.target as Node)) stage.focus();
+    if (stray(e.target)) stage.focus();
   }, { signal });
   // A key aimed outside the modal (focus fell to <body>) never reaches the page behind: it is
   // re-sent from the stage, so Esc, v and the undo keys still act, as the lightbox's own.
   document.addEventListener("keydown", (e) => {
-    if (e.isComposing || el.contains(e.target as Node)) return;
+    if (e.isComposing || !stray(e.target)) return;
     e.stopPropagation();
     e.preventDefault(); // Tab included: it can't walk into the page behind
     stage.focus();
@@ -194,7 +198,7 @@ export function openLightbox(
     if (closed) return;
     // A picker that left without saving (its Esc) leaves no region being tagged.
     if (records.some((r) => [...r.removedNodes].some(isPicker)) && !el.querySelector(".picker")) showPending(null);
-    if (!el.contains(document.activeElement)) stage.focus();
+    if (stray(document.activeElement)) stage.focus();
   });
   keepFocus.observe(el, { childList: true, subtree: true });
   const resize = typeof ResizeObserver !== "undefined" ? new ResizeObserver(layout) : null;
@@ -216,6 +220,7 @@ export function openLightbox(
     resize?.disconnect();
     el.remove();
     if (opener?.isConnected) opener.focus();
+    deps.onClose?.(); // the caller closes a picker docked inside (it went with el)
   }
 
   // The thumbnail shows at once. The original is preloaded off-screen and swapped in only once it

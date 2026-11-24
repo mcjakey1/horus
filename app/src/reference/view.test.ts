@@ -413,6 +413,51 @@ describe("Reference view", () => {
     expect($<HTMLInputElement>("#value").checked).toBe(checked);
   });
 
+  /** Opens the lightbox on "a" and drags a box, so a picker docks inside it. */
+  function dockPickerInLightbox() {
+    $<HTMLButtonElement>("#lab .lb-open").click();
+    const stage = $(".lb-stage");
+    stage.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect;
+    for (const [type, fx, fy] of [["pointerdown", 0.1, 0.1], ["pointerup", 0.4, 0.5]] as const)
+      stage.dispatchEvent(new MouseEvent(type, { clientX: 175 + fx * 450, clientY: fy * 600, button: 0, bubbles: true }));
+    return $(".lightbox .picker");
+  }
+
+  it("closing_the_lightbox_closes_its_docked_picker", () => {
+    const real = store.subscribe.bind(store);
+    const unsubs: ReturnType<typeof vi.fn>[] = [];
+    vi.spyOn(store, "subscribe").mockImplementation((fn) => {
+      const u = vi.fn(real(fn));
+      unsubs.push(u);
+      return u;
+    });
+    dockPickerInLightbox(); // subscribes the lightbox, then the picker
+    expect(unsubs).toHaveLength(2);
+    $<HTMLButtonElement>(".lightbox .lb-close").click(); // closed with the picker still docked
+    expect(document.querySelector(".lightbox")).toBeNull();
+    expect(unsubs[1]).toHaveBeenCalledTimes(1); // the picker unsubscribed: no detached picker left on the store
+    // view.ts dropped it: digits pin callouts again, and t opens a fresh margin picker
+    keyOn("t", document.body);
+    expect(document.querySelectorAll(".picker")).toHaveLength(1);
+    expect(document.querySelector(".margin .picker")).not.toBeNull();
+  });
+
+  it("notice_over_the_lightbox_takes_focus_and_keys", () => {
+    dockPickerInLightbox();
+    const notice = $("#import-notice");
+    notice.hidden = false;
+    const dismiss = $<HTMLButtonElement>("#import-dismiss");
+    dismiss.focus();
+    expect(document.activeElement).toBe(dismiss); // the lightbox's focus guard lets a notice keep focus
+    const checked = $<HTMLInputElement>("#value").checked;
+    keyOn("v", dismiss); // nor does a key there reach the Reference view behind the modal
+    expect($<HTMLInputElement>("#value").checked).toBe(checked);
+    dismiss.click();
+    expect(notice.hidden).toBe(true); // its button works
+    expect(document.querySelector(".lightbox")).not.toBeNull();
+  });
+
   // ---------- Task 11: the AND/OR technique filter (SPEC §5a) ----------
   const rows = () => [...document.querySelectorAll<HTMLElement>("#pane-ranked .row")].map((r) => r.dataset.go);
   const chips = () => [...document.querySelectorAll<HTMLElement>("#pane-ranked .chip")].map((c) => c.textContent?.replace("×", "").trim());

@@ -127,6 +127,30 @@ describe("openLightbox", () => {
     expect(openPicker).not.toHaveBeenCalled();
   });
 
+  it("dialogs_raised_over_the_lightbox_keep_focus_and_keys", async () => {
+    for (const [role, cls] of [["alertdialog", ""], ["dialog", ""], ["status", "notice"]] as const) {
+      const d = document.createElement("div");
+      d.setAttribute("role", role);
+      if (cls) d.className = cls;
+      d.innerHTML = `<button type="button">Try again</button>`;
+      document.body.append(d);
+      const btn = d.querySelector("button")!;
+      const pressed = vi.fn();
+      btn.addEventListener("keydown", pressed);
+      btn.addEventListener("click", () => d.remove());
+      btn.focus();
+      expect(document.activeElement).toBe(btn); // not pulled back to the stage
+      key("Enter", {}, btn);
+      expect(pressed).toHaveBeenCalledTimes(1); // the key reached it, not re-sent from the stage
+      store.apply({ ...none, references: [{ ...R }] }); // a lightbox re-render while the dialog holds focus
+      await tick();
+      expect(document.activeElement).toBe(btn);
+      btn.click();
+      expect(d.isConnected).toBe(false); // its button works
+    }
+    expect(document.querySelector(".lightbox")).not.toBeNull();
+  });
+
   it("focus_on_body_keeps_keys_in_the_modal", () => {
     expect($(".lightbox").tabIndex).toBe(-1); // a click on blank lightbox area focuses the dialog root
     const behind = vi.fn((e: Event) => (e.target as Element).closest?.(".lightbox") ?? e.target);
