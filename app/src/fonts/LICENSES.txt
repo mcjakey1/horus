@@ -1,0 +1,2 @@
+Source Serif 4 (Adobe) and Red Hat Mono (Red Hat): SIL Open Font License 1.1, https://openfontlicense.org.
+Static instances downloaded from Google Fonts on 2026-11-24 so the app works offline.
