@@ -1,3 +1,4 @@
+pub mod import;
 pub mod library;
 pub mod model;
 pub mod taxonomy;

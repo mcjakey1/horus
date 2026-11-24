@@ -106,16 +106,25 @@ impl Library {
     }
 
     pub fn image_path(&self, r: &Reference) -> PathBuf {
-        self.root.join("images").join(&r.file)
+        image_path_in(&self.root, &r.file)
     }
 
     /// `size` is 256 or 1024.
     pub fn thumb_path(&self, hash: &str, size: u32) -> PathBuf {
-        self.root
-            .join("thumbs")
-            .join(size.to_string())
-            .join(format!("{hash}.jpg"))
+        thumb_path_in(&self.root, hash, size)
     }
+}
+
+/// `file` is the bare `Reference.file` name.
+pub fn image_path_in(root: &Path, file: &str) -> PathBuf {
+    root.join("images").join(file)
+}
+
+/// `size` is 256 or 1024.
+pub fn thumb_path_in(root: &Path, hash: &str, size: u32) -> PathBuf {
+    root.join("thumbs")
+        .join(size.to_string())
+        .join(format!("{hash}.jpg"))
 }
 
 fn parse(p: &Path) -> Option<LibraryData> {
