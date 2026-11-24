@@ -112,6 +112,7 @@ export function mountReference(
     const spec = $("#specimen")!;
     spec.style.setProperty("--ar", String(aspect(ref)));
     // Repaint the image only when it changed: a superseded show() or reset may have left another one.
+    $("#plate")!.dataset.refDrop = ref.id; // a drop here is "Tag like this" for this reference (Task 9)
     const src = api.assetUrl(ref.thumb1024);
     if (S.plateSrc !== src) {
       $("#plate")!.innerHTML = img(ref, true);
@@ -155,6 +156,7 @@ export function mountReference(
     S.related = [];
     S.ranked = [];
     S.plateSrc = "";
+    delete $("#plate")!.dataset.refDrop;
     clearTimeout(S.paintTimer);
     S.nav++;
     $("#specimen")!.classList.remove("is-leaving");
@@ -178,8 +180,9 @@ export function mountReference(
     const folder = store.root.split(/[\\/]/).filter(Boolean).pop() ?? store.root;
     $("#lib-count")!.textContent = `${store.refs.size} references`;
     $("#inbox-count")!.textContent = String(store.inbox().length);
-    $("#data-source")!.textContent = [`Library: ${folder}`, store.warning].filter(Boolean).join(" · ");
-    $("#data-source")!.title = [store.root, store.warning].filter(Boolean).join(" · ");
+    // The library's warning lives in #import-notice only (982f8a6), never here as well.
+    $("#data-source")!.textContent = `Library: ${folder}`;
+    $("#data-source")!.title = store.root;
     $("#find-similar")!.textContent = `Find similar: ${S.settings.findSimilar === "on" ? "on" : "off"}`;
   }
 
@@ -417,7 +420,11 @@ export function mountReference(
       return;
     }
     const choose = target.closest<HTMLElement>("[data-filter]");
-    if (choose) return applyFilter(choose.dataset.filter!);
+    if (choose) {
+      applyFilter(choose.dataset.filter!);
+      $<HTMLElement>('.m-tab[data-pane="ranked"]')?.focus(); // the callout pane just hid its button
+      return;
+    }
     const untoggle = target.closest<HTMLElement>("[data-untoggle]");
     if (untoggle) {
       const k = S.filter.techniques.indexOf(untoggle.dataset.untoggle!);
@@ -473,6 +480,9 @@ export function mountReference(
   }, { signal });
   document.addEventListener("keydown", (e) => {
     if (e.isComposing) return;
+    // Ctrl/⌘ combos (paste, copy…) belong to the browser; Alt only for Alt+← (Back).
+    if (e.ctrlKey || e.metaKey || (e.altKey && e.key !== "ArrowLeft")) return;
+    if ((document.body.dataset.view ?? "reference") !== "reference") return; // another view is showing
     // The picker, the lightbox and text fields own their keys (Plan 2 Global Constraints).
     if ((e.target as Element).closest?.(".picker, .lightbox, input, textarea, [contenteditable]")) return;
     if (e.key === "/") {
@@ -487,7 +497,7 @@ export function mountReference(
       hot(null);
       syncPins();
     } else if (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) $<HTMLButtonElement>("#back")!.click();
-    else if (e.key === "t" && !e.ctrlKey && !e.metaKey && !e.altKey) openPicker();
+    else if (e.key === "t") openPicker();
     else if (/^[1-9]$/.test(e.key)) {
       if (pickerOpen()) return; // the picker's digits pick operations, never callouts
       const i = +e.key - 1;
@@ -533,7 +543,12 @@ export function mountReference(
     }
     closePicker();
     // Docked in the margin, for the whole image: an already-tagged reference can gain a tag too.
-    picker = mountPicker($(".margin")!, api, store, { refId: ref.id, onDone: closePicker });
+    const mine = mountPicker($(".margin")!, api, store, {
+      refId: ref.id,
+      onDone: closePicker,
+      onClose: () => void (picker === mine && (picker = null)), // never null a newer picker
+    });
+    picker = mine;
   }
   $("#lab")!.insertAdjacentHTML("beforeend", `<button type="button" class="tag-open" aria-keyshortcuts="t">Tag…</button>`);
   const tagOpen = $<HTMLButtonElement>("#lab .tag-open")!;
@@ -553,6 +568,13 @@ export function mountReference(
   const touchesFocus = (c: StoreEvent) => {
     const f = focusRef();
     if (c.reset || c.taxonomy || c.removed.length || !f) return true;
+    // With a filter on, a ranked or newly matching reference changes the Ranked list too.
+    const filtered = new Set(S.filter.techniques);
+    if (
+      filtered.size &&
+      c.references.some((r) => S.ranked.includes(r.id) || r.tags.some((t) => t.techniqueId && filtered.has(t.techniqueId)))
+    )
+      return true;
     const techs = new Set(f.tags.map((t) => t.techniqueId).filter(Boolean));
     const branches = new Set(f.tags.map((t) => t.branchId).filter(Boolean));
     return c.references.some(
@@ -563,8 +585,12 @@ export function mountReference(
     );
   };
   const unsubscribe = store.subscribe((c) => {
-    S.trail = S.trail.filter((id) => store.refs.has(id));
-    if (c.reset && store.warning) notify(warningHTML(store.warning));
+    // A library switch starts a fresh history; Rust clears the undo trail, the Store its flags.
+    S.trail = c.reset ? [] : S.trail.filter((id) => store.refs.has(id));
+    if (c.reset) {
+      if (store.warning) notify(warningHTML(store.warning));
+      else $<HTMLElement>("#import-notice")!.hidden = true; // the old library's notice is stale
+    }
     if (S.focus && store.refs.has(S.focus)) {
       if (touchesFocus(c)) refresh();
     }

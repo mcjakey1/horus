@@ -556,6 +556,36 @@ describe("technique picker", () => {
     expect(el.querySelector("img[onerror]")).toBeNull();
   });
 
+  it("close_returns_focus_to_the_opener_and_calls_onClose (Task 8 carry-in)", () => {
+    document.body.innerHTML = `<button id="opener">Tag…</button><div id="host"></div>`;
+    const opener = document.getElementById("opener")!;
+    opener.focus();
+    const onClose = vi.fn();
+    const store = createStore({ root: "C:\\lib", references: [ref("r")], links: [], warning: null, taxonomyReadOnly: false }, seed);
+    const p = mountPicker(document.getElementById("host")!, fakeApi(), store, { refId: "r", onClose });
+    pickers.push(p);
+    expect(p.el.contains(document.activeElement)).toBe(true);
+    key(row(p.el), "Escape"); // empty search: Esc closes
+    expect(p.el.isConnected).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    p.close(); // a second close is a no-op
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("close_leaves_focus_alone_when_it_is_elsewhere_or_the_opener_is_gone", () => {
+    document.body.innerHTML = `<button id="opener">Tag…</button><input id="other"><div id="host"></div>`;
+    document.getElementById("opener")!.focus();
+    const store = createStore({ root: "C:\\lib", references: [ref("r")], links: [], warning: null, taxonomyReadOnly: false }, seed);
+    const p = mountPicker(document.getElementById("host")!, fakeApi(), store, { refId: "r" });
+    document.getElementById("other")!.focus();
+    p.close();
+    expect(document.activeElement).toBe(document.getElementById("other"));
+    const q = mountPicker(document.getElementById("host")!, fakeApi(), store, { refId: "r" });
+    document.getElementById("opener")!.remove();
+    expect(() => q.close()).not.toThrow();
+  });
+
   it("close_unsubscribes", () => {
     const { p, el, store } = mount();
     p.close();

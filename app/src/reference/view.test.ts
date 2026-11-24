@@ -407,6 +407,72 @@ describe("Reference view", () => {
     expect(document.activeElement).toBe($('.m-tab[data-pane="ranked"]'));
   });
 
+  // ---------- Task 9 carry-ins ----------
+  it("filtered_ranked_refreshes_for_a_change_outside_the_focus (Task 11 carry-in)", async () => {
+    vi.mocked(api.search).mockResolvedValue([{ kind: "technique", id: "rhythm", operationId: "sequence", count: 0 }]);
+    const q = $<HTMLInputElement>("#q");
+    q.value = "rhy";
+    q.dispatchEvent(new Event("input"));
+    await settle();
+    $('#q-results li[data-t="rhythm"]').click();
+    expect($("#pane-ranked").textContent).toContain("No reference has any of these yet.");
+    // shares nothing with the focus, but carries the filtered technique
+    store.apply({ ...none, references: [ref("u", "Plate U", [tag("u1", "sequence", "rhythm", "sequence-x")])] });
+    await settle();
+    expect($("#pane-ranked").textContent).toContain("Plate U");
+  });
+
+  it("filter_by_this_moves_focus_to_the_ranked_tab (Task 11 carry-in)", () => {
+    $<HTMLButtonElement>("#pane-callouts .filter-by").click();
+    expect(document.activeElement).toBe($('.m-tab[data-pane="ranked"]'));
+  });
+
+  it("modifier_combos_are_left_to_the_browser (Task 7 carry-in)", () => {
+    const pins = () => [...document.querySelectorAll(".pin")].map((p) => p.getAttribute("aria-pressed"));
+    for (const init of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "v", bubbles: true, ...init }));
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "1", bubbles: true, ...init }));
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "t", bubbles: true, ...init }));
+    }
+    expect($<HTMLInputElement>("#value").checked).toBe(false);
+    expect(pins()).toEqual(["false", "false"]);
+    expect(document.querySelector(".margin .picker")).toBeNull();
+  });
+
+  it("alt_left_still_goes_back", async () => {
+    $<HTMLButtonElement>('#pane-callouts .thumb[data-go="b"]').click();
+    await settle();
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", altKey: true, bubbles: true }));
+    await settle();
+    expect($("#ref-id").textContent).toBe("a");
+  });
+
+  it("view_keys_sleep_while_another_view_shows", () => {
+    document.body.dataset.view = "inbox";
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "v", bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "t", bubbles: true }));
+    delete document.body.dataset.view;
+    expect($<HTMLInputElement>("#value").checked).toBe(false);
+    expect(document.querySelector(".margin .picker")).toBeNull();
+  });
+
+  it("library_switch_clears_the_back_trail (Task 7 carry-in)", async () => {
+    $<HTMLButtonElement>('#pane-callouts .thumb[data-go="b"]').click();
+    await settle();
+    expect($<HTMLButtonElement>("#back").disabled).toBe(false);
+    store.reset({ ...library, root: "D:\\other" }, taxonomy);
+    await settle();
+    expect($<HTMLButtonElement>("#back").disabled).toBe(true);
+    expect([store.canUndo, store.canRedo]).toEqual([false, false]);
+  });
+
+  it("plate_is_a_drop_target_for_the_focus (Task 9)", async () => {
+    expect($("#plate").dataset.refDrop).toBe("a");
+    view.show("b");
+    await settle();
+    expect($("#plate").dataset.refDrop).toBe("b");
+  });
+
   it("filter_from_search_and_empty_copy", async () => {
     vi.mocked(api.search).mockResolvedValue([{ kind: "technique", id: "rhythm", operationId: "sequence", count: 0 }]);
     const q = $<HTMLInputElement>("#q");
@@ -458,6 +524,27 @@ describe("notices", () => {
     const notice = document.querySelector<HTMLElement>("#import-notice")!;
     expect(notice.hidden).toBe(false);
     expect(notice.textContent).toContain("Demo image d07 was not imported.");
+    view.destroy();
+  });
+
+  it("warning_shows_once_in_the_notice_not_the_status_bar (Plan 1 QA carry-in)", async () => {
+    const warning = "taxonomy.json could not be read";
+    const view = mountReference(document.body, fakeApi(), createStore({ ...library, warning }, taxonomy));
+    await view.ready;
+    const src = document.querySelector<HTMLElement>("#data-source")!;
+    expect([src.textContent, src.title]).toEqual(["Library: lib", "C:\\lib"]);
+    expect(document.querySelector("#import-notice [data-body]")!.textContent).toContain(warning);
+    view.destroy();
+  });
+
+  it("reset_without_warning_clears_the_warning_notice (Task 7 carry-in)", async () => {
+    const store = createStore({ ...library, warning: "taxonomy.json could not be read" }, taxonomy);
+    const view = mountReference(document.body, fakeApi(), store);
+    await view.ready;
+    const notice = document.querySelector<HTMLElement>("#import-notice")!;
+    expect(notice.hidden).toBe(false);
+    store.reset({ ...library, root: "D:\\b", warning: null }, taxonomy);
+    expect(notice.hidden).toBe(true);
     view.destroy();
   });
 
