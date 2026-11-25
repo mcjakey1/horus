@@ -355,3 +355,49 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
   .lb-side { grid-column: 1; grid-row: 2; max-height: 45vh; border-left: 0; border-top: 1px solid var(--line); }
   .lb-bar { grid-row: 3; min-height: 36px; }
 }
+
+/* Plan 3 Task 4: the graph canvas, its WebGL fallback, and the dev-only scene harness */
+.graph-canvas { display: block; width: 100%; height: 100%; outline-offset: -2px; touch-action: none; }
+.graph-canvas[hidden] { display: none; } /* a lost WebGL context: the fallback shows instead */
+.graph-fallback { margin: 48px auto; max-width: 36ch; color: var(--ink-2); font: 15px/1.5 var(--serif); text-align: center; }
+.scene-demo-bar { position: fixed; top: 0; left: 0; right: 0; height: 40px; display: flex; gap: 16px; align-items: center; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.scene-demo-host { position: fixed; top: 40px; left: 0; right: 0; bottom: 0; background: var(--shell); }
+
+/* Plan 3 Task 6: the Tree view, and the graph inspector (DESIGN.md margin column, callout card
+   and record header). The inspector is the 340px margin column; its breadcrumb is a 2×2 .record. */
+.graph-host.tree { grid-template-columns: minmax(0, 1fr) 340px; }
+.tree-main { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+.tree-bar { display: flex; justify-content: flex-end; padding: 8px 20px; border-bottom: 1px solid var(--line); }
+.tree-all[aria-pressed="true"] { text-decoration-color: currentColor; }
+.tree-all[aria-pressed="true"]::after { content: " · on"; font: 500 11px var(--mono); color: var(--ink-2); }
+.tree-stage { position: relative; min-height: 0; overflow: hidden; }
+.tree-stage > canvas { display: block; width: 100%; height: 100%; }
+.insp { display: flex; flex-direction: column; min-height: 0; overflow: auto; border-left: 1px solid var(--line); background: var(--panel); }
+.insp-crumb { grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 0; }
+.insp-crumb .cell { padding: 10px 16px; border-top: 1px solid var(--line); }
+.insp-crumb .cell:nth-child(-n + 2) { border-top: 0; }
+.insp-crumb .cell:nth-child(odd) { border-left: 0; }
+.insp-crumb .v, .insp-crumb .v.serif { font-size: 16px; }
+.insp-body { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 24px; }
+.insp-title { margin: 0; font: 500 21px/1.2 var(--serif); }
+.insp-plain { margin: 0; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.insp-desc, .insp-syn { margin: 0; font-size: 14px; color: var(--ink-2); }
+.insp-syn { font-style: italic; }
+.insp-count { margin: 0; font-size: 12px; color: var(--ink-2); }
+.insp-h { margin: 6px 0 0; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.insp-list { display: grid; gap: 6px; }
+.insp-sel { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); background: var(--shell); text-align: left; font: 500 15px/1.25 var(--serif); }
+.insp-sel:hover, .insp-sel:focus-visible { border-color: var(--line-2); }
+.insp-sel .count { color: var(--ink-2); }
+.insp-body .text-btn { align-self: flex-start; }
+
+/* Plan 3 Task 8: the Radial view. The operation switch is a segmented control that wraps to a
+   second row past five operations; the inspector is the Tree's (.insp). */
+.graph-host.radial { grid-template-columns: minmax(0, 1fr) 340px; }
+.radial-main { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+.radial-ops { display: grid; grid-template-columns: repeat(5, minmax(0, max-content)); border-bottom: 1px solid var(--line); background: var(--panel); }
+.radial-op { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-right: 1px solid var(--line); color: var(--ink-2); font-weight: 500; white-space: nowrap; }
+.radial-op[aria-pressed="true"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.radial-op .sw { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }
+.radial-stage { position: relative; min-height: 0; overflow: hidden; }
+.radial-stage > canvas { display: block; width: 100%; height: 100%; }
