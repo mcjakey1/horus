@@ -41,6 +41,8 @@ pub struct AppState {
     skip_close_flush: AtomicBool,
     /// A close came while an import ran: the import's end closes the window (I1).
     close_owed: AtomicBool,
+    /// The UI's intake queue has work Rust has not seen yet: a close waits for it to drain (R2).
+    intake_busy: AtomicBool,
     /// Imports queue here for their whole run: thumbnail temp names are fixed per hash.
     import_gate: Mutex<()>,
     /// Serialises the settings read-merge-write.
@@ -58,6 +60,7 @@ impl AppState {
             saver: Condvar::new(),
             skip_close_flush: AtomicBool::new(false),
             close_owed: AtomicBool::new(false),
+            intake_busy: AtomicBool::new(false),
             import_gate: Mutex::new(()),
             settings: Mutex::new(()),
             config_dir,
@@ -183,7 +186,8 @@ pub enum CloseDecision {
     Close,
     /// The flush failed with this reason: keep the window open and ask.
     Prevent(String),
-    /// An import is running: keep the window open; its end closes it.
+    /// An import is running, or the UI's intake queue has work: keep the window open; the
+    /// import's end (or the queue's drain) closes it.
     Wait,
 }
 
@@ -213,14 +217,20 @@ fn hold_gate<R: Runtime>(app: &AppHandle<R>) -> Gate<'_, R> {
 impl<R: Runtime> Drop for Gate<'_, R> {
     fn drop(&mut self) {
         self.guard.take();
-        // `close()` re-raises CloseRequested, so the normal flush (and the B5 dialog if it
-        // fails) applies. Run with no lock held.
-        let st = self.app.state::<AppState>();
-        if st.close_owed.swap(false, Ordering::SeqCst)
-            && let Some(w) = self.app.get_webview_window("main")
-        {
-            let _ = w.close();
-        }
+        take_owed_close(self.app);
+    }
+}
+
+/// Takes a close owed meanwhile, unless the UI's intake queue still has work (R2): its drain
+/// takes it instead. `close()` re-raises CloseRequested, so the normal flush (and the B5 dialog
+/// if it fails) applies. Callers clear their own busy state first and hold no lock.
+fn take_owed_close<R: Runtime>(app: &AppHandle<R>) {
+    let st = app.state::<AppState>();
+    if !st.intake_busy.load(Ordering::SeqCst)
+        && st.close_owed.swap(false, Ordering::SeqCst)
+        && let Some(w) = app.get_webview_window("main")
+    {
+        let _ = w.close();
     }
 }
 
@@ -958,6 +968,9 @@ pub fn close_decision(st: &AppState) -> CloseDecision {
     }
     // Owed before the try: an import that ends in between still sees it (no lost wake-up).
     st.close_owed.store(true, Ordering::SeqCst);
+    if st.intake_busy.load(Ordering::SeqCst) {
+        return CloseDecision::Wait; // a paste queued in the UI has not reached Rust yet (R2)
+    }
     let _gate = match st.import_gate.try_lock() {
         Err(TryLockError::WouldBlock) => return CloseDecision::Wait,
         Err(TryLockError::Poisoned(p)) => p.into_inner(),
@@ -968,6 +981,16 @@ pub fn close_decision(st: &AppState) -> CloseDecision {
         Some(Err(reason)) => CloseDecision::Prevent(reason),
         _ => CloseDecision::Close,
     }
+}
+
+/// The UI's intake queue went busy (`true`) or drained (`false`). A close owed while it was
+/// busy is taken once it drains (R2).
+#[tauri::command]
+pub fn intake_busy<R: Runtime>(app: AppHandle<R>, busy: bool) {
+    app.state::<AppState>()
+        .intake_busy
+        .store(busy, Ordering::SeqCst);
+    take_owed_close(&app);
 }
 
 /// The save-failure dialog's "Try again". On a good flush Rust closes the window itself, so
@@ -2035,6 +2058,47 @@ mod tests {
         );
         assert_eq!(saved(&e)["references"].as_array().unwrap().len(), 2);
         assert_eq!(close_decision(&state), CloseDecision::Close);
+    }
+
+    /// R2: a paste still queued in the UI has not reached Rust; the close waits for the queue.
+    #[test]
+    fn close_waits_while_the_intake_is_busy() {
+        let e = created();
+        let state = st(&e);
+        intake_busy(e.handle(), true);
+        assert_eq!(
+            close_decision(&state),
+            CloseDecision::Wait,
+            "the gate is free"
+        );
+        assert!(state.close_owed.load(Ordering::SeqCst));
+    }
+
+    /// R2: the queue draining takes the owed close.
+    #[test]
+    fn draining_the_intake_takes_the_owed_close() {
+        let e = created();
+        let state = st(&e);
+        intake_busy(e.handle(), true);
+        assert_eq!(close_decision(&state), CloseDecision::Wait);
+        intake_busy(e.handle(), false);
+        assert!(!state.close_owed.load(Ordering::SeqCst));
+        assert_eq!(close_decision(&state), CloseDecision::Close);
+    }
+
+    /// R2: an import ending mid-queue leaves the close to the queue's end.
+    #[test]
+    fn the_gate_leaves_the_close_to_a_busy_intake() {
+        let e = created();
+        let state = st(&e);
+        intake_busy(e.handle(), true);
+        let h = e.handle();
+        let gate = hold_gate(&h);
+        assert_eq!(close_decision(&state), CloseDecision::Wait);
+        drop(gate);
+        assert!(state.close_owed.load(Ordering::SeqCst), "still owed");
+        intake_busy(e.handle(), false);
+        assert!(!state.close_owed.load(Ordering::SeqCst));
     }
 
     #[test]

@@ -36,7 +36,8 @@ pub fn run() {
             Ok(())
         })
         // B5: flush before the main window closes; if that fails, keep it open and ask.
-        // I1: while an import runs, keep it open and say so; the import's end closes it.
+        // I1, R2: while an import runs or the UI's intake queue has work, keep it open and say
+        // so; the import's end (or the queue's drain) closes it.
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event
                 && window.label() == "main"
@@ -75,6 +76,7 @@ pub fn run() {
             commands::redo,
             commands::image_path,
             commands::demo_examples,
+            commands::intake_busy,
             commands::retry_save,
             commands::exit_without_saving,
         ])
