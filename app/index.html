@@ -12,11 +12,11 @@
   <span class="brand">Horus</span>
   <nav class="tabs" aria-label="Views">
     <button class="tab is-on" aria-current="page" data-view-tab="reference">Reference</button>
-    <button class="tab" disabled title="Not built yet">Tree</button>
-    <button class="tab" disabled title="Not built yet">Galaxy</button>
-    <button class="tab" disabled title="Not built yet">Radial</button>
+    <button class="tab" data-view-tab="tree" disabled title="Not built yet">Tree</button>
+    <button class="tab" data-view-tab="galaxy" disabled title="Not built yet">Galaxy</button>
+    <button class="tab" data-view-tab="radial" disabled title="Not built yet">Radial</button>
     <button class="tab" data-view-tab="inbox">Inbox <span class="count" id="inbox-count">0</span></button>
-    <button class="tab" disabled title="Not built yet">Boards</button>
+    <button class="tab" data-view-tab="boards" disabled title="Not built yet">Boards</button>
   </nav>
   <div class="search">
     <label class="sr-only" for="q">Search by idea</label>
@@ -61,6 +61,9 @@
 </main>
 
 <section class="inbox" id="inbox" aria-label="Inbox"></section>
+<section class="graph-host" data-view-host="tree"></section>
+<section class="graph-host" data-view-host="galaxy"></section>
+<section class="graph-host" data-view-host="radial"></section>
 
 <footer class="status">
   <span class="mono" id="lib-count"></span>

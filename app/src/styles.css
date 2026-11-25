@@ -281,10 +281,17 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .pk-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px; border: 1px solid var(--line-2); font: 500 14px/1.25 var(--serif); }
 .pk-chip button { width: 22px; height: 22px; color: var(--ink-2); }
 
-/* Task 9: the view toggle (body[data-view]), the Inbox, intake notices and the Library menu */
-body[data-view="inbox"] { grid-template-rows: 52px 1fr 36px; }
-body[data-view="inbox"] > .record, body[data-view="inbox"] > .work { display: none; }
+/* The view shell (body[data-view]): only the Reference view has the record row; every other view
+   uses the Inbox row template, and graph views dock the breadcrumb in their inspector (SPEC §5).
+   No data-view yet (first run) keeps the Reference layout behind the dialog. */
+body[data-view]:not([data-view="reference"]) { grid-template-rows: 52px 1fr 36px; }
+body[data-view]:not([data-view="reference"]) > .record, body[data-view]:not([data-view="reference"]) > .work { display: none; }
 body:not([data-view="inbox"]) > .inbox { display: none; }
+.graph-host { position: relative; display: none; min-height: 0; }
+body[data-view="tree"] > [data-view-host="tree"],
+body[data-view="galaxy"] > [data-view-host="galaxy"],
+body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
+/* Task 9: the Inbox, intake notices and the Library menu */
 .top { position: relative; }
 .lib-btn { height: 32px; padding: 0 10px; margin-left: -10px; color: var(--ink-2); font-weight: 500; }
 .lib-btn[aria-expanded="true"] { color: var(--ink); }
