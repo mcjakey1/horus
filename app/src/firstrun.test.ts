@@ -100,6 +100,14 @@ describe("first run", () => {
     view.destroy();
   });
 
+  it("boot first clears a busy intake left by a reload, before anything can wait (round 2)", () => {
+    const api = fakeApi(null);
+    void boot(document.body, api);
+    expect(api.intakeBusy).toHaveBeenCalledWith(false);
+    const first = (f: unknown) => vi.mocked(f as () => void).mock.invocationCallOrder[0];
+    expect(first(api.intakeBusy)).toBeLessThan(first(api.getSettings)); // the clear goes out first
+  });
+
   it("shows first run with a readable message when lastLibrary fails to open", async () => {
     void boot(document.body, fakeApi("D:\\moved"));
     await tick();

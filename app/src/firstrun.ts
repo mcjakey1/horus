@@ -19,6 +19,9 @@ export const FIND_SIMILAR_COPY =
 
 /** `win` is the webview, for drag-and-drop; tests (jsdom has no Tauri window) leave it out. */
 export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
+  // A reload mid-queue leaves Rust's intake flag set, so every close would wait: clear it first,
+  // before first run can wait on the artist. It also takes a close owed before the reload.
+  void api.intakeBusy(false).catch(() => {});
   const settings = await api.getSettings().catch(() => null);
   const dark = settings?.theme === "dark" ||
     (settings?.theme !== "light" && typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches);
