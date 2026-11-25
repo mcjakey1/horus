@@ -198,6 +198,32 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// The import gate, held by an import, a create or an open. Dropping it releases the gate,
+/// then takes a close that came meanwhile (I1).
+struct Gate<'a, R: Runtime> {
+    app: &'a AppHandle<R>,
+    guard: Option<MutexGuard<'a, ()>>,
+}
+
+fn hold_gate<R: Runtime>(app: &AppHandle<R>) -> Gate<'_, R> {
+    let guard = Some(lock(&app.state::<AppState>().inner().import_gate));
+    Gate { app, guard }
+}
+
+impl<R: Runtime> Drop for Gate<'_, R> {
+    fn drop(&mut self) {
+        self.guard.take();
+        // `close()` re-raises CloseRequested, so the normal flush (and the B5 dialog if it
+        // fails) applies. Run with no lock held.
+        let st = self.app.state::<AppState>();
+        if st.close_owed.swap(false, Ordering::SeqCst)
+            && let Some(w) = self.app.get_webview_window("main")
+        {
+            let _ = w.close();
+        }
+    }
+}
+
 pub(crate) fn library_error(e: LibraryError) -> String {
     match e {
         LibraryError::AlreadyALibrary => {
@@ -360,7 +386,7 @@ pub fn create_library<R: Runtime>(
 ) -> Result<LibraryView, String> {
     let root = absolute(&path)?;
     let st = app.state::<AppState>();
-    let _gate = lock(&st.import_gate);
+    let _gate = hold_gate(&app);
     // Before anything is created on disk, so a refused switch leaves no new library behind.
     flush_for_switch(&mut lock(&st.open))?;
     let mut lib = Library::create(&root, &st.seed_taxonomy).map_err(library_error)?;
@@ -397,7 +423,7 @@ pub fn create_library<R: Runtime>(
 pub fn open_library<R: Runtime>(app: AppHandle<R>, path: String) -> Result<LibraryView, String> {
     let root = absolute(&path)?;
     let st = app.state::<AppState>();
-    let _gate = lock(&st.import_gate);
+    let _gate = hold_gate(&app);
     let mut view = {
         // The state lock is held from the flush to the swap: reopening the same library must
         // read what the flush wrote, and no edit may land in between.
@@ -714,29 +740,10 @@ fn run_import<R: Runtime>(
     note: Option<String>,
     source_url: Option<String>,
 ) -> Result<ImportResult, String> {
-    let result = import_gated(app, paths, note, source_url);
-    // I1: a close that came mid-import is taken now, on every exit. `close()` re-raises
-    // CloseRequested, so the normal flush (and the B5 dialog if it fails) applies.
-    if app
-        .state::<AppState>()
-        .close_owed
-        .swap(false, Ordering::SeqCst)
-        && let Some(w) = app.get_webview_window("main")
-    {
-        let _ = w.close();
-    }
-    result
-}
-
-fn import_gated<R: Runtime>(
-    app: &AppHandle<R>,
-    paths: Vec<PathBuf>,
-    note: Option<String>,
-    source_url: Option<String>,
-) -> Result<ImportResult, String> {
     let st = app.state::<AppState>();
     // Taken before the hash snapshot, so a queued import sees the previous one's results.
-    let gate = lock(&st.import_gate);
+    // Every exit releases it and takes a close owed meanwhile (I1).
+    let gate = hold_gate(app);
     let (root, known) = {
         let open = lock(&st.open);
         let lib = &open.as_ref().ok_or(NO_LIBRARY)?.lib;
@@ -1976,6 +1983,19 @@ mod tests {
             assert!(state.close_owed.load(Ordering::SeqCst));
         }
         assert_eq!(close_decision(&state), CloseDecision::Close);
+        assert!(!state.close_owed.load(Ordering::SeqCst));
+    }
+
+    /// I1: create and open hold the gate too, off the main thread; releasing it takes the
+    /// owed close, so a close during a switch is not left for the next import.
+    #[test]
+    fn releasing_the_gate_takes_the_owed_close() {
+        let e = created();
+        let state = st(&e);
+        let h = e.handle();
+        let gate = hold_gate(&h);
+        assert_eq!(close_decision(&state), CloseDecision::Wait);
+        drop(gate);
         assert!(!state.close_owed.load(Ordering::SeqCst));
     }
 

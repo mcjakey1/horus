@@ -32,7 +32,7 @@ export function digitOf(e: KeyboardEvent): number | null {
 export function wireUndoKeys(doc: Document, api: Api, store: Store, notice: (html: string) => void): () => void {
   // M4: a refusal is said in plain words, but never over a save-failed notice.
   const refused = (what: string) => (err: unknown) => {
-    if (doc.querySelector("#import-notice [data-save-failed]")) return;
+    if (doc.querySelector("#import-notice:not([hidden]) [data-save-failed]")) return; // a dismissed one may go
     notice(`<p>Couldn't ${what}: ${esc(String(err).replace(/\.$/, ""))}.</p>`);
   };
   const onKey = (e: KeyboardEvent) => {

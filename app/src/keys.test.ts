@@ -144,5 +144,10 @@ describe("undo keys", () => {
     press(document.body, { key: "z", ctrlKey: true });
     await tick();
     expect(notice).not.toHaveBeenCalled();
+    document.getElementById("import-notice")!.hidden = true; // dismissed: the refusal may show
+    vi.mocked(api.undo).mockRejectedValueOnce("No library is open.");
+    press(document.body, { key: "z", ctrlKey: true });
+    await tick();
+    expect(notice).toHaveBeenCalledTimes(1);
   });
 });
