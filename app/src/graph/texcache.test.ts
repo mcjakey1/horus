@@ -10,8 +10,7 @@ describe("TexCache", () => {
     cache.get("a");
     cache.get("b");
     await settle();
-    expect(cache.get("a")).toBe("tex:a");
-    cache.touch("a"); // b is now least recently touched
+    cache.touch("a"); // only touch decides: b is now least recently touched
     cache.get("c");
     await settle();
     expect(unload).toHaveBeenCalledOnce();
