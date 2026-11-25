@@ -1,16 +1,27 @@
 // Start-up: reopen the last library, or run first-run setup (pick a library, the demo set,
-// the Find similar question), then mount the Reference view on the library that came back.
+// the Find similar question), then build the Store on the library that came back (B7) and
+// mount the Reference view on it.
 import type { Api, LibraryView } from "./api";
+import { esc } from "./esc";
+import { noticeIn } from "./importer";
+import { dockPicker, mountInbox } from "./inbox/view";
+import { type DropWin, wireIntake } from "./intake";
+import { wireUndoKeys } from "./keys";
+import { mountLibraryMenu } from "./library-menu";
 import { mountReference } from "./reference/view";
+import { mountSaveDialog, wireSaveStatus } from "./save-dialog";
+import { createStore } from "./store";
+import { mountViews } from "./views";
 
 /** SPEC §5a, verbatim. */
 export const FIND_SIMILAR_COPY =
   "Turn on Find similar? It downloads a 150–350 MB image model and indexes your library in the background. Recommended for machines with 8 GB of RAM or more.";
 
-const esc = (s = "") =>
-  String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-
-export async function boot(root: HTMLElement, api: Api) {
+/** `win` is the webview, for drag-and-drop; tests (jsdom has no Tauri window) leave it out. */
+export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
+  // A reload mid-queue leaves Rust's intake flag set, so every close would wait: clear it first,
+  // before first run can wait on the artist. It also takes a close owed before the reload.
+  void api.intakeBusy(false).catch(() => {});
   const settings = await api.getSettings().catch(() => null);
   const dark = settings?.theme === "dark" ||
     (settings?.theme !== "light" && typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -25,7 +36,45 @@ export async function boot(root: HTMLElement, api: Api) {
     }
   }
   lib ??= await firstRun(root, api, { error, askFindSimilar: (settings?.findSimilar ?? "unset") === "unset" });
-  return mountReference(root, api, lib);
+  const store = createStore(lib, await api.getTaxonomy());
+  const notice = noticeIn(root);
+  const unwire = wireUndoKeys(document, api, store, notice);
+  const view = mountReference(root, api, store);
+
+  // Task 9: the Inbox, intake, the view toggle and the Library menu.
+  const inboxRoot = root.querySelector<HTMLElement>("#inbox")!;
+  let dock: ReturnType<typeof dockPicker> | null = null;
+  const inbox = mountInbox(inboxRoot, api, store, { openPicker: (o) => dock?.(o) });
+  dock = dockPicker(inboxRoot.querySelector<HTMLElement>(".inbox-dock")!, api, store);
+  // Switching to the Inbox lands on its first item, or on the one intake is opening.
+  let landOn: string | null = null;
+  const views = mountViews(root, { inbox: () => (landOn ? inbox.focusId(landOn) : inbox.focus(0)) });
+  const unIntake = wireIntake(win ?? null, document, {
+    api,
+    store,
+    notice,
+    show: (id) => {
+      views.select("reference");
+      view.show(id);
+    },
+    // ponytail: several new references each keep their preset; the Inbox lands on the last one
+    openPicker: (o) => {
+      if (o.preset?.length) dock?.remember(o.refId, o.preset);
+      landOn = o.refId;
+      if (views.current() === "inbox") inbox.focusId(o.refId);
+      else views.select("inbox");
+      landOn = null;
+    },
+  });
+  const menu = mountLibraryMenu(root.querySelector<HTMLElement>("#library-menu")!, api, store, notice, unIntake.idle);
+  const unmountSaveDialog = mountSaveDialog(root, api);
+  const unwireSaveStatus = wireSaveStatus(root, api);
+  return {
+    ...view,
+    store,
+    destroy: () =>
+      (unwire(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), dock?.close(), inbox.destroy(), view.destroy()),
+  };
 }
 
 /** Resolves once a library is created or opened. */

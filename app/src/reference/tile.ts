@@ -2,11 +2,18 @@ import type { Region } from "../api";
 
 export type Box = { left: number; top: number; width: number; height: number };
 
+/** A plate of `aspect` (w/h) letterboxed, centred, into a w×h box (pixels). */
+export function fitBox(aspect: number, w: number, h: number): Box {
+  const wide = aspect >= w / h; // the plate is wider than the box, so its width binds
+  const width = wide ? w : h * aspect;
+  const height = wide ? w / aspect : h;
+  return { left: (w - width) / 2, top: (h - height) / 2, width, height };
+}
+
 /** Whole plate letterboxed on a square N5 tile, with the matching region outlined (pixels). */
 export function tileBox(aspect: number, tile: number, region?: Region): { plate: Box; outline?: Box } {
-  const width = aspect >= 1 ? tile : tile * aspect;
-  const height = aspect >= 1 ? tile / aspect : tile;
-  const plate = { left: (tile - width) / 2, top: (tile - height) / 2, width, height };
+  const plate = fitBox(aspect, tile, tile);
+  const { width, height } = plate;
   if (!region) return { plate };
   return {
     plate,

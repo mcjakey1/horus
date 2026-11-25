@@ -3,6 +3,7 @@
 use crate::model::LibraryData;
 use crate::taxonomy::Taxonomy;
 use serde::Serialize;
+use unicode_normalization::UnicodeNormalization;
 
 /// Over IPC: `{"kind":"technique","id","operationId","count"}` or `{"kind":"reference","id"}`.
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -24,32 +25,52 @@ pub enum Hit {
 
 const MAX_TECHNIQUES: usize = 8;
 const MAX_REFERENCES: usize = 4;
+/// Shorter queries (after `normalise`) return nothing: one letter matches half the library.
+pub const MIN_QUERY_CHARS: usize = 2;
 
-/// Case-insensitive search, mirroring `prototype/app.js` `searchTechniques`.
+/// NFC, lowercase, every run of non-alphanumeric characters to one space, trimmed.
+pub fn normalise(s: &str) -> String {
+    let s = s.nfc().collect::<String>().to_lowercase();
+    s.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// `phrase` appears in `hay` as whole words. Both are already normalised.
+fn has_phrase(hay: &str, phrase: &str) -> bool {
+    !phrase.is_empty() && format!(" {hay} ").contains(&format!(" {phrase} "))
+}
+
+/// Idea search, run on every keystroke. The query and every field are `normalise`d first.
 ///
-/// A technique matches on its name, a synonym (either one containing the other), or every
-/// query word longer than 3 characters appearing in its description. A match on an
-/// operation's name or plain label pulls in all of that operation's techniques. A reference
-/// matches on its title, its note, or the `why` of any link touching it.
+/// A technique matches when its name or a synonym contains the query, or the query contains
+/// it as whole words ("chiaroscuro lighting"), or every query word longer than 3 characters
+/// is a whole word of its description. A query containing an operation's name or plain label
+/// as whole words pulls in all of that operation's techniques. A reference matches when its
+/// title, its note, or the `why` of any link touching it contains the query.
 ///
 /// One hit per technique. Its `operation_id` is the matched operation, if the query
 /// matched one. Otherwise it is the operation the library tags it under most, and failing
 /// that, the first operation it sits under in taxonomy order. Techniques are ranked by how
 /// many references are tagged with them; ties keep taxonomy order.
 pub fn search(tax: &Taxonomy, data: &LibraryData, q: &str) -> Vec<Hit> {
-    let q = q.trim().to_lowercase();
-    if q.is_empty() {
+    let q = normalise(q);
+    if q.chars().count() < MIN_QUERY_CHARS {
         return vec![];
     }
-    let has = |s: &str| s.to_lowercase().contains(&q);
-    let words: Vec<&str> = q
-        .split_whitespace()
-        .filter(|w| w.chars().count() > 3)
-        .collect();
+    let has = |s: &str| normalise(s).contains(&q);
+    let field = |s: &str| {
+        let s = normalise(s);
+        s.contains(&q) || has_phrase(&q, &s)
+    };
+    let words: Vec<&str> = q.split(' ').filter(|w| w.chars().count() > 3).collect();
     let op_hits: Vec<&str> = tax
         .operations
         .iter()
-        .filter(|o| has(&o.name) || has(&o.plain_label))
+        .filter(|o| {
+            has_phrase(&q, &normalise(&o.name)) || has_phrase(&q, &normalise(&o.plain_label))
+        })
         .map(|o| o.id.as_str())
         .collect();
 
@@ -71,14 +92,11 @@ pub fn search(tax: &Taxonomy, data: &LibraryData, q: &str) -> Vec<Hit> {
             continue;
         }
         let op_match = ops.iter().find(|o| op_hits.contains(o)).copied();
-        let text_match = has(&t.name)
-            || t.synonyms.iter().any(|s| {
-                let s = s.to_lowercase();
-                !s.is_empty() && (s.contains(&q) || q.contains(&s))
-            })
+        let text_match = field(&t.name)
+            || t.synonyms.iter().any(|s| field(s))
             || (!words.is_empty() && {
-                let d = t.description.to_lowercase();
-                words.iter().all(|w| d.contains(w))
+                let d = normalise(&t.description);
+                words.iter().all(|w| has_phrase(&d, w))
             });
         if op_match.is_none() && !text_match {
             continue;
@@ -275,5 +293,268 @@ mod tests {
     #[test]
     fn blank_query_is_empty() {
         assert_eq!(search(&seed(), &library(), "   "), vec![]);
+    }
+
+    fn empty() -> LibraryData {
+        LibraryData {
+            version: 1,
+            references: vec![],
+            links: vec![],
+            boards: vec![],
+        }
+    }
+
+    fn refs_lib(refs: Vec<Reference>) -> LibraryData {
+        LibraryData {
+            references: refs,
+            ..empty()
+        }
+    }
+
+    fn ref_ids(hits: &[Hit]) -> Vec<&str> {
+        hits.iter()
+            .filter_map(|h| match h {
+                Hit::Reference { id } => Some(id.as_str()),
+                Hit::Technique { .. } => None,
+            })
+            .collect()
+    }
+
+    fn op_of<'a>(hits: &'a [Hit], tech: &str) -> Option<&'a str> {
+        hits.iter().find_map(|h| match h {
+            Hit::Technique {
+                id, operation_id, ..
+            } if id == tech => Some(operation_id.as_str()),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn operation_label_needs_whole_words() {
+        let tax = seed();
+        let hits = search(&tax, &library(), "lead the eye");
+        assert_eq!(
+            technique_ids(&hits),
+            [
+                "chiaroscuro",
+                "good-continuation",
+                "size-hierarchy",
+                "temporal-synthesis",
+                "leading-lines",
+                "gaze-cue",
+                "body-vector",
+                "reading-path"
+            ],
+            "{hits:?}"
+        );
+        assert!(
+            technique_ids(&hits)
+                .iter()
+                .all(|t| op_of(&hits, t) == Some("sequence"))
+        );
+
+        let hits = search(&tax, &library(), "make it stand out");
+        assert_eq!(
+            technique_ids(&hits),
+            [
+                "chiaroscuro",
+                "pop-out",
+                "saturation-blocking",
+                "simultaneous-contrast",
+                "warm-and-cool-split",
+                "semantic-contrast",
+                "face-schema",
+                "complementary-pairing"
+            ],
+            "{hits:?}"
+        );
+        assert!(
+            technique_ids(&hits)
+                .iter()
+                .all(|t| op_of(&hits, t) == Some("differentiate"))
+        );
+
+        // "out" is not the whole label "stand out": text matches only, so the tagged
+        // Differentiate technique Chiaroscuro (no "out" in its text) is absent
+        let hits = search(&tax, &library(), "out");
+        assert_eq!(
+            technique_ids(&hits),
+            [
+                "pop-out",
+                "scale-disparity",
+                "contextual-metaphor",
+                "rim-light",
+                "silhouette",
+                "pattern-break",
+                "crop-at-the-edge",
+                "set-apart"
+            ],
+            "{hits:?}"
+        );
+    }
+
+    #[test]
+    fn min_query_length() {
+        let lib = refs_lib(vec![reference("r1", "Abbey", vec![])]);
+        assert_eq!(search(&seed(), &lib, "a"), vec![]);
+        assert_eq!(search(&seed(), &lib, " a! "), vec![]);
+        assert_eq!(ref_ids(&search(&seed(), &lib, "ab")), ["r1"]);
+    }
+
+    #[test]
+    fn custom_operation_label() {
+        let mut tax = seed();
+        tax.operations.push(
+            serde_json::from_value(serde_json::json!({"id": "provoke", "name": "Provoke",
+                "plainLabel": "Make it sting", "color": null, "icon": "x", "description": "x"}))
+            .unwrap(),
+        );
+        tax.branches.push(
+            serde_json::from_value(serde_json::json!({"id": "provoke.feature",
+                "operationId": "provoke", "domainId": "feature"}))
+            .unwrap(),
+        );
+        tax.techniques.push(
+            serde_json::from_value(serde_json::json!({"id": "barb", "name": "Barb", "icon": "x",
+                "description": "x", "synonyms": [], "citation": null, "examples": [], "custom": true}))
+            .unwrap(),
+        );
+        tax.branch_techniques.push(
+            serde_json::from_value(serde_json::json!({"branchId": "provoke.feature",
+                "techniqueId": "barb", "source": "user", "rationale": "x"}))
+            .unwrap(),
+        );
+        let hits = search(&tax, &library(), "make it sting");
+        assert_eq!(op_of(&hits, "barb"), Some("provoke"), "{hits:?}");
+
+        let d = tax
+            .operations
+            .iter_mut()
+            .find(|o| o.id == "differentiate")
+            .unwrap();
+        d.plain_label = "Pop".into();
+        let hits = search(&tax, &library(), "stand out");
+        assert_eq!(technique_ids(&hits), Vec::<&str>::new(), "{hits:?}");
+        let hits = search(&tax, &library(), "pop");
+        assert_eq!(
+            op_of(&hits, "chiaroscuro"),
+            Some("differentiate"),
+            "{hits:?}"
+        );
+    }
+
+    #[test]
+    fn punctuation_stripped() {
+        for q in ["moody!", "Moody,"] {
+            assert!(
+                technique_ids(&search(&seed(), &library(), q)).contains(&"chiaroscuro"),
+                "{q}"
+            );
+        }
+        assert!(technique_ids(&search(&seed(), &library(), "pop out")).contains(&"pop-out"));
+    }
+
+    #[test]
+    fn query_contains_name() {
+        let hits = search(&seed(), &library(), "chiaroscuro lighting");
+        assert!(technique_ids(&hits).contains(&"chiaroscuro"), "{hits:?}");
+        // a synonym ("eyes") inside a longer word is not a match
+        let hits = search(&seed(), &library(), "eyesore");
+        assert!(!technique_ids(&hits).contains(&"face-schema"), "{hits:?}");
+    }
+
+    #[test]
+    fn description_words_over_3() {
+        let finds =
+            |q| technique_ids(&search(&seed(), &library(), q)).contains(&"isolation-in-void");
+        assert!(finds("the empty space"));
+        assert!(!finds("vast space"));
+    }
+
+    #[test]
+    fn nfc_both_sides() {
+        let lib = refs_lib(vec![reference("r1", "E\u{301}tude", vec![])]);
+        for q in ["\u{c9}tude", "\u{e9}tude"] {
+            assert_eq!(ref_ids(&search(&seed(), &lib, q)), ["r1"], "{q:?}");
+        }
+    }
+
+    #[test]
+    fn note_and_title_match() {
+        let mut noted = reference("r1", "Untitled", vec![]);
+        noted.note = Some("Seen at the flea-market".into());
+        let lib = refs_lib(vec![noted, reference("r2", "Lighthouse, Brest", vec![])]);
+        assert_eq!(ref_ids(&search(&seed(), &lib, "flea market")), ["r1"]);
+        assert_eq!(ref_ids(&search(&seed(), &lib, "lighthouse brest")), ["r2"]);
+    }
+
+    #[test]
+    fn reference_cap_is_4() {
+        let lib = refs_lib(
+            (1..=6)
+                .map(|i| reference(&format!("r{i}"), &format!("harbour {i}"), vec![]))
+                .collect(),
+        );
+        assert_eq!(
+            ref_ids(&search(&seed(), &lib, "harbour")),
+            ["r1", "r2", "r3", "r4"]
+        );
+    }
+
+    #[test]
+    fn operation_id_rungs() {
+        let tax = seed();
+        // 1. the matched operation wins, even over the library's tags (r1 tags Differentiate)
+        assert_eq!(
+            op_of(&search(&tax, &library(), "lead the eye"), "chiaroscuro"),
+            Some("sequence")
+        );
+        // 2. no operation matched: the operation the library tags it under most
+        let seq = || tag("sequence", "chiaroscuro", "sequence.feature");
+        let lib = refs_lib(vec![
+            reference("r1", "a", vec![seq()]),
+            reference("r2", "b", vec![seq()]),
+            reference(
+                "r3",
+                "c",
+                vec![tag("differentiate", "chiaroscuro", "differentiate.feature")],
+            ),
+        ]);
+        assert_eq!(
+            op_of(&search(&tax, &lib, "moody"), "chiaroscuro"),
+            Some("sequence")
+        );
+        // 3. untagged: the first operation it sits under, in taxonomy order
+        assert_eq!(
+            op_of(&search(&tax, &empty(), "moody"), "chiaroscuro"),
+            Some("differentiate")
+        );
+    }
+
+    /// The same cases as `tagging/model.test.ts` runs through `matchesQuery`, so the picker
+    /// filter and this search agree. Extra fixture techniques sit under `differentiate.feature`.
+    #[test]
+    fn shared_match_cases() {
+        let file: serde_json::Value =
+            serde_json::from_str(include_str!("../../src/tagging/match-cases.json")).unwrap();
+        let mut tax = seed();
+        for t in file["extraTechniques"].as_array().unwrap() {
+            let t: crate::taxonomy::Technique = serde_json::from_value(t.clone()).unwrap();
+            tax.branch_techniques.push(
+                serde_json::from_value(serde_json::json!({"branchId": "differentiate.feature",
+                    "techniqueId": t.id, "source": "user", "rationale": "fixture"}))
+                .unwrap(),
+            );
+            tax.techniques.push(t);
+        }
+        for c in file["cases"].as_array().unwrap() {
+            let (q, id) = (c["q"].as_str().unwrap(), c["technique"].as_str().unwrap());
+            let hits = search(&tax, &empty(), q);
+            assert_eq!(
+                technique_ids(&hits).contains(&id),
+                c["match"].as_bool().unwrap(),
+                "{q:?} -> {id}"
+            );
+        }
     }
 }

@@ -29,6 +29,7 @@ qcms = "0.3.0"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "tiff", "gif"] }
 tauri-plugin-dialog = "2"
 sysinfo = { version = "0.40.4", default-features = false, features = ["system"] }
+unicode-normalization = "0.1"
 
 [dev-dependencies]
 tauri = { version = "2", features = ["protocol-asset", "test"] }

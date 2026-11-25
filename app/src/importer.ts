@@ -1,22 +1,29 @@
-// "Import images…" / "Import folder…" in the status bar: pick, import, reopen the library so
-// the view sees the new references, then show what happened. Drag-and-drop is Plan 2.
-import type { Api, ImportReport, LibraryView, Skip } from "./api";
+// "Import images…" / "Import folder…" in the status bar: pick, import, apply the returned Change
+// to the store (B4: no reopen, so the import stays undoable), then show what happened. The other
+// intake routes (drop, paste, the Inbox's buttons) live in intake.ts; every route ends in the same
+// notice, with the note field and the duplicate rows (Task 9).
+import type { Api, Change, ImportReport, ImportResult, Skip } from "./api";
+import { esc } from "./esc";
+import type { DupRow } from "./intake";
 
 export type ImportHooks = {
   libraryRoot(): string | null;
-  onLibrary(lib: LibraryView): void;
+  onChange(c: Change): void;
 };
 
-const esc = (s = "") =>
-  String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+/** Fired on the document after the status-bar import, so intake can add its note field and rows. */
+export const IMPORTED = "horus:imported";
+
 const fileName = (p: string) => p.split(/[\\/]/).pop() || p;
 
 function reason(s: Skip): string {
   switch (s.kind) {
     case "tooLarge":
       return "larger than 500 MB";
+    case "insideLibrary":
+      return "already inside the library folder";
     case "unsupported":
-      return s.detail === "inside the library" ? "already inside the library folder" : "not a supported image type";
+      return "not a supported image type";
     case "unreadable":
       return `could not be read (${s.detail})`;
     case "writeFailed":
@@ -28,7 +35,7 @@ function reason(s: Skip): string {
 export function summaryHTML(r: ImportReport): string {
   const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
   const parts = [
-    r.added.length ? `Added ${n(r.added.length, "reference")}` : "",
+    r.added.length ? `Added ${r.added.length} to the Inbox` : "",
     r.duplicates.length ? `${n(r.duplicates.length, "file was", "files were")} already in the library` : "",
     r.skipped.length ? `${n(r.skipped.length, "file")} skipped` : "",
   ].filter(Boolean);
@@ -43,31 +50,57 @@ export function summaryHTML(r: ImportReport): string {
   return `<p>${esc(line)}</p>${skipped ? `<ul>${skipped}</ul>` : ""}${warned ? `<ul>${warned}</ul>` : ""}`;
 }
 
+/** The summary, then the optional note field (or what was saved) and one row per duplicate (SPEC §9). */
+export function intakeHTML(r: ImportReport, dups: DupRow[], savedNote?: string): string {
+  const note =
+    savedNote != null
+      ? `<p class="intake-saved">Note saved: “${esc(savedNote)}”</p>`
+      : r.added.length
+        ? `<form class="intake-note" data-intake-note><input name="note" type="text" maxlength="200" autocomplete="off" aria-label="Note for the new references" placeholder="Add a short note (optional)"><button type="submit" class="text-btn">Save note</button></form>`
+        : "";
+  const rows = dups
+    .map(
+      (d) =>
+        `<li>Already in your library: <i>${esc(d.title)}</i> <button type="button" class="text-btn" data-dup-show="${esc(d.existingId)}">Show</button>${
+          d.action === "merge"
+            ? ` <button type="button" class="text-btn" data-dup-merge="${esc(d.existingId)}" title="Adds the ${d.fills.map((f) => (f === "note" ? "note" : "source link")).join(" and ")} it lacks">Merge</button>`
+            : ""
+        }</li>`,
+    )
+    .join("");
+  return summaryHTML(r) + note + (rows ? `<ul class="intake-dups">${rows}</ul>` : "");
+}
+
 /** `LibraryView.warning` (backup recovery, seed or taxonomy problems) for the notice. */
 export const warningHTML = (w?: string | null) => (w ? `<p>${esc(w)}</p>` : "");
 
-/** Returns `say`, which shows HTML in the `#import-notice` box (it has a Dismiss button). */
-export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, signal?: AbortSignal): (html: string) => void {
+/** Shows HTML in the `#import-notice` box. No listeners: safe to make more than one. */
+export function noticeIn(root: ParentNode): (html: string) => void {
   const notice = root.querySelector<HTMLElement>("#import-notice")!;
   const body = notice.querySelector<HTMLElement>("[data-body]")!;
-  const buttons = [...root.querySelectorAll<HTMLButtonElement>("[data-import]")];
-  const say = (html: string) => {
+  return (html) => {
     body.innerHTML = html;
     notice.hidden = false;
   };
+}
+
+/** Wires the status-bar import buttons and Dismiss; returns `say`. */
+export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, signal?: AbortSignal): (html: string) => void {
+  const notice = root.querySelector<HTMLElement>("#import-notice")!;
+  const buttons = [...root.querySelectorAll<HTMLButtonElement>("[data-import]")];
+  const say = noticeIn(root);
 
   async function run(pick: () => Promise<string[]>) {
-    const lib = hooks.libraryRoot();
-    if (!lib) return;
+    if (!hooks.libraryRoot()) return;
     const paths = await pick();
     if (!paths.length) return;
     buttons.forEach((b) => (b.disabled = true));
     say(`<p>Importing…</p>`);
     try {
-      const report = await api.importPaths(paths);
-      const fresh = await api.openLibrary(lib);
-      hooks.onLibrary(fresh);
-      say(summaryHTML(report) + warningHTML(fresh.warning));
+      const result: ImportResult = await api.importPaths(paths);
+      hooks.onChange(result.change);
+      say(summaryHTML(result.report));
+      root.ownerDocument.dispatchEvent(new CustomEvent<ImportResult>(IMPORTED, { detail: result }));
     } catch (err) {
       say(`<p>The import did not finish: ${esc(String(err))}</p>`);
     } finally {

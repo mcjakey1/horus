@@ -84,7 +84,7 @@ mod tests {
         let t = Tag {
             id: "t1".into(),
             operation_id: "op".into(),
-            technique_id: None,
+            technique_id: Some("tech".into()),
             branch_id: Some("br".into()),
             region: None,
             suggested: false,
@@ -92,7 +92,7 @@ mod tests {
         let v = serde_json::to_value(&t).unwrap();
         assert_eq!(
             v,
-            serde_json::json!({"id": "t1", "operationId": "op", "branchId": "br", "suggested": false})
+            serde_json::json!({"id": "t1", "operationId": "op", "techniqueId": "tech", "branchId": "br", "suggested": false})
         );
         assert_eq!(serde_json::from_value::<Tag>(v).unwrap(), t);
     }

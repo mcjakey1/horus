@@ -1,38 +1,35 @@
 // The Reference view, ported 1:1 from prototype/app.js (show / render*). Correlation comes from
-// the Rust `related` command; names come from the library's taxonomy (tags carry ids only).
-import type { Api, LibraryView, Link, Reference, Scored, Settings, Tag, Taxonomy } from "../api";
+// the Rust `related` command. The references, links and taxonomy come from the Store (tags
+// carry ids only); the view keeps only its own state: focus, trail, pin, filter.
+import type { Api, Reference, Scored, Settings, Tag } from "../api";
+import { esc } from "../esc";
 import { mountImport, warningHTML } from "../importer";
+import { digitOf } from "../keys";
+import { openLightbox } from "../lightbox/view";
+import { opInk, opLabel } from "../ops";
 import { mountSearch } from "../search";
+import type { Store, StoreEvent } from "../store";
+import { mountPicker } from "../tagging/picker";
+import { type Filter, matchesFilter, toggle } from "./filter";
 import { drawLeaders, highlight } from "./leaders";
 import { tileHTML } from "./tile";
 
-const OP_KEY: Record<string, string> = { differentiate: "diff", group: "group", sequence: "seq", infer: "infer" };
-const key = (opId: string) => OP_KEY[opId] ?? "diff";
-const opColor = (opId: string) => `var(--${key(opId)})`;
-const opText = (opId: string) => `var(--${key(opId)}-text)`;
-const opOn = (opId: string) => `var(--${key(opId)}-on)`;
-const esc = (s: unknown = "") =>
-  String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const fmt = (n: number) => n.toFixed(2);
 const stateLabel = { full: "full tag", partial: "partial", region: "region" } as const;
 const stateOf = (t: Tag): keyof typeof stateLabel => (t.region ? "region" : t.techniqueId ? "full" : "partial");
 const PAINT_DELAY = 180; // matches .specimen.is-leaving transition
+const noFilter = (): Filter => ({ techniques: [], mode: "or" });
 
-/** `initial`: a library already opened (first run); otherwise the view opens `lastLibrary`. */
+/** `ready` resolves once the settings (theme, Find similar status) are in; the library is painted at mount. */
 export function mountReference(
   root: HTMLElement,
   api: Api,
-  initial?: LibraryView,
+  store: Store,
 ): { show(id: string): void; ready: Promise<void>; destroy(): void } {
   const life = new AbortController();
   const signal = life.signal;
   const $ = <T extends Element = HTMLElement>(s: string) => root.querySelector<T>(s);
   const S = {
-    root: null as string | null,
-    refs: [] as Reference[],
-    byId: new Map<string, Reference>(),
-    links: [] as Link[],
-    tax: null as Taxonomy | null,
     settings: { lastLibrary: null, theme: "system", findSimilar: "unset" } as Settings,
     focus: null as string | null,
     trail: [] as string[],
@@ -41,44 +38,61 @@ export function mountReference(
     arrival: null as Tag | null,
     related: [] as Scored[],
     ranked: [] as string[],
-    filter: null as string | null,
-    source: "",
-    sourceTitle: "",
+    filter: noFilter(),
     paintTimer: 0 as ReturnType<typeof setTimeout> | 0,
-    nav: 0, // drops stale show() calls
+    plateSrc: "", // what #plate shows, so any paint can tell whether it is stale
+    nav: 0, // drops stale paints
   };
 
   // ---------- taxonomy lookups (tags carry ids) ----------
-  const opOf = (id: string) => S.tax?.operations.find((o) => o.id === id);
-  const opName = (id: string) => opOf(id)?.name ?? id;
-  const opPlain = (id: string) => opOf(id)?.plainLabel ?? "";
-  const techName = (id?: string) => (id ? (S.tax?.techniques.find((t) => t.id === id)?.name ?? id) : "");
-  const techDef = (id?: string) => (id ? S.tax?.techniques.find((t) => t.id === id)?.description : undefined);
+  const opColor = (opId: string) => opInk(store.tax, opId).base;
+  const opText = (opId: string) => opInk(store.tax, opId).text;
+  const opOn = (opId: string) => opInk(store.tax, opId).on;
+  const opName = (id: string) => opLabel(store.tax, id).name;
+  const opPlain = (id: string) => opLabel(store.tax, id).plain;
+  const techName = (id?: string) => (id ? (store.tax.techniques.find((t) => t.id === id)?.name ?? id) : "");
+  const techDef = (id?: string) => (id ? store.tax.techniques.find((t) => t.id === id)?.description : undefined);
   const domainOf = (branchId?: string) => {
-    const b = branchId ? S.tax?.branches.find((x) => x.id === branchId) : undefined;
-    return b ? (S.tax?.domains.find((d) => d.id === b.domainId)?.name ?? b.domainId) : "";
+    const b = branchId ? store.tax.branches.find((x) => x.id === branchId) : undefined;
+    return b ? (store.tax.domains.find((d) => d.id === b.domainId)?.name ?? b.domainId) : "";
   };
   const branchLabel = (branchId: string) => {
-    const b = S.tax?.branches.find((x) => x.id === branchId);
+    const b = store.tax.branches.find((x) => x.id === branchId);
     return b ? `${opName(b.operationId)} · ${domainOf(branchId)}` : branchId;
+  };
+  /** The operation a technique is shown under, by search's rule (`search.rs`): the one the library
+   * tags it under most, else its first operation in branch order; none → opInk's neutral. */
+  const techOp = (id: string) => {
+    const ops = store.tax.branches
+      .filter((b) => store.tax.branchTechniques.some((l) => l.branchId === b.id && l.techniqueId === id))
+      .map((b) => b.operationId);
+    const uses = (op: string) =>
+      allRefs().reduce((n, r) => n + r.tags.filter((t) => t.techniqueId === id && t.operationId === op).length, 0);
+    return ops.reduce((best, op) => (uses(op) > uses(best) ? op : best), ops[0] ?? "");
   };
   const aspect = (r: Reference) => (r.width && r.height ? r.width / r.height : 3 / 4);
   const img = (r: Reference, big = false) =>
     `<img src="${esc(api.assetUrl(big ? r.thumb1024 : r.thumb256))}" alt="${esc(r.title)}" loading="lazy">`;
+  const allRefs = () => [...store.refs.values()];
 
   // ---------- rendering ----------
+  const arrivalOf = (ref: Reference, via: string | null) =>
+    ref.tags.find((t) => via && t.techniqueId === via) ?? ref.tags.find((t) => t.techniqueId) ?? ref.tags[0] ?? null;
+
   function show(id: string, { push = true, via = null as string | null } = {}) {
-    const ref = S.byId.get(id);
+    const ref = store.refs.get(id);
     if (!ref) return;
+    if (picker && picker.el.dataset.ref !== id) closePicker();
+    if (id !== S.focus) lightbox?.close(); // it shows the focus; never another reference behind it
     if (push && S.focus && S.focus !== id) S.trail.push(S.focus);
     const spec = $("#specimen")!;
     const first = !S.focus;
     S.focus = id;
     S.pinned = null;
     S.hot = null;
-    S.filter = null;
+    S.filter = noFilter();
     // The path you arrived on stays in the record header at rest.
-    S.arrival = ref.tags.find((t) => via && t.techniqueId === via) ?? ref.tags.find((t) => t.techniqueId) ?? ref.tags[0] ?? null;
+    S.arrival = arrivalOf(ref, via);
     clearTimeout(S.paintTimer);
     const mine = ++S.nav;
     const related = api.related(id).catch(() => [] as Scored[]);
@@ -86,33 +100,94 @@ export function mountReference(
       const list = await related;
       if (mine !== S.nav) return;
       S.related = list;
-      spec.style.setProperty("--ar", String(aspect(ref)));
-      $("#plate")!.innerHTML = img(ref, true);
-      renderBoxes(ref);
-      renderCallouts(ref);
-      renderRanked(ref);
-      renderLinks(ref);
-      renderRecord(ref, S.arrival);
-      readout();
-      spec.classList.remove("is-leaving");
-      redraw();
+      paintFocus(ref);
     };
     if (first) void paint();
     else {
       spec.classList.add("is-leaving");
       S.paintTimer = setTimeout(() => void paint(), PAINT_DELAY);
     }
-    const back = $<HTMLButtonElement>("#back")!;
-    back.disabled = !S.trail.length;
-    $("#back-label")!.textContent = S.trail.length ? `Back to ${S.byId.get(S.trail[S.trail.length - 1])?.title ?? ""}` : "Back";
+    renderBack();
     renderStatus();
   }
 
+  function paintFocus(ref: Reference) {
+    const spec = $("#specimen")!;
+    spec.style.setProperty("--ar", String(aspect(ref)));
+    // A drop here is "Tag like this" for this reference (Task 9). On #specimen, not #plate: the
+    // region boxes lie over the plate, so the drop's hit-test lands on a .box (Task 12 item 4).
+    spec.dataset.refDrop = ref.id;
+    // Repaint the image only when it changed: a superseded show() or reset may have left another one.
+    const src = api.assetUrl(ref.thumb1024);
+    if (S.plateSrc !== src) {
+      $("#plate")!.innerHTML = img(ref, true);
+      S.plateSrc = src;
+    }
+    renderBoxes(ref);
+    renderCallouts(ref);
+    renderRanked(ref);
+    renderLinks(ref);
+    renderRecord(ref, S.arrival);
+    readout();
+    spec.classList.remove("is-leaving");
+    redraw();
+  }
+
+  /** Re-render the focus in place after a Change: the pin, filter and trail stay. */
+  function refresh() {
+    const ref = focusRef();
+    if (!ref) return;
+    S.arrival = ref.tags.find((t) => t.id === S.arrival?.id) ?? arrivalOf(ref, null);
+    if (S.pinned != null && !ref.tags[S.pinned]) S.pinned = null;
+    if (S.hot != null && !ref.tags[S.hot]) S.hot = null;
+    clearTimeout(S.paintTimer);
+    const mine = ++S.nav;
+    void api
+      .related(ref.id)
+      .catch(() => [] as Scored[])
+      .then((list) => {
+        const now = focusRef();
+        if (mine !== S.nav || !now) return;
+        S.related = list;
+        paintFocus(now);
+        syncPins();
+        if (S.pinned != null) hot(S.pinned);
+      });
+  }
+
+  function renderEmpty() {
+    S.focus = S.pinned = S.hot = S.arrival = null;
+    S.filter = noFilter();
+    S.related = [];
+    S.ranked = [];
+    S.plateSrc = "";
+    delete $("#specimen")!.dataset.refDrop;
+    clearTimeout(S.paintTimer);
+    S.nav++;
+    $("#specimen")!.classList.remove("is-leaving");
+    for (const s of ["#plate", "#boxes", "#pane-ranked", "#pane-links", "#lab-meta"]) $(s)!.innerHTML = "";
+    $("#pane-callouts")!.innerHTML = `<p class="none">No references yet.</p>`;
+    $("#links-count")!.textContent = "";
+    $("#ref-id")!.textContent = "";
+    $("#ref-id")!.title = "";
+    root.querySelectorAll(".cell[data-level] [data-v]").forEach((v) => (v.textContent = ""));
+    redraw();
+  }
+
+  function renderBack() {
+    const back = $<HTMLButtonElement>("#back")!;
+    const last = S.trail[S.trail.length - 1];
+    back.disabled = !S.trail.length;
+    $("#back-label")!.textContent = last ? `Back to ${store.refs.get(last)?.title ?? ""}` : "Back";
+  }
+
   function renderStatus() {
-    $("#lib-count")!.textContent = `${S.refs.length} references`;
-    $("#inbox-count")!.textContent = String(S.refs.filter((r) => !r.tags.length).length);
-    $("#data-source")!.textContent = S.source;
-    $("#data-source")!.title = S.sourceTitle || S.source;
+    const folder = store.root.split(/[\\/]/).filter(Boolean).pop() ?? store.root;
+    $("#lib-count")!.textContent = `${store.refs.size} references`;
+    $("#inbox-count")!.textContent = String(store.inbox().length);
+    // The library's warning lives in #import-notice only (982f8a6), never here as well.
+    $("#data-source")!.textContent = `Library: ${folder}`;
+    $("#data-source")!.title = store.root;
     $("#find-similar")!.textContent = `Find similar: ${S.settings.findSimilar === "on" ? "on" : "off"}`;
   }
 
@@ -131,12 +206,12 @@ export function mountReference(
   function thumbsFor(technique?: string) {
     if (!technique) return [];
     return S.related
-      .filter((x) => S.byId.get(x.id)?.tags.some((t) => t.techniqueId === technique))
+      .filter((x) => store.refs.get(x.id)?.tags.some((t) => t.techniqueId === technique))
       .slice(0, 4);
   }
 
   function readout() {
-    const ref = S.focus ? S.byId.get(S.focus) : undefined;
+    const ref = focusRef();
     if (!ref) return;
     const value = $<HTMLInputElement>("#value")!.checked ? "on" : "off";
     // Items wrap as whole units; the separator trails each item so no line starts with "·".
@@ -164,13 +239,14 @@ export function mountReference(
         <div><h3><button class="pin" aria-pressed="false" aria-label="Pin callout ${i + 1}: ${esc(name)}">${esc(name)}</button><span class="state">${stateLabel[stateOf(t)]}</span></h3>
           <div class="path"><span class="op">${esc(opName(op))}</span>${domain ? ` · ${esc(domain)}` : ""} · ${esc(opPlain(op))}</div>
           ${def ? `<p class="pane-note">${esc(def)}</p>` : ""}
+          ${t.techniqueId ? `<button class="text-btn filter-by" data-filter="${esc(t.techniqueId)}" aria-label="Filter the Ranked list by ${esc(name)}">Filter by this</button>` : ""}
           ${
             !t.techniqueId
               ? `<p class="none">Partial tags don't count toward related scores.</p>`
               : th.length
                 ? `<div class="thumbs">${th
                     .map((x) => {
-                      const r = S.byId.get(x.id)!;
+                      const r = store.refs.get(x.id)!;
                       const region = r.tags.find((u) => u.techniqueId === t.techniqueId && u.region)?.region;
                       return `<button class="thumb" data-go="${esc(r.id)}" data-via="${esc(t.techniqueId)}" title="${esc(r.title)}" aria-label="Open ${esc(r.title)}, score ${fmt(x.score)}"><span class="t">${tileHTML(img(r), aspect(r), opColor(op), region)}</span><span class="sc">${fmt(x.score)}</span></button>`;
                     })
@@ -187,15 +263,26 @@ export function mountReference(
     const prev = new Set(S.ranked);
     const byScore = new Map(S.related.map((x) => [x.id, x]));
     const blank = (id: string): Scored => ({ id, score: 0, sharedTechniques: [], sharedBranches: [] });
-    const list = S.filter
-      ? S.refs.filter((r) => r.tags.some((t) => t.techniqueId === S.filter)).map((r) => byScore.get(r.id) ?? blank(r.id))
+    const f = S.filter;
+    const filtering = f.techniques.length > 0;
+    const list = filtering
+      ? allRefs()
+          .filter((r) => matchesFilter(r, f))
+          .map((r) => byScore.get(r.id) ?? blank(r.id))
+          .sort((a, b) => b.score - a.score)
       : S.related;
     S.ranked = list.map((x) => x.id);
-    const head = S.filter
-      ? `<p class="pane-note">Using <b class="mono">${esc(techName(S.filter))}</b> · ${list.length} references · <button class="settings" id="clear-filter">Clear</button></p>`
+    const mode = (m: Filter["mode"], label: string) =>
+      `<button class="text-btn" data-mode="${m}" aria-pressed="${f.mode === m}">${label}</button>`;
+    const head = filtering
+      ? `<div class="filter"><div class="filter-mode" role="group" aria-label="Match">${mode("or", "Any of")}${mode("and", "All of")}</div>
+        <ul class="chips">${f.techniques
+          .map((id) => `<li class="chip" data-t="${esc(id)}"><span>${esc(techName(id))}</span><button class="chip-x" data-untoggle="${esc(id)}" aria-label="Remove ${esc(techName(id))} from the filter">×</button></li>`)
+          .join("")}</ul>
+        <p class="pane-note">${list.length} references · <button class="settings" id="clear-filter">Clear</button></p></div>`
       : `<p class="pane-note">${list.length} related · strongest first</p>`;
     // SPEC §4: links the artist drew are always shown, listed first, never mixed into the score.
-    const mine = S.filter
+    const mine = filtering
       ? []
       : linksOf(ref).map(
           ({ other }) =>
@@ -203,7 +290,7 @@ export function mountReference(
         );
     const rows = list
       .map((x) => {
-        const r = S.byId.get(x.id);
+        const r = store.refs.get(x.id);
         if (!r) return "";
         const why = x.sharedTechniques.length
           ? `shares ${x.sharedTechniques.map(techName).join(", ")}`
@@ -213,15 +300,18 @@ export function mountReference(
         return `<button class="row${prev.size && !prev.has(r.id) ? " is-new" : ""}" data-go="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>${esc(why)}</small></span><span class="sc">${r.id === ref.id ? "this" : fmt(x.score)}</span></button>`;
       })
       .join("");
-    pane.innerHTML =
-      head + mine.join("") + (list.length ? rows : `<p class="none">Nothing shares a technique with this reference yet.</p>`);
+    const empty = filtering
+      ? `No reference has ${f.mode === "and" ? "all" : "any"} of these yet.`
+      : "Nothing shares a technique with this reference yet.";
+    pane.innerHTML = head + mine.join("") + (list.length ? rows : `<p class="none">${empty}</p>`);
+    pane.querySelectorAll<HTMLElement>(".chip").forEach((c) => c.style.setProperty("--c", opColor(techOp(c.dataset.t!))));
     setTimeout(() => pane.querySelectorAll(".is-new").forEach((el) => el.classList.remove("is-new")), 2400);
   }
 
   const linksOf = (ref: Reference) =>
-    S.links
+    store.links
       .filter((l) => l.fromRef === ref.id || l.toRef === ref.id)
-      .map((l) => ({ ...l, other: S.byId.get(l.fromRef === ref.id ? l.toRef : l.fromRef)! }))
+      .map((l) => ({ ...l, other: store.refs.get(l.fromRef === ref.id ? l.toRef : l.fromRef)! }))
       .filter((l) => l.other);
 
   function renderLinks(ref: Reference) {
@@ -263,7 +353,7 @@ export function mountReference(
   }
 
   // ---------- leaders and hover ----------
-  const focusRef = () => (S.focus ? S.byId.get(S.focus) : undefined);
+  const focusRef = () => (S.focus ? store.refs.get(S.focus) : undefined);
   const colors = () => (focusRef()?.tags ?? []).map((t) => opColor(t.operationId));
   const redraw = () => requestAnimationFrame(() => drawLeaders(root, colors(), S.hot));
 
@@ -306,11 +396,19 @@ export function mountReference(
   const systemTheme = () =>
     typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 
-  function applyFilter(tech: string) {
-    S.filter = tech;
-    selectPane("ranked");
+  /** Filter changes are view state: re-rank the Ranked pane only (no Change, no undo, no refetch). */
+  function rerank(filter: Filter, focusOn?: () => HTMLElement | null | undefined) {
+    S.filter = filter;
     const ref = focusRef();
     if (ref) renderRanked(ref);
+    // innerHTML dropped the focused control; put keyboard focus back near where the artist was.
+    if (focusOn) (focusOn() ?? $('.m-tab[data-pane="ranked"]'))?.focus();
+  }
+
+  /** Choosing a technique (search or callout) adds it; choosing it again keeps it. */
+  function applyFilter(tech: string) {
+    selectPane("ranked");
+    rerank(S.filter.techniques.includes(tech) ? S.filter : toggle(S.filter, tech));
   }
 
   // ---------- events ----------
@@ -326,12 +424,27 @@ export function mountReference(
       syncPins();
       return;
     }
-    if (target.id === "clear-filter") {
-      S.filter = null;
-      const ref = focusRef();
-      if (ref) renderRanked(ref);
+    const choose = target.closest<HTMLElement>("[data-filter]");
+    if (choose) {
+      applyFilter(choose.dataset.filter!);
+      $<HTMLElement>('.m-tab[data-pane="ranked"]')?.focus(); // the callout pane just hid its button
       return;
     }
+    const untoggle = target.closest<HTMLElement>("[data-untoggle]");
+    if (untoggle) {
+      const k = S.filter.techniques.indexOf(untoggle.dataset.untoggle!);
+      // the chip that slides into its place (or the one before it) keeps focus; none left → the tab
+      return rerank(toggle(S.filter, untoggle.dataset.untoggle!), () => {
+        const xs = root.querySelectorAll<HTMLElement>("#pane-ranked .chip-x");
+        return xs[Math.min(k, xs.length - 1)];
+      });
+    }
+    const mode = target.closest<HTMLElement>("[data-mode]");
+    if (mode) {
+      const m = mode.dataset.mode as Filter["mode"];
+      return rerank({ ...S.filter, mode: m }, () => $(`#pane-ranked [data-mode="${m}"]`));
+    }
+    if (target.id === "clear-filter") return rerank(noFilter(), () => null);
     const tab = target.closest<HTMLElement>(".m-tab");
     if (tab) selectPane(tab.dataset.pane!);
   }, { signal });
@@ -371,7 +484,13 @@ export function mountReference(
     selectPane(next.dataset.pane!);
   }, { signal });
   document.addEventListener("keydown", (e) => {
-    if ((e.target as Element).matches?.("input")) return;
+    if (e.isComposing) return;
+    // Ctrl/⌘ combos (paste, copy…) belong to the browser; Alt only for Alt+← (Back).
+    if (e.ctrlKey || e.metaKey || (e.altKey && e.key !== "ArrowLeft")) return;
+    if ((document.body.dataset.view ?? "reference") !== "reference") return; // another view is showing
+    if (lightbox) return; // the lightbox is modal: a key in a notice or dialog over it never acts behind it
+    // The picker, the lightbox and text fields own their keys (Plan 2 Global Constraints).
+    if ((e.target as Element).closest?.(".picker, .lightbox, input, textarea, [contenteditable]")) return;
     if (e.key === "/") {
       e.preventDefault();
       $<HTMLInputElement>("#q")!.focus();
@@ -384,8 +503,11 @@ export function mountReference(
       hot(null);
       syncPins();
     } else if (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) $<HTMLButtonElement>("#back")!.click();
-    else if (/^[1-9]$/.test(e.key)) {
-      const i = +e.key - 1;
+    else if (e.key === "t") openPicker();
+    else if (e.key === "l" || e.key === "L") openLb();
+    else if (digitOf(e)) {
+      if (pickerOpen()) return; // the picker's digits pick operations, never callouts
+      const i = digitOf(e)! - 1;
       if (focusRef()?.tags[i]) {
         S.pinned = i;
         hot(i);
@@ -400,68 +522,148 @@ export function mountReference(
 
   mountSearch(root, api, {
     techniqueName: techName,
-    operationLabel: (id) => ({ name: opName(id), plain: opPlain(id), color: opColor(id) }),
-    referenceTitle: (id) => S.byId.get(id)?.title,
+    operationLabel: (id) => ({ ...opLabel(store.tax, id), color: opColor(id) }),
+    referenceTitle: (id) => store.refs.get(id)?.title,
     onTechnique: applyFilter,
     onReference: (id) => show(id),
   }, signal);
 
   const notify = mountImport(root, api, {
-    libraryRoot: () => S.root,
-    onLibrary: (lib) => {
-      apply(lib);
-      const id = S.focus && S.byId.has(S.focus) ? S.focus : start()?.id;
-      if (id) show(id, { push: false });
-      else renderStatus();
-    },
+    libraryRoot: () => store.root,
+    // B4: the import's Change goes to the store; no reopen, so undo survives.
+    onChange: (c) => store.apply(c),
   }, signal);
 
-  // ---------- load ----------
-  function apply(lib: LibraryView) {
-    S.root = lib.root;
-    S.refs = lib.references;
-    S.links = lib.links;
-    S.byId = new Map(S.refs.map((r) => [r.id, r]));
-    const folder = lib.root.split(/[\\/]/).filter(Boolean).pop() ?? lib.root;
-    S.source = [`Library: ${folder}`, lib.warning].filter(Boolean).join(" · ");
-    S.sourceTitle = [lib.root, lib.warning].filter(Boolean).join(" · ");
+  // ---------- the technique picker (Plan 2 Task 8): "Tag…" on the plate, or the t key ----------
+  let picker: ReturnType<typeof mountPicker> | null = null;
+  const pickerOpen = () => !!picker?.el.isConnected;
+  function closePicker() {
+    picker?.close();
+    picker = null;
   }
-  const start = () => S.refs.find((r) => r.tags.length >= 3) ?? S.refs.find((r) => r.tags.length) ?? S.refs[0];
-
-  async function load() {
-    try {
-      S.settings = await api.getSettings();
-    } catch {
-      /* keep defaults */
-    }
-    applyTheme(S.settings.theme === "system" ? systemTheme() : S.settings.theme);
-    if (!initial && !S.settings.lastLibrary) {
-      S.source = "No library open yet.";
-      renderStatus();
+  function openPicker() {
+    const ref = focusRef();
+    if (!ref) return;
+    if (pickerOpen() && picker!.el.dataset.ref === ref.id) {
+      picker!.el.querySelector<HTMLElement>('.pk-ops [tabindex="0"]')?.focus();
       return;
     }
-    try {
-      const lib = initial ?? (await api.openLibrary(S.settings.lastLibrary!));
-      apply(lib);
-      // After an import the reopen's warning goes out with the summary (importer.ts).
-      if (lib.warning) notify(warningHTML(lib.warning));
-      S.tax = await api.getTaxonomy();
-    } catch (err) {
-      S.source = `Could not open the library: ${String(err)}`;
-      renderStatus();
-      return;
-    }
-    const first = start();
-    if (first) show(first.id, { push: false });
-    else renderStatus();
+    closePicker();
+    // Docked in the margin, for the whole image: an already-tagged reference can gain a tag too.
+    const mine = mountPicker($(".margin")!, api, store, {
+      refId: ref.id,
+      onDone: closePicker,
+      onClose: () => void (picker === mine && (picker = null)), // never null a newer picker
+    });
+    picker = mine;
   }
+  $("#lab")!.insertAdjacentHTML("beforeend", `<button type="button" class="tag-open" aria-keyshortcuts="t">Tag…</button>`);
+  const tagOpen = $<HTMLButtonElement>("#lab .tag-open")!;
+  tagOpen.addEventListener("click", openPicker, { signal });
+  signal.addEventListener("abort", () => {
+    closePicker();
+    tagOpen.remove();
+  });
 
-  const ready = load();
+  // ---------- the minimal lightbox (Plan 2 Task 10): "Open lightbox" on the plate, or the L key ----------
+  let lightbox: { close(): void } | null = null;
+  function openLb() {
+    const ref = focusRef();
+    if (!ref || document.querySelector(".lightbox")) return;
+    closePicker(); // a margin picker would sit behind the modal
+    lightbox = openLightbox(api, store, ref.id, {
+      openPicker: (opts) => {
+        closePicker();
+        // Docked inside the modal so it can be reached and focus stays trapped.
+        // ponytail: found by class; Plan 4's lightbox chrome owns this slot.
+        const slot = document.querySelector<HTMLElement>(".lightbox .lb-side") ?? $(".margin")!;
+        const mine = mountPicker(slot, api, store, {
+          ...opts,
+          onDone: closePicker,
+          onClose: () => void (picker === mine && (picker = null)), // never null a newer picker
+        });
+        picker = mine;
+      },
+      // A picker docked inside left with the lightbox's DOM: close it so it unsubscribes.
+      onClose: () => {
+        lightbox = null;
+        if (picker && !picker.el.isConnected) closePicker();
+      },
+    });
+  }
+  $("#lab")!.insertAdjacentHTML("beforeend", `<button type="button" class="lb-open" aria-keyshortcuts="l">Open lightbox</button>`);
+  const lbOpen = $<HTMLButtonElement>("#lab .lb-open")!;
+  lbOpen.addEventListener("click", openLb, { signal });
+  signal.addEventListener("abort", () => {
+    lightbox?.close();
+    lbOpen.remove();
+  });
+
+  // ---------- the Store ----------
+  const start = () => {
+    const refs = allRefs();
+    return refs.find((r) => r.tags.length >= 3) ?? refs.find((r) => r.tags.length) ?? refs[0];
+  };
+  /** The brief's re-render scope: the focus, its related references, or the taxonomy. A changed
+   * reference sharing a technique or branch with the focus may have just become related. */
+  const touchesFocus = (c: StoreEvent) => {
+    const f = focusRef();
+    if (c.reset || c.taxonomy || c.removed.length || !f) return true;
+    // With a filter on, a ranked or newly matching reference changes the Ranked list too.
+    const filtered = new Set(S.filter.techniques);
+    if (
+      filtered.size &&
+      c.references.some((r) => S.ranked.includes(r.id) || r.tags.some((t) => t.techniqueId && filtered.has(t.techniqueId)))
+    )
+      return true;
+    const techs = new Set(f.tags.map((t) => t.techniqueId).filter(Boolean));
+    const branches = new Set(f.tags.map((t) => t.branchId).filter(Boolean));
+    return c.references.some(
+      (r) =>
+        r.id === f.id ||
+        S.related.some((x) => x.id === r.id) ||
+        r.tags.some((t) => techs.has(t.techniqueId) || branches.has(t.branchId)),
+    );
+  };
+  const unsubscribe = store.subscribe((c) => {
+    // A library switch starts a fresh history; Rust clears the undo trail, the Store its flags.
+    S.trail = c.reset ? [] : S.trail.filter((id) => store.refs.has(id));
+    if (c.reset) {
+      if (store.warning) notify(warningHTML(store.warning));
+      else $<HTMLElement>("#import-notice")!.hidden = true; // the old library's notice is stale
+    }
+    if (S.focus && store.refs.has(S.focus)) {
+      if (touchesFocus(c)) refresh();
+    }
+    else {
+      // The focus was removed: back along the trail, then the first reference, then empty.
+      const id = c.reset ? start()?.id : (S.trail.pop() ?? store.refs.keys().next().value);
+      if (id) show(id, { push: false });
+      else renderEmpty();
+    }
+    renderBack();
+    renderStatus();
+  });
+
+  renderStatus();
+  if (store.warning) notify(warningHTML(store.warning));
+  const first = start();
+  if (first) show(first.id, { push: false });
+  else renderEmpty();
+
+  const ready = api
+    .getSettings()
+    .then((s) => void (S.settings = s), () => {}) // keep the defaults
+    .then(() => {
+      applyTheme(S.settings.theme === "system" ? systemTheme() : S.settings.theme);
+      renderStatus();
+    });
   return {
     show: (id: string) => show(id),
     ready,
     destroy: () => {
       life.abort();
+      unsubscribe();
       clearTimeout(S.paintTimer);
       S.nav++; // drop any paint still in flight
     },

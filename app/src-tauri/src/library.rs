@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 const DATA: &str = "library.json";
 const BACKUP: &str = "library.bak.json";
 const TMP: &str = "library.json.tmp";
-const SUBFOLDER: &str = "Horus Library";
+/// Where `create` puts the library when the chosen folder already holds other files.
+pub const SUBFOLDER: &str = "Horus Library";
 /// The `library.json` format this build writes; `open` refuses anything newer.
 const VERSION: u32 = 1;
 
@@ -24,6 +25,9 @@ pub enum LibraryError {
     SubfolderNotEmpty,
     #[error("library.json was saved by a newer version of Horus")]
     NewerVersion,
+    /// A `Reference.file` or hash that is not one Horus wrote (a hand-edited library.json).
+    #[error("not a valid image file name: {0}")]
+    InvalidFile(String),
 }
 
 pub struct Library {
@@ -102,8 +106,8 @@ impl Library {
         })
     }
 
-    /// Write library.json.tmp, roll the current library.json into library.bak.json,
-    /// then atomically rename the tmp over library.json.
+    /// Write library.json.tmp, roll the current library.json into library.bak.json (through
+    /// library.bak.json.tmp), then atomically rename the tmp over library.json.
     pub fn save(&self) -> Result<(), LibraryError> {
         let json = serde_json::to_vec_pretty(&self.data).map_err(std::io::Error::other)?;
         let tmp_path = self.root.join(TMP);
@@ -118,33 +122,89 @@ impl Library {
         tmp.as_file().sync_all()?;
         let data = self.root.join(DATA);
         // Rotate only a library.json that parses, so a corrupt file never replaces a good backup.
-        if parse(&data).is_some() {
-            fs::copy(&data, self.root.join(BACKUP))?;
+        match fs::read(&data) {
+            Ok(current) if serde_json::from_slice::<LibraryData>(&current).is_ok() => {
+                write_atomic(&self.root.join(BACKUP), &current)?;
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            // Locked (a sync client) rather than damaged: keep the old backup, still save.
+            Err(e) => eprintln!(
+                "Horus: library.json could not be read, so library.bak.json was not updated: {e}"
+            ),
         }
         tmp.persist(&data).map_err(|e| e.error)?;
         Ok(())
     }
 
-    pub fn image_path(&self, r: &Reference) -> PathBuf {
+    pub fn image_path(&self, r: &Reference) -> Result<PathBuf, LibraryError> {
         image_path_in(&self.root, &r.file)
     }
 
     /// `size` is 256 or 1024.
-    pub fn thumb_path(&self, hash: &str, size: u32) -> PathBuf {
+    pub fn thumb_path(&self, hash: &str, size: u32) -> Result<PathBuf, LibraryError> {
         thumb_path_in(&self.root, hash, size)
     }
 }
 
-/// `file` is the bare `Reference.file` name.
-pub fn image_path_in(root: &Path, file: &str) -> PathBuf {
-    root.join("images").join(file)
+/// Writes `<path>.tmp`, syncs it, then renames it over `path`. The tmp name is fixed, so a
+/// leftover from a crash is replaced instead of piling up next to the library's files.
+// ponytail: no sweep of random `.tmp*` names in the root. With fixed names none are created
+// (Task 3's NamedTempFile names never shipped); Plan 6's `sweep_tmp` owns crash leftovers.
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let name = format!(
+        "{}.tmp",
+        path.file_name().unwrap_or_default().to_string_lossy()
+    );
+    let _ = fs::remove_file(dir.join(&name));
+    let mut tmp = tempfile::Builder::new()
+        .prefix(&name)
+        .rand_bytes(0)
+        .tempfile_in(dir)?;
+    tmp.write_all(bytes)?;
+    tmp.as_file().sync_all()?;
+    tmp.persist(path).map_err(|e| e.error)?;
+    Ok(())
+}
+
+/// Where imports put image files. Unguarded: it names the directory, not a reference's file.
+pub fn images_dir(root: &Path) -> PathBuf {
+    root.join("images")
+}
+
+/// 64 lowercase hex characters: a BLAKE3 hash as Horus writes it.
+fn is_hash(s: &str) -> bool {
+    s.len() == 64
+        && s.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// `file` is the bare `Reference.file` name: `<hash>.<ext>`, the ext 2-5 of `[a-z0-9]`.
+/// Anything else (`..`, a separator, a drive) is refused, so library.json can't point outside.
+pub fn image_path_in(root: &Path, file: &str) -> Result<PathBuf, LibraryError> {
+    let ok = file.split_once('.').is_some_and(|(hash, ext)| {
+        is_hash(hash)
+            && (2..=5).contains(&ext.len())
+            && ext
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+    });
+    if !ok {
+        return Err(LibraryError::InvalidFile(file.into()));
+    }
+    Ok(images_dir(root).join(file))
 }
 
 /// `size` is 256 or 1024.
-pub fn thumb_path_in(root: &Path, hash: &str, size: u32) -> PathBuf {
-    root.join("thumbs")
+pub fn thumb_path_in(root: &Path, hash: &str, size: u32) -> Result<PathBuf, LibraryError> {
+    if !is_hash(hash) || !matches!(size, 256 | 1024) {
+        return Err(LibraryError::InvalidFile(format!("{hash} ({size})")));
+    }
+    Ok(root
+        .join("thumbs")
         .join(size.to_string())
-        .join(format!("{hash}.jpg"))
+        .join(format!("{hash}.jpg")))
 }
 
 fn is_library(dir: &Path) -> bool {
@@ -192,10 +252,6 @@ fn check(bytes: &[u8]) -> Result<Option<LibraryData>, LibraryError> {
         return Err(LibraryError::NewerVersion);
     }
     Ok(serde_json::from_value(value).ok())
-}
-
-fn parse(p: &Path) -> Option<LibraryData> {
-    serde_json::from_slice(&fs::read(p).ok()?).ok()
 }
 
 #[cfg(test)]
@@ -444,5 +500,20 @@ mod tests {
         let opened = Library::open(&root).unwrap();
         assert!(!opened.recovered_from_backup);
         assert_eq!(opened.data, lib.data);
+    }
+
+    #[test]
+    fn backup_written_via_tmp() {
+        let (dir, mut lib) = new_lib();
+        let previous = fs::read(dir.path().join("library.json")).unwrap();
+        // a leftover from a crash mid-rotation is replaced, never left behind
+        fs::write(dir.path().join("library.bak.json.tmp"), "junk").unwrap();
+        add_board(&mut lib, "b1");
+        lib.save().unwrap();
+        assert!(!dir.path().join("library.bak.json.tmp").exists());
+        assert_eq!(
+            fs::read(dir.path().join("library.bak.json")).unwrap(),
+            previous
+        );
     }
 }

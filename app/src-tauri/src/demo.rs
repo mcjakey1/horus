@@ -1,12 +1,13 @@
 //! The demo seed: imports the bundled `resources/demo` images into a fresh library and turns
-//! each manifest record's `suggestedTechniques` into suggested tags.
+//! each manifest record's `suggestedTechniques` into suggested tags. `examples` lists the same
+//! images per technique for the picker.
 
 use crate::import;
 use crate::model::{Reference, Region, Tag};
 use crate::taxonomy::Taxonomy;
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::path::Path;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,10 +37,7 @@ struct Suggestion {
 /// manifest, skipped image, unknown name) is reported, never raised.
 pub fn seed(root: &Path, tax: &Taxonomy, demo_dir: &Path) -> (Vec<Reference>, Vec<String>) {
     let mut warnings = vec![];
-    let records: Vec<Record> = match std::fs::read(demo_dir.join("manifest.json"))
-        .map_err(|e| e.to_string())
-        .and_then(|b| serde_json::from_slice(&b).map_err(|e| e.to_string()))
-    {
+    let records = match read_manifest(demo_dir) {
         Ok(r) => r,
         Err(e) => {
             return (
@@ -78,6 +76,47 @@ pub fn seed(root: &Path, tax: &Taxonomy, demo_dir: &Path) -> (Vec<Reference>, Ve
         refs.push(r);
     }
     (refs, warnings)
+}
+
+fn read_manifest(demo_dir: &Path) -> Result<Vec<Record>, String> {
+    let bytes = std::fs::read(demo_dir.join("manifest.json")).map_err(|e| e.to_string())?;
+    serde_json::from_slice(&bytes).map_err(|e| e.to_string())
+}
+
+/// A bundled demo image that uses a technique (SPEC §6.2). `path` is absolute.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DemoExample {
+    pub technique_id: String,
+    pub title: String,
+    pub path: String,
+}
+
+/// One entry per (technique, image) in the manifest, with names resolved against `tax` as
+/// `seed` resolves them. A name `tax` lacks, or a missing image, is skipped; a missing or
+/// unreadable manifest gives none.
+pub fn examples(tax: &Taxonomy, demo_dir: &Path) -> Vec<DemoExample> {
+    let mut out = vec![];
+    for rec in read_manifest(demo_dir).unwrap_or_default() {
+        // Collected from components, so the manifest's `/` becomes the platform's separator.
+        let path: PathBuf = demo_dir.join(&rec.file).components().collect();
+        if !path.is_file() {
+            continue;
+        }
+        let mut seen = HashSet::new();
+        for s in &rec.suggested_techniques {
+            if let Some(id) = to_tag(tax, s).ok().and_then(|t| t.technique_id)
+                && seen.insert(id.clone())
+            {
+                out.push(DemoExample {
+                    technique_id: id,
+                    title: rec.title.clone(),
+                    path: path.to_string_lossy().into_owned(),
+                });
+            }
+        }
+    }
+    out
 }
 
 /// Resolves display names to taxonomy ids. A partial tag (no technique) keeps the operation only.

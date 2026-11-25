@@ -8,13 +8,14 @@
 </head>
 <body>
 <header class="top">
+  <button class="lib-btn" id="library-menu">Library</button>
   <span class="brand">Horus</span>
   <nav class="tabs" aria-label="Views">
-    <button class="tab is-on" aria-current="page">Reference</button>
+    <button class="tab is-on" aria-current="page" data-view-tab="reference">Reference</button>
     <button class="tab" disabled title="Not built yet">Tree</button>
     <button class="tab" disabled title="Not built yet">Galaxy</button>
     <button class="tab" disabled title="Not built yet">Radial</button>
-    <button class="tab" disabled title="Not built yet">Inbox <span class="count" id="inbox-count">0</span></button>
+    <button class="tab" data-view-tab="inbox">Inbox <span class="count" id="inbox-count">0</span></button>
     <button class="tab" disabled title="Not built yet">Boards</button>
   </nav>
   <div class="search">
@@ -58,6 +59,8 @@
     <div class="pane" id="pane-links" role="tabpanel" aria-labelledby="tab-links" hidden></div>
   </aside>
 </main>
+
+<section class="inbox" id="inbox" aria-label="Inbox"></section>
 
 <footer class="status">
   <span class="mono" id="lib-count"></span>

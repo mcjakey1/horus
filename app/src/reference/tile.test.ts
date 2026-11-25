@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { tileBox } from "./tile";
+import { fitBox, tileBox } from "./tile";
+
+describe("fitBox", () => {
+  it("letterboxes into any w×h", () => {
+    const b = fitBox(4 / 3, 800, 400);
+    expect(b.left).toBeCloseTo(133.333, 2);
+    expect(b.top).toBe(0);
+    expect(b.width).toBeCloseTo(533.333, 2);
+    expect(b.height).toBe(400);
+  });
+
+  it("pillarboxes a tall plate in a wide box, and fills an exact fit", () => {
+    expect(fitBox(1 / 2, 300, 400)).toEqual({ left: 50, top: 0, width: 200, height: 400 });
+    expect(fitBox(2, 400, 200)).toEqual({ left: 0, top: 0, width: 400, height: 200 });
+  });
+});
 
 describe("tileBox", () => {
   it("letterboxes a portrait plate horizontally, with no outline", () => {

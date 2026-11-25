@@ -1,6 +1,7 @@
 //! Seed taxonomy: Operation -> Domain (a Branch) -> Technique, as a DAG.
 //! `validate` checks structure; `validate_seed` adds the rest of `taxonomy/check_taxonomy.py`.
 
+use crate::library::write_atomic;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -72,10 +73,92 @@ pub struct Technique {
 pub struct BranchTechnique {
     pub branch_id: String,
     pub technique_id: String,
+    #[serde(default)]
     pub source: String,
+    #[serde(default)]
     pub rationale: String,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
+}
+
+/// The only taxonomy format this build reads and writes (top-level `version`).
+pub const TAXONOMY_VERSION: u64 = 1;
+const NEWER: &str = "This library was saved by a newer version of Horus.";
+
+/// Where `load_with_fallback` found the taxonomy. `SeedReadOnly` means both library files
+/// were unusable: the caller must never write `taxonomy.json` (the damaged file stays
+/// recoverable).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaxSource {
+    File,
+    Backup,
+    SeedReadOnly,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CustomError {
+    /// The id of the technique that already has this name.
+    NameTaken(String),
+    EmptyName,
+    NoSuchBranch,
+}
+
+impl std::fmt::Display for CustomError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            CustomError::NameTaken(_) => "A technique with that name already exists.",
+            CustomError::EmptyName => "Give the technique a name.",
+            CustomError::NoSuchBranch => "That operation has no such domain.",
+        })
+    }
+}
+
+/// Case-folded, whitespace-collapsed: the "same name" rule (Review Focus 4).
+fn name_key(name: &str) -> String {
+    name.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
+}
+
+/// Lowercase alphanumeric runs joined by `-`; "technique" if nothing is left.
+fn slug(name: &str) -> String {
+    let lower = name.to_lowercase();
+    let s = lower
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    if s.is_empty() { "technique".into() } else { s }
+}
+
+/// `Ok(None)` when the file is absent or is not a taxonomy. `Err` when an existing file can't
+/// be read (a sync lock, a permission error): falling back would load an older copy, and the
+/// next saves would rotate the newer file out of both copies (as `library.rs` `open` does).
+/// `Err` too when it is from a newer Horus (checked before parsing, so it is never skipped).
+fn read_taxonomy(path: &Path) -> Result<Option<Taxonomy>, String> {
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            let name = path.file_name().map_or_else(
+                || path.display().to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            );
+            return Err(format!("Couldn't read {name}: {e}"));
+        }
+    };
+    let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+        return Ok(None);
+    };
+    if value
+        .get("version")
+        .and_then(Value::as_u64)
+        .is_some_and(|v| v > TAXONOMY_VERSION)
+    {
+        return Err(NEWER.into());
+    }
+    Ok(serde_json::from_value(value).ok())
 }
 
 // Seed-pinned constants, mirrored verbatim from check_taxonomy.py; used only by `validate_seed`.
@@ -172,6 +255,116 @@ impl Taxonomy {
     pub fn load(path: &Path) -> Result<Taxonomy, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
         serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
+    }
+
+    /// Rotates `<dir>/taxonomy.bak.json` from the current file (only if it parses, so a
+    /// damaged file never replaces a good backup), then writes this taxonomy atomically.
+    /// An existing file that can't be read (a sync lock) is an `Err`, as in `read_taxonomy`:
+    /// writing anyway would skip the rotation and replace a newer file nothing else holds.
+    pub fn save(&self, path: &Path) -> std::io::Result<()> {
+        let dir = path.parent().unwrap_or_else(|| Path::new("."));
+        match std::fs::read(path) {
+            Ok(current) if serde_json::from_slice::<Taxonomy>(&current).is_ok() => {
+                write_atomic(&dir.join("taxonomy.bak.json"), &current)?;
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                let name = path.file_name().unwrap_or_default().to_string_lossy();
+                return Err(std::io::Error::new(
+                    e.kind(),
+                    format!("Couldn't read {name}: {e}"),
+                ));
+            }
+        }
+        let bytes = serde_json::to_vec_pretty(self).map_err(std::io::Error::other)?;
+        write_atomic(path, &bytes)
+    }
+
+    /// `taxonomy.json`, then `taxonomy.bak.json`, then the bundled seed (read-only). `Err`
+    /// for a newer-version file, or when all three are unusable (a broken install).
+    pub fn load_with_fallback(root: &Path, seed: &Path) -> Result<(Taxonomy, TaxSource), String> {
+        if let Some(t) = read_taxonomy(&root.join("taxonomy.json"))? {
+            return Ok((t, TaxSource::File));
+        }
+        if let Some(t) = read_taxonomy(&root.join("taxonomy.bak.json"))? {
+            return Ok((t, TaxSource::Backup));
+        }
+        Taxonomy::load(seed)
+            .map(|t| (t, TaxSource::SeedReadOnly))
+            .map_err(|e| {
+                format!(
+                    "The library's technique list and its backup are damaged, and the starting \
+                     list that ships with Horus could not be read ({e})."
+                )
+            })
+    }
+
+    /// Same name ignoring case and spacing only (Review Focus 4).
+    pub fn find_by_name(&self, name: &str) -> Option<&Technique> {
+        let key = name_key(name);
+        self.techniques.iter().find(|t| name_key(&t.name) == key)
+    }
+
+    /// Builds (does not apply) the `AddTechnique` for an artist's new technique under the
+    /// existing branch `operation_id` × `domain_id`.
+    pub fn custom_technique(
+        &self,
+        name: &str,
+        description: &str,
+        operation_id: &str,
+        domain_id: &str,
+    ) -> Result<crate::edit::Edit, CustomError> {
+        let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+        if name.is_empty() {
+            return Err(CustomError::EmptyName);
+        }
+        if let Some(t) = self.find_by_name(&name) {
+            return Err(CustomError::NameTaken(t.id.clone()));
+        }
+        let branch = self
+            .branches
+            .iter()
+            .find(|b| b.operation_id == operation_id && b.domain_id == domain_id)
+            .ok_or(CustomError::NoSuchBranch)?;
+        // Orphan links count as taken: AddTechnique refuses an id any link already uses.
+        let taken: HashSet<&str> = self
+            .techniques
+            .iter()
+            .map(|t| t.id.as_str())
+            .chain(
+                self.branch_techniques
+                    .iter()
+                    .map(|l| l.technique_id.as_str()),
+            )
+            .collect();
+        let base = slug(&name);
+        let id = std::iter::once(base.clone())
+            .chain((2..).map(|n| format!("{base}-{n}")))
+            .find(|id| !taken.contains(id.as_str()))
+            .expect("an unbounded sequence always finds a free id");
+        let technique = Technique {
+            id: id.clone(),
+            name,
+            icon: String::new(),
+            description: description.trim().to_string(),
+            synonyms: vec![],
+            citation: None,
+            examples: vec![],
+            custom: true,
+            extra: Map::new(),
+        };
+        let link = BranchTechnique {
+            branch_id: branch.id.clone(),
+            technique_id: id,
+            source: "drafted".into(),
+            rationale: "Added by the artist in the tag picker.".into(),
+            extra: Map::new(),
+        };
+        Ok(crate::edit::Edit::AddTechnique {
+            technique,
+            links: vec![link],
+        })
     }
 
     /// Structural integrity only: unique ids, references resolve, every technique has a
@@ -562,5 +755,297 @@ mod tests {
             read(&seed_path()) == read(&repo),
             "resources/taxonomy.json drifted from taxonomy/taxonomy.json; copy it again"
         );
+    }
+
+    fn empty_data() -> crate::model::LibraryData {
+        crate::model::LibraryData {
+            version: 1,
+            references: vec![],
+            links: vec![],
+            boards: vec![],
+        }
+    }
+
+    /// `seed` with "Halo glow" added through `custom_technique` + `edit::apply`.
+    fn seed_with_halo() -> Taxonomy {
+        let mut t = seed();
+        let e = t
+            .custom_technique(
+                "Halo glow",
+                "A soft ring of light around the subject.",
+                "differentiate",
+                "feature",
+            )
+            .unwrap();
+        crate::edit::apply(&mut empty_data(), &mut t, e).unwrap();
+        t
+    }
+
+    fn tmp_names(dir: &Path) -> Vec<String> {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".tmp") || n.starts_with(".tmp"))
+            .collect()
+    }
+
+    #[test]
+    fn save_writes_no_key_absent_from_the_seed() {
+        let seed_value: Value =
+            serde_json::from_str(&std::fs::read_to_string(seed_path()).unwrap()).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("taxonomy.json");
+        seed().save(&path).unwrap();
+        let saved: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(saved, seed_value);
+        // And the save/load round trip keeps unknown keys too (extends roundtrip_preserves_fields).
+        let mut with_extra = seed_value.clone();
+        with_extra["techniques"][0]["futureKey"] = Value::from("kept");
+        std::fs::write(&path, serde_json::to_string(&with_extra).unwrap()).unwrap();
+        Taxonomy::load(&path).unwrap().save(&path).unwrap();
+        let back: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(back, with_extra);
+    }
+
+    #[test]
+    fn custom_technique_is_custom_and_linked() {
+        let t = seed();
+        let e = t
+            .custom_technique(
+                "Halo glow",
+                "A soft ring of light around the subject.",
+                "differentiate",
+                "feature",
+            )
+            .unwrap();
+        let crate::edit::Edit::AddTechnique { technique, links } = &e else {
+            panic!("expected AddTechnique, got {e:?}");
+        };
+        assert!(technique.custom);
+        assert_eq!(technique.id, "halo-glow");
+        assert_eq!(technique.name, "Halo glow");
+        assert_eq!(technique.icon, "");
+        assert!(technique.synonyms.is_empty() && technique.examples.is_empty());
+        assert_eq!(technique.citation, None);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].branch_id, "differentiate.feature");
+        assert_eq!(links[0].technique_id, "halo-glow");
+        assert_eq!(links[0].source, "drafted");
+        assert_eq!(links[0].rationale, "Added by the artist in the tag picker.");
+        let t = seed_with_halo();
+        assert_eq!(t.validate(), Ok(()));
+        assert!(t.techniques.iter().any(|x| x.id == "halo-glow"));
+    }
+
+    #[test]
+    fn custom_name_collision() {
+        let t = seed();
+        for name in ["  chiaroscuro ", "CHIAROSCURO"] {
+            assert_eq!(
+                t.custom_technique(name, "", "differentiate", "feature"),
+                Err(CustomError::NameTaken("chiaroscuro".into())),
+                "{name:?}"
+            );
+        }
+        assert_eq!(
+            t.custom_technique("   ", "", "differentiate", "feature"),
+            Err(CustomError::EmptyName)
+        );
+    }
+
+    #[test]
+    fn custom_unknown_branch() {
+        assert_eq!(
+            seed().custom_technique("x", "", "group", "semantic"),
+            Err(CustomError::NoSuchBranch)
+        );
+    }
+
+    #[test]
+    fn custom_id_suffix() {
+        let t = seed_with_halo();
+        // Only case and spacing differ: the same name (Review Focus 4, ruling B6).
+        assert_eq!(
+            t.custom_technique("HALO  Glow", "", "differentiate", "feature"),
+            Err(CustomError::NameTaken("halo-glow".into()))
+        );
+        // Punctuation makes it a different name that slugifies to the same id.
+        let e = t
+            .custom_technique("Halo-Glow!", "", "differentiate", "feature")
+            .unwrap();
+        let crate::edit::Edit::AddTechnique { technique, links } = e else {
+            panic!()
+        };
+        assert_eq!(technique.id, "halo-glow-2");
+        assert_eq!(links[0].technique_id, "halo-glow-2");
+    }
+
+    #[test]
+    fn find_by_name_ignores_case_and_spacing_only() {
+        let t = seed();
+        assert_eq!(
+            t.find_by_name("  rim   LIGHT ").map(|x| x.id.as_str()),
+            Some("rim-light")
+        );
+        assert!(t.find_by_name("rim-light").is_none());
+    }
+
+    #[test]
+    fn taxonomy_backup_rotates() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("taxonomy.json");
+        let bak = dir.path().join("taxonomy.bak.json");
+        let first = seed();
+        first.save(&path).unwrap();
+        assert!(
+            !bak.exists(),
+            "no backup before there is a previous version"
+        );
+        let first_bytes = std::fs::read(&path).unwrap();
+        let second = seed_with_halo();
+        second.save(&path).unwrap();
+        assert_eq!(std::fs::read(&bak).unwrap(), first_bytes);
+        assert_eq!(Taxonomy::load(&path).unwrap(), second);
+        assert!(
+            tmp_names(dir.path()).is_empty(),
+            "{:?}",
+            tmp_names(dir.path())
+        );
+        // A save over an unparseable taxonomy.json leaves the good backup alone.
+        std::fs::write(&path, "{").unwrap();
+        second.save(&path).unwrap();
+        assert_eq!(std::fs::read(&bak).unwrap(), first_bytes);
+        assert_eq!(Taxonomy::load(&path).unwrap(), second);
+    }
+
+    #[test]
+    fn damaged_taxonomy_falls_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::copy(seed_path(), root.join("taxonomy.bak.json")).unwrap();
+        std::fs::write(root.join("taxonomy.json"), "{").unwrap();
+        let (t, src) = Taxonomy::load_with_fallback(root, &seed_path()).unwrap();
+        assert_eq!((t, src), (seed(), TaxSource::Backup));
+
+        std::fs::write(root.join("taxonomy.bak.json"), "not json").unwrap();
+        let (t, src) = Taxonomy::load_with_fallback(root, &seed_path()).unwrap();
+        assert_eq!((t, src), (seed(), TaxSource::SeedReadOnly));
+
+        let missing_seed = root.join("no-such-seed.json");
+        assert!(Taxonomy::load_with_fallback(root, &missing_seed).is_err());
+
+        // A good file is used as is.
+        seed_with_halo().save(&root.join("taxonomy.json")).unwrap();
+        let (t, src) = Taxonomy::load_with_fallback(root, &seed_path()).unwrap();
+        assert_eq!(src, TaxSource::File);
+        assert!(t.techniques.iter().any(|x| x.id == "halo-glow"));
+    }
+
+    #[test]
+    fn unreadable_taxonomy_refuses_instead_of_using_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        // A directory at the file's path: the read fails with a non-NotFound error, as a
+        // sync lock or permission error would. The older backup must not be used.
+        std::fs::create_dir(root.join("taxonomy.json")).unwrap();
+        std::fs::copy(seed_path(), root.join("taxonomy.bak.json")).unwrap();
+        let err = Taxonomy::load_with_fallback(root, &seed_path()).unwrap_err();
+        assert!(err.starts_with("Couldn't read taxonomy.json:"), "{err}");
+        // The same rule for the backup: unreadable is an error, not a reason to use the seed.
+        std::fs::remove_dir(root.join("taxonomy.json")).unwrap();
+        std::fs::remove_file(root.join("taxonomy.bak.json")).unwrap();
+        std::fs::create_dir(root.join("taxonomy.bak.json")).unwrap();
+        let err = Taxonomy::load_with_fallback(root, &seed_path()).unwrap_err();
+        assert!(err.starts_with("Couldn't read taxonomy.bak.json:"), "{err}");
+    }
+
+    #[test]
+    fn newer_taxonomy_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let mut v: Value =
+            serde_json::from_str(&std::fs::read_to_string(seed_path()).unwrap()).unwrap();
+        v["version"] = Value::from(2);
+        let bytes = serde_json::to_vec(&v).unwrap();
+        std::fs::write(root.join("taxonomy.json"), &bytes).unwrap();
+        std::fs::copy(seed_path(), root.join("taxonomy.bak.json")).unwrap();
+        let err = Taxonomy::load_with_fallback(root, &seed_path()).unwrap_err();
+        assert_eq!(err, "This library was saved by a newer version of Horus.");
+        assert_eq!(std::fs::read(root.join("taxonomy.json")).unwrap(), bytes);
+        // A newer backup is refused too, rather than skipped.
+        std::fs::write(root.join("taxonomy.json"), "{").unwrap();
+        std::fs::write(root.join("taxonomy.bak.json"), &bytes).unwrap();
+        assert!(Taxonomy::load_with_fallback(root, &seed_path()).is_err());
+    }
+
+    #[test]
+    fn branch_technique_source_and_rationale_default() {
+        let link: BranchTechnique =
+            serde_json::from_str(r#"{"branchId":"a.b","techniqueId":"t"}"#).unwrap();
+        assert_eq!((link.source.as_str(), link.rationale.as_str()), ("", ""));
+    }
+
+    #[test]
+    fn save_refuses_unreadable_current() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("taxonomy.json");
+        // A directory at the file's path: the read fails with a non-NotFound error, as a
+        // sync lock would. Writing anyway would rotate nothing and lose the newer file.
+        std::fs::create_dir(&path).unwrap();
+        let tax = Taxonomy::load(&seed_path()).unwrap();
+        let err = tax.save(&path).unwrap_err().to_string();
+        assert!(err.starts_with("Couldn't read taxonomy.json:"), "{err}");
+        assert!(!dir.path().join("taxonomy.bak.json").exists());
+    }
+
+    #[test]
+    fn rotation_skips_valid_json_of_the_wrong_shape() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("taxonomy.json");
+        let bak = dir.path().join("taxonomy.bak.json");
+        let good = std::fs::read(seed_path()).unwrap();
+        std::fs::write(&bak, &good).unwrap();
+        let tax = Taxonomy::load(&seed_path()).unwrap();
+        for wrong in ["{}", "[]"] {
+            std::fs::write(&path, wrong).unwrap();
+            tax.save(&path).unwrap();
+            assert_eq!(
+                std::fs::read(&bak).unwrap(),
+                good,
+                "{wrong} replaced the backup"
+            );
+        }
+    }
+
+    #[test]
+    fn custom_id_skips_orphan_link() {
+        let mut t = Taxonomy::load(&seed_path()).unwrap();
+        t.branch_techniques.push(BranchTechnique {
+            branch_id: "differentiate.feature".into(),
+            technique_id: "halo-glow".into(),
+            source: "drafted".into(),
+            rationale: String::new(),
+            extra: Map::new(),
+        });
+        let crate::edit::Edit::AddTechnique { technique, .. } = t
+            .custom_technique("Halo glow", "", "differentiate", "feature")
+            .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(technique.id, "halo-glow-2");
+    }
+
+    #[test]
+    fn save_failure_keeps_old_taxonomy() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("taxonomy.json");
+        std::fs::copy(seed_path(), &path).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        std::fs::create_dir(dir.path().join("taxonomy.json.tmp")).unwrap();
+        let mut tax = Taxonomy::load(&seed_path()).unwrap();
+        tax.techniques[0].name = "Renamed".into();
+        assert!(tax.save(&path).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
     }
 }
