@@ -69,17 +69,17 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
 
   let body = "";
   if (!node) {
-    body = `<h2 class="insp-h">Operations</h2><div class="insp-list">${tax.operations
+    body = `<h2 class="insp-title" tabindex="-1">Operations</h2><div class="insp-list">${tax.operations
       .map((o) => selBtn(`op:${o.id}`, `${o.name} · ${o.plainLabel}`, (g.nodes.get(`op:${o.id}`) as { count: number }).count))
       .join("")}</div>`;
   } else if (node.kind === "op") {
     const op = tax.operations.find((o) => o.id === node.opId)!;
-    body = `<p class="insp-plain">${esc(op.plainLabel)}</p><h2 class="insp-title">${esc(op.name)}</h2>
-      <p class="insp-desc">${esc(op.description)}</p><p class="insp-count mono">${node.count} references</p>
+    body = `<p class="insp-plain">${esc(op.plainLabel)}</p><h2 class="insp-title" tabindex="-1">${esc(op.name)}</h2>
+      <p class="insp-desc">${esc(op.description)}</p><p class="insp-count mono">${node.count} ${node.count === 1 ? "reference" : "references"}</p>
       <div class="insp-list">${(g.children.get(node.id) ?? []).map((b) => selBtn(b, N.branchLabel(b.slice(3)), (g.nodes.get(b) as { count: number }).count)).join("")}</div>`;
   } else if (node.kind === "branch") {
     const d = N.domain(node.domainId);
-    body = `<h2 class="insp-title">${esc(d?.name ?? node.domainId)}</h2><p class="insp-desc">${esc(d?.description ?? "")}</p>
+    body = `<h2 class="insp-title" tabindex="-1">${esc(d?.name ?? node.domainId)}</h2><p class="insp-desc">${esc(d?.description ?? "")}</p>
       <div class="insp-list">${(g.children.get(node.id) ?? [])
         .map((t) => selBtn(t, N.tech(t.slice(5))?.name ?? t, (g.nodes.get(t) as { count: number }).count))
         .join("")}</div>`;
@@ -90,18 +90,21 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
       const ref = s.refs.get(r.refId)!;
       return `<button class="thumb" data-open="${esc(ref.id)}" title="${esc(ref.title)}"><span class="t"><span class="tplate">${opts.assetUrl ? `<img alt="" src="${esc(opts.assetUrl(ref.thumb256))}">` : ""}</span>${r.via.region ? `<span class="treg"></span>` : ""}</span></button>`;
     });
-    body = `<h2 class="insp-title">${esc(t.name)}</h2><p class="insp-desc">${esc(t.description)}</p>
+    body = `<h2 class="insp-title" tabindex="-1">${esc(t.name)}</h2><p class="insp-desc">${esc(t.description)}</p>
       ${t.synonyms.length ? `<p class="insp-syn">${esc(t.synonyms.join(", "))}</p>` : ""}
       <h3 class="insp-h">Used under</h3><div class="insp-list insp-used">${node.parents.map((b) => selBtn(`br:${b}`, N.branchLabel(b))).join("")}</div>
       <h3 class="insp-h">References ${count(node.count)}</h3>
       ${tiles.length ? `<div class="thumbs">${tiles.join("")}</div>` : `<p class="none">No reference has this technique yet.</p>`}`;
   } else {
     const ref = s.refs.get(node.refId)!;
-    body = `<h2 class="insp-title">${esc(ref.title)}</h2>
+    body = `<h2 class="insp-title" tabindex="-1">${esc(ref.title)}</h2>
       ${ref.creator || ref.year ? `<p class="insp-desc">${esc([ref.creator, ref.year].filter(Boolean).join(", "))}</p>` : ""}
       <button class="text-btn" data-open="${esc(ref.id)}">Open in Reference view</button>`;
   }
+  // Rewriting the aside destroys the focused button: keep the keyboard route inside it (I1).
+  const hadFocus = el.contains(document.activeElement);
   el.innerHTML = `${crumb}<div class="insp-body">${body}</div>`;
+  if (hadFocus) el.querySelector<HTMLElement>(".insp-title")?.focus();
 
   // Inks and tile geometry, through the CSSOM.
   if (opId) el.querySelector<HTMLElement>(".insp-crumb")!.style.setProperty("--op-text", opInk(tax, opId).text);

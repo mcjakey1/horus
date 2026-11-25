@@ -97,6 +97,34 @@ describe("renderInspector", () => {
     expect(el.querySelectorAll('[data-sel^="op:"]')).toHaveLength(4);
   });
 
+  it("focus_survives_rerender (fix round 1, I1)", () => {
+    renderInspector(el, s, { kind: "branch", id: "br:differentiate.feature" }, opts);
+    el.querySelector<HTMLElement>('[data-sel="tech:chiaroscuro"]')!.focus();
+    renderInspector(el, s, { kind: "tech", id: "tech:chiaroscuro" }, opts);
+    const title = el.querySelector<HTMLElement>(".insp-title")!;
+    expect(document.activeElement).toBe(title);
+    expect(title.getAttribute("tabindex")).toBe("-1");
+    // back to no selection: the list heading takes focus
+    renderInspector(el, s, null, opts);
+    expect(document.activeElement).toBe(el.querySelector(".insp-title"));
+    expect(el.querySelector(".insp-title")!.textContent).toBe("Operations");
+    // focus outside the aside is left alone
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+    renderInspector(el, s, { kind: "op", id: "op:infer" }, opts);
+    expect(document.activeElement).toBe(outside);
+  });
+
+  it("reference_count_plural (fix round 1, I2)", () => {
+    renderInspector(el, s, { kind: "op", id: "op:infer" }, opts);
+    expect(el.querySelector(".insp-count")!.textContent).toBe("1 reference");
+    renderInspector(el, s, { kind: "op", id: "op:differentiate" }, opts);
+    expect(el.querySelector(".insp-count")!.textContent).toBe("2 references");
+    renderInspector(el, s, { kind: "op", id: "op:group" }, opts);
+    expect(el.querySelector(".insp-count")!.textContent).toBe("0 references");
+  });
+
   it("no_inline_style_markup", () => {
     const written: string[] = [];
     const desc = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML")!;
