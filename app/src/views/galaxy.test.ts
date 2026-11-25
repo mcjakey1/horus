@@ -12,12 +12,12 @@ const last = <T,>(a: T[]): T => a[a.length - 1];
 
 function fakeScene() {
   const handlers: Record<string, ((id: string | null, m: Mods) => void)[]> = { hover: [], select: [], activate: [] };
-  const calls = { nodes: [] as SceneNode[][], edges: [] as SceneEdge[][], select: [] as (string | null)[], fit: 0 };
+  const calls = { nodes: [] as SceneNode[][], edges: [] as SceneEdge[][], select: [] as (string | null)[], fit: 0, cam: 0 };
   const scene: Scene = {
     setNodes: (n) => void calls.nodes.push(n),
     setEdges: (e) => void calls.edges.push(e),
     camera: () => ({ x: 0, y: 0, scale: 1 }),
-    setCamera: () => {},
+    setCamera: () => void calls.cam++,
     fitAll: () => void calls.fit++,
     on: (ev, fn) => void handlers[ev].push(fn),
     setDraggable: () => {},
@@ -243,6 +243,86 @@ describe("Galaxy", () => {
     await settle();
     expect(sc.calls.fit).toBe(1);
     expect(last(sc.calls.nodes).length).toBe(3);
+    // A later data change warm-starts without touching the camera (no late "centre").
+    const cams = sc.calls.cam;
+    wk.finish();
+    expect(sc.calls.cam).toBe(cams);
+  });
+
+  it("warm_restart_never_moves_the_camera", async () => {
+    const t = setup();
+    await settle();
+    t.wk.finish();
+    const cams = t.sc.calls.cam;
+    const fits = t.sc.calls.fit;
+    t.change(snapOf(["a", "b", "c", "d"], 2));
+    await settle();
+    t.wk.finish();
+    expect(t.sc.calls.cam).toBe(cams);
+    expect(t.sc.calls.fit).toBe(fits);
+  });
+
+  it("hidden_galaxy_defers_refresh_until_shown", async () => {
+    const t = setup();
+    await settle();
+    t.wk.finish();
+    t.view.hide();
+    t.change(snapOf(["a", "b", "c", "d"], 2));
+    t.change(snapOf(["a", "b", "c", "d"], 3));
+    t.change(snapOf(["a", "b", "c", "d", "e"], 4));
+    await settle();
+    expect(t.api.graphEdges).toHaveBeenCalledTimes(1); // nothing while hidden (carry-in 6)
+    const starts = () => t.wk.posted.filter((m) => m.type === "start").length;
+    const before = starts();
+    t.view.show();
+    await settle();
+    expect(t.api.graphEdges).toHaveBeenCalledTimes(2);
+    expect(starts()).toBe(before + 1);
+    const start = last(t.wk.posted.filter((m) => m.type === "start"))!;
+    expect(start.type === "start" && Object.keys(start.input.prev ?? {}).sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("hidden_galaxy_keeps_a_deferred_reset", async () => {
+    const t = setup();
+    await settle();
+    t.wk.finish();
+    t.sc.fire("select", "a");
+    t.view.hide();
+    t.change(snapOf(["x", "y"], 5), true);
+    t.change(snapOf(["x", "y", "z"], 6)); // a later plain change must not lose the reset
+    t.view.show();
+    await settle();
+    const start = last(t.wk.posted.filter((m) => m.type === "start"))!;
+    expect(start.type === "start" && start.input.prev).toBeUndefined();
+    expect(last(t.sc.calls.select)).toBeNull();
+  });
+
+  it("no_fit_while_hidden", async () => {
+    const t = setup();
+    await settle();
+    t.view.hide();
+    t.wk.finish(); // the cold layout settles while another view shows: a 1x1 fit would be wrong
+    expect(t.sc.calls.fit).toBe(0);
+    t.view.show();
+    expect(t.sc.calls.fit).toBe(1);
+  });
+
+  it("kept_selection_refetches_neighbours_on_change", async () => {
+    const t = setup();
+    await settle();
+    t.wk.finish();
+    t.sc.fire("select", "a");
+    await settle();
+    t.change(snapOf(["a", "b", "c"], 2));
+    await settle();
+    expect(t.api.related).toHaveBeenCalledTimes(2);
+  });
+
+  it("superseded_layout_cannot_spend_the_fit", async () => {
+    const t = setup();
+    await settle(); // first start posted, its layout still running
+    t.change(snapOf(["a", "b", "c", "d"], 2), true);
+    expect(last(t.wk.posted).type).toBe("stop"); // the old run is stopped before graph_edges returns
   });
 
   it("empty_library_copy", async () => {

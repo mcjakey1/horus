@@ -51,6 +51,8 @@ export function mountGalaxy(
   let gen = 0; // a newer refresh supersedes an older one still awaiting graph_edges
 
   let settled = false; // the worker's last layout has ended
+  let visible = true; // mounted on its first select; then the shell calls show() and hide()
+  let pending: SourceEvent | null = null; // a change that arrived while hidden (reset kept)
   const worker = (deps.makeWorker ?? defaultWorker)();
   const post = (m: ToWorker) => worker.postMessage(m);
 
@@ -121,9 +123,14 @@ export function mountGalaxy(
     scene?.select(id);
     renderInsp();
     drawEdges();
-    if (!id) return;
-    const rows = await deps.api.related(id).catch(() => [] as Scored[]); // names for "shares …" (C18)
-    if (selected !== id || destroyed) return;
+    if (id) await loadRelated(id);
+  }
+
+  /** Neighbours with their shared techniques (C18); fetched again on every data change. */
+  async function loadRelated(id: string) {
+    const v = data.get().version;
+    const rows = await deps.api.related(id).catch(() => [] as Scored[]);
+    if (selected !== id || destroyed || data.get().version !== v) return;
     related = { id, rows };
     renderInsp();
   }
@@ -133,6 +140,10 @@ export function mountGalaxy(
   async function refresh(e: SourceEvent | null) {
     const mine = ++gen;
     const s = data.get();
+    // Stop the run in progress now, so it can't stream stale positions or spend the first fit
+    // while graph_edges is awaited.
+    settled = false;
+    post({ type: "stop" });
     if (e?.reset) {
       // A library switch: cold start, fit when settled, no selection (C20).
       positions = {};
@@ -162,10 +173,10 @@ export function mountGalaxy(
     const prev: Record<string, XY> = {};
     for (const id of ids) if (positions[id]) prev[id] = positions[id];
     // Warm start (Review Focus 3): placed references begin where they are.
-    settled = false;
     post({ type: "start", input: { ids, edges: allEdges, seed: SEED, prev: Object.keys(prev).length ? prev : undefined } });
     renderInsp();
     drawEdges();
+    if (selected) void loadRelated(selected); // scores and neighbours may have changed (carry-in 4)
   }
   let allEdges: Edge[] = [];
 
@@ -186,7 +197,8 @@ export function mountGalaxy(
 
   /** While a cold layout streams in, look at its origin; the fit comes once it settles. */
   function centre() {
-    if (centredOnce || !scene) return;
+    // Only before the first fit of a cold layout: a warm restart keeps the artist's camera.
+    if (centredOnce || !fitOnEnd || !scene || !visible) return;
     centredOnce = true;
     const c = scene.camera();
     scene.setCamera({ x: -canvasEl.clientWidth / (2 * c.scale), y: -canvasEl.clientHeight / (2 * c.scale), scale: c.scale });
@@ -195,7 +207,7 @@ export function mountGalaxy(
   /** The first layout (and the first after a switch) fits once both it and the scene are ready:
    * the worker can settle before Pixi has loaded. */
   function fitIfSettled() {
-    if (!fitOnEnd || !settled || !scene) return;
+    if (!fitOnEnd || !settled || !scene || !visible) return; // hidden, the view is 1x1
     fitOnEnd = false;
     scene.fitAll();
   }
@@ -237,17 +249,38 @@ export function mountGalaxy(
     const t = e.target as Element;
     if (t.closest("[data-open-ref]") && selected) deps.openReference(selected);
     const row = t.closest<HTMLElement>("[data-ref]");
-    if (row) void select(row.dataset.ref!);
+    if (row) {
+      void select(row.dataset.ref!);
+      canvasEl.querySelector("canvas")?.focus(); // the row re-renders; keep Esc and the keys working
+    }
   }, { signal: life.signal });
 
   // Dev-only handle for the manual check (positions and settle state); release builds drop it.
-  if (import.meta.env.DEV) (globalThis as unknown as { __galaxy: unknown }).__galaxy = { positions: () => positions, settled: () => settled };
-  const unsub = data.subscribe((_, e) => void refresh(e));
+  if (import.meta.env.DEV)
+    (globalThis as unknown as { __galaxy: unknown }).__galaxy = {
+      positions: () => positions, settled: () => settled, camera: () => scene?.camera(), selected: () => selected, scene: () => scene,
+    };
+  // Hidden, a change is only remembered (a reset is never lost): each Inbox tag would otherwise
+  // pay for graph_edges and a layout nobody sees (carry-in 6).
+  const unsub = data.subscribe((_, e) => {
+    if (visible) void refresh(e);
+    else pending = { reset: (pending?.reset ?? false) || e.reset };
+  });
   void refresh(null);
 
   return {
-    show() {},
-    hide() {},
+    show() {
+      visible = true;
+      if (pending) {
+        const e = pending;
+        pending = null;
+        void refresh(e);
+      }
+      fitIfSettled();
+    },
+    hide() {
+      visible = false;
+    },
     destroy() {
       destroyed = true;
       unsub();
