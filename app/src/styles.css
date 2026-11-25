@@ -390,3 +390,14 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .insp-sel:hover, .insp-sel:focus-visible { border-color: var(--line-2); }
 .insp-sel .count { color: var(--ink-2); }
 .insp-body .text-btn { align-self: flex-start; }
+
+/* Plan 3 Task 8: the Radial view. The operation switch is a segmented control that wraps to a
+   second row past five operations; the inspector is the Tree's (.insp). */
+.graph-host.radial { grid-template-columns: minmax(0, 1fr) 340px; }
+.radial-main { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+.radial-ops { display: grid; grid-template-columns: repeat(5, minmax(0, max-content)); border-bottom: 1px solid var(--line); background: var(--panel); }
+.radial-op { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-right: 1px solid var(--line); color: var(--ink-2); font-weight: 500; white-space: nowrap; }
+.radial-op[aria-pressed="true"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.radial-op .sw { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }
+.radial-stage { position: relative; min-height: 0; overflow: hidden; }
+.radial-stage > canvas { display: block; width: 100%; height: 100%; }
