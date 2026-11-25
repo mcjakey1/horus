@@ -168,3 +168,17 @@ describe("TexCache.cancel", () => {
     expect(unload).toHaveBeenCalledWith("tex:b");
   });
 });
+
+describe("TexCache.loading", () => {
+  it("lists_only_in_flight_urls", async () => {
+    let resolve!: (t: string) => void;
+    const cache = new TexCache<string>(5, (url) => (url === "slow" ? new Promise<string>((r) => (resolve = r)) : Promise.resolve(url)), () => {});
+    cache.get("fast");
+    cache.get("slow");
+    await settle();
+    expect(cache.loading()).toEqual(["slow"]);
+    resolve("slow");
+    await settle();
+    expect(cache.loading()).toEqual([]);
+  });
+});

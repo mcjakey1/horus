@@ -8,15 +8,15 @@ import { createScene } from "./scene";
 function swatches(n: number): string[] {
   const out: string[] = [];
   const c = document.createElement("canvas");
-  c.width = 192;
-  c.height = 256;
+  c.width = 48;
+  c.height = 64;
   const g = c.getContext("2d")!;
   for (let i = 0; i < n; i++) {
     g.fillStyle = `hsl(${(i * 37) % 360} 45% 55%)`;
-    g.fillRect(0, 0, 192, 256);
+    g.fillRect(0, 0, 48, 64);
     g.fillStyle = "#161616";
-    g.font = "64px serif";
-    g.fillText(String(i + 1), 48, 150);
+    g.font = "16px serif";
+    g.fillText(String(i + 1), 6, 38);
     out.push(c.toDataURL("image/png"));
   }
   return out;
@@ -40,7 +40,9 @@ export async function runSceneDemo(root: HTMLElement): Promise<void> {
   host.dataset.label = "Scene demo";
   root.append(bar, host);
 
-  const urls = swatches(24);
+  // `&unique` gives every node its own thumbnail, to push the texture cache past TEX_CAP.
+  const unique = new URLSearchParams(location.search).has("unique");
+  const urls = swatches(unique ? 2000 : 24);
   const nodes: SceneNode[] = [];
   const states = ["full", "partial", "region"] as const;
   for (let i = 0; i < 50; i++)

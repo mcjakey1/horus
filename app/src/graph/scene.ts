@@ -162,6 +162,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     (t) => t.destroy(true),
   );
 
+  if (import.meta.env.DEV) (globalThis as unknown as { __horusTex: unknown }).__horusTex = tex; // dev checks only
   const view = () => ({ w: host.clientWidth || canvas.clientWidth || 1, h: host.clientHeight || canvas.clientHeight || 1 });
   const toWorld = (sx: number, sy: number) => ({ x: cam.x + sx / cam.scale, y: cam.y + sy / cam.scale });
 
@@ -276,10 +277,9 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       if (!o) continue;
       o.root.visible = false;
       if (o.sprite) o.sprite.texture = PIXI.Texture.EMPTY; // hidden sprites never hold a texture
-      const n = nodes.get(id);
-      if (n?.kind === "ref") tex.cancel(n.url); // only in-flight loads: loads stay limited to what is on screen
     }
     let loading = false;
+    const wanted = new Set<string>(); // URLs drawn as thumbnails this frame
     for (const id of plan.visible) {
       const n = nodes.get(id)!;
       let o = objs.get(id);
@@ -299,6 +299,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
           o.sprite.texture = PIXI.Texture.EMPTY;
           continue;
         }
+        wanted.add(n.url);
         const t = tex.get(n.url);
         if (t === "loading") loading = true;
         else if (t !== "failed" && o.sprite.texture !== t) o.sprite.texture = t;
@@ -308,6 +309,9 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         }
       }
     }
+    // By URL, not by node: one reference can be drawn under several techniques (Tree), and a node
+    // can drop from thumb to dot while still on screen. Only loads a thumbnail wants stay in flight.
+    for (const url of tex.loading()) if (!wanted.has(url)) tex.cancel(url);
     shown = next;
     drawEdges();
     drawMarks();
@@ -315,8 +319,8 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   }
 
   // Why eviction never hits an on-screen texture: planFrame gives at most TEX_CAP thumbnails,
-  // every update touches each of them, and loads run only for them (cancel above). So the least
-  // recently used live texture is always one that left the view.
+  // every update touches each of them, and loads stay in flight only for them (cancel above). So
+  // the least recently used live texture is always one no longer drawn as a thumbnail.
 
   const tick = () => {
     if (tween) {
@@ -363,6 +367,10 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   }
 
   // ---------- input ----------
+
+  // Every canvas listener goes with destroy: destroying the renderer fires webglcontextlost.
+  const life = new AbortController();
+  const signal = life.signal;
 
   const local = (e: { clientX: number; clientY: number }) => {
     const r = canvas.getBoundingClientRect();
@@ -451,14 +459,14 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     e.preventDefault();
   };
 
-  canvas.addEventListener("pointerdown", onDown);
-  canvas.addEventListener("pointermove", onMove);
-  canvas.addEventListener("pointerup", onUp);
-  canvas.addEventListener("pointercancel", () => { press = null; ghost = null; dirty = true; });
-  canvas.addEventListener("pointerleave", onLeave);
-  canvas.addEventListener("dblclick", onDbl);
-  canvas.addEventListener("wheel", onWheel, { passive: false });
-  canvas.addEventListener("keydown", onKey);
+  canvas.addEventListener("pointerdown", onDown, { signal });
+  canvas.addEventListener("pointermove", onMove, { signal });
+  canvas.addEventListener("pointerup", onUp, { signal });
+  canvas.addEventListener("pointercancel", () => { press = null; ghost = null; dirty = true; }, { signal });
+  canvas.addEventListener("pointerleave", onLeave, { signal });
+  canvas.addEventListener("dblclick", onDbl, { signal });
+  canvas.addEventListener("wheel", onWheel, { passive: false, signal });
+  canvas.addEventListener("keydown", onKey, { signal });
 
   // ---------- theme, resize, lost context ----------
 
@@ -468,19 +476,25 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     dirty = true;
   });
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-  const resize = typeof ResizeObserver === "function" ? new ResizeObserver(() => (dirty = true)) : null;
+  // A host shown or resized by CSS (no window resize): resizeTo alone would miss it.
+  const resize = typeof ResizeObserver === "function"
+    ? new ResizeObserver(() => {
+      app.resize();
+      dirty = true;
+    })
+    : null;
   resize?.observe(host);
   canvas.addEventListener("webglcontextlost", (e) => {
     e.preventDefault(); // lets the browser restore the context
     app.ticker.stop();
-  });
+  }, { signal });
   canvas.addEventListener("webglcontextrestored", () => {
     // The GPU lost every texture: drop them and the sprites holding them; visible ones reload.
     clearObjs();
     tex.clear();
     dirty = true;
     app.ticker.start();
-  });
+  }, { signal });
 
   return {
     setNodes(list) {
@@ -515,6 +529,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       dirty = true;
     },
     destroy() {
+      life.abort();
       themeObserver.disconnect();
       resize?.disconnect();
       app.ticker.remove(tick);

@@ -89,6 +89,11 @@ export class TexCache<T> {
     this.clear();
   }
 
+  /** URLs whose load is still in flight. */
+  loading(): string[] {
+    return [...this.pending].filter(([, p]) => p.state === "loading").map(([url]) => url);
+  }
+
   /** The live URLs, least recently used first: what to reload after `clear`. */
   urls(): string[] {
     return [...this.live.keys()];
