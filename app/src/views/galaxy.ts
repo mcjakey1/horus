@@ -11,6 +11,7 @@ import { isTextEntry } from "../keys";
 import type { ViewHandle } from "../views";
 
 const SEED = 7;
+const ARROWS: Record<string, XY> = { ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 } };
 
 // R7: a same-origin module chunk (Vite resolves the URL from this file). Never `?worker&inline`:
 // that is a blob: URL, which the CSP blocks.
@@ -55,6 +56,7 @@ export function mountGalaxy(
   let pending: SourceEvent | null = null; // a change that arrived while hidden (reset kept)
   const worker = (deps.makeWorker ?? defaultWorker)();
   const post = (m: ToWorker) => worker.postMessage(m);
+  let run = 0; // the current layout; a batch posted before the worker read a stop is dropped (I1)
 
   // ---------- drawing ----------
 
@@ -143,6 +145,7 @@ export function mountGalaxy(
     // Stop the run in progress now, so it can't stream stale positions or spend the first fit
     // while graph_edges is awaited.
     settled = false;
+    run++; // anything still in flight from the old run is now stale
     post({ type: "stop" });
     if (e?.reset) {
       // A library switch: cold start, fit when settled, no selection (C20).
@@ -173,7 +176,7 @@ export function mountGalaxy(
     const prev: Record<string, XY> = {};
     for (const id of ids) if (positions[id]) prev[id] = positions[id];
     // Warm start (Review Focus 3): placed references begin where they are.
-    post({ type: "start", input: { ids, edges: allEdges, seed: SEED, prev: Object.keys(prev).length ? prev : undefined } });
+    post({ type: "start", run: ++run, input: { ids, edges: allEdges, seed: SEED, prev: Object.keys(prev).length ? prev : undefined } });
     renderInsp();
     drawEdges();
     if (selected) void loadRelated(selected); // scores and neighbours may have changed (carry-in 4)
@@ -182,6 +185,7 @@ export function mountGalaxy(
 
   worker.onmessage = (ev: MessageEvent<FromWorker>) => {
     const m = ev.data;
+    if (m.run !== run) return; // from a stopped or superseded layout
     if (m.type === "tick") {
       const next: Record<string, XY> = {};
       m.ids.forEach((id, i) => (next[id] = { x: m.xy[2 * i], y: m.xy[2 * i + 1] }));
@@ -243,8 +247,43 @@ export function mountGalaxy(
     if (e.key === "Escape" && selected) {
       e.preventDefault();
       void select(null);
+    } else if (e.key === "Enter" && !selected) {
+      // With a selection the scene's Enter is `activate` (open). Without one, it falls through to
+      // here: pick the in-scope reference nearest the view centre (Global Constraints).
+      const c = scene?.camera() ?? { x: 0, y: 0, scale: 1 };
+      const at = { x: c.x + canvasEl.clientWidth / (2 * c.scale), y: c.y + canvasEl.clientHeight / (2 * c.scale) };
+      const id = nearest(at, null);
+      if (id) {
+        e.preventDefault();
+        void select(id);
+      }
+    } else if (selected && ARROWS[e.key]) {
+      // With a selection the scene leaves the arrows to the view: move along the arrow.
+      e.preventDefault();
+      const id = positions[selected] ? nearest(positions[selected], ARROWS[e.key], selected) : null;
+      if (id) void select(id);
     }
   }, { signal: life.signal });
+
+  /** The in-scope placed reference nearest `p`, optionally only inside the open ±45° cone along `dir`. */
+  function nearest(p: XY, dir: XY | null, except?: string): string | null {
+    const s = data.get();
+    let best: string | null = null;
+    let bestD = Infinity;
+    for (const [id, q] of Object.entries(positions)) {
+      if (id === except || !s.refs.has(id) || !s.inScope(id)) continue;
+      const dx = q.x - p.x;
+      const dy = q.y - p.y;
+      if (dir) {
+        const along = dx * dir.x + dy * dir.y;
+        const across = Math.abs(dx * dir.y - dy * dir.x);
+        if (along <= 0 || across >= along) continue; // outside the cone; nothing there means no move
+      }
+      const d = Math.hypot(dx, dy);
+      if (d < bestD || (d === bestD && best !== null && id < best)) [best, bestD] = [id, d];
+    }
+    return best;
+  }
   insp.addEventListener("click", (e) => {
     const t = e.target as Element;
     if (t.closest("[data-open-ref]") && selected) deps.openReference(selected);

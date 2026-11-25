@@ -37,16 +37,21 @@ function fakeWorker() {
     onmessage: null as ((e: MessageEvent<FromWorker>) => void) | null,
     terminate: vi.fn(),
   };
-  /** Answers the last start with a finished layout on a line. */
-  const finish = () => {
+  const lastStart = () => {
     const start = [...posted].reverse().find((m) => m.type === "start");
     if (!start || start.type !== "start") throw new Error("no start");
-    const ids = start.input.ids;
-    const xy = new Float32Array(ids.flatMap((_, i) => [i * 100, 0]));
-    w.onmessage?.({ data: { type: "tick", ids, xy, alpha: 0.005 } } as MessageEvent<FromWorker>);
-    w.onmessage?.({ data: { type: "end" } } as MessageEvent<FromWorker>);
+    return start;
   };
-  return { worker: w as unknown as Worker, posted, finish };
+  /** Answers the last start with a finished layout: on a line, or at the given positions. */
+  const finish = (at?: Record<string, [number, number]>) => {
+    const { run, input } = lastStart();
+    const ids = input.ids;
+    const xy = new Float32Array(ids.flatMap((id, i) => at?.[id] ?? [i * 100, 0]));
+    w.onmessage?.({ data: { type: "tick", run, ids, xy, alpha: 0.005 } } as MessageEvent<FromWorker>);
+    w.onmessage?.({ data: { type: "end", run } } as MessageEvent<FromWorker>);
+  };
+  const deliver = (m: FromWorker) => w.onmessage?.({ data: m } as MessageEvent<FromWorker>);
+  return { worker: w as unknown as Worker, posted, finish, lastStart, deliver };
 }
 
 function fakeSource(s: Snapshot) {
@@ -321,8 +326,79 @@ describe("Galaxy", () => {
   it("superseded_layout_cannot_spend_the_fit", async () => {
     const t = setup();
     await settle(); // first start posted, its layout still running
-    t.change(snapOf(["a", "b", "c", "d"], 2), true);
+    const old = t.wk.lastStart();
+    t.change(snapOf(["x", "y"], 2), true);
     expect(last(t.wk.posted).type).toBe("stop"); // the old run is stopped before graph_edges returns
+    // The worker had already posted a batch of the old run before it read the stop: it arrives late.
+    t.wk.deliver({ type: "tick", run: old.run, ids: old.input.ids, xy: new Float32Array([0, 0, 1, 1, 2, 2]), alpha: 0.005 });
+    t.wk.deliver({ type: "end", run: old.run });
+    expect(t.sc.calls.fit).toBe(0); // the late end did not spend the fit
+    await settle();
+    const fresh = t.wk.lastStart();
+    expect(fresh.run).not.toBe(old.run);
+    expect(fresh.input.prev).toBeUndefined(); // the late tick did not turn the reset into a warm start
+    t.wk.finish();
+    expect(t.sc.calls.fit).toBe(1); // the new library fits
+  });
+
+  describe("keyboard (Global Constraints: every action from the keyboard)", () => {
+    // a at the centre; b east; c south-east, exactly on the 45 deg edges (outside: the cone is open); d north; e far west
+    const AT: Record<string, [number, number]> = { a: [0, 0], b: [100, 0], c: [100, 100], d: [0, -80], e: [-300, 10] };
+    const key = (t: ReturnType<typeof setup>, k: string) =>
+      t.host.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+    async function ready() {
+      const t = setup({ ids: ["a", "b", "c", "d", "e"], edges: [] });
+      await settle();
+      t.wk.finish(AT);
+      return t;
+    }
+
+    it("enter_with_nothing_selected_picks_the_reference_nearest_the_centre", async () => {
+      const t = await ready(); // the fake camera's view centre is the world origin
+      key(t, "Enter");
+      expect(last(t.sc.calls.select)).toBe("a");
+      expect(t.openReference).not.toHaveBeenCalled(); // a second Enter is the scene's activate
+    });
+
+    it("first_pick_skips_out_of_scope_references", async () => {
+      const t = setup({ ids: ["a", "b"], edges: [], inScope: (id) => id !== "a" });
+      await settle();
+      t.wk.finish({ a: [0, 0], b: [100, 0] });
+      key(t, "Enter");
+      expect(last(t.sc.calls.select)).toBe("b");
+    });
+
+    it("arrows_move_to_the_nearest_reference_in_that_direction", async () => {
+      const t = await ready();
+      key(t, "Enter"); // a
+      key(t, "ArrowRight");
+      expect(last(t.sc.calls.select)).toBe("b"); // c sits exactly on the cone's edge, so only b qualifies
+      key(t, "ArrowDown");
+      expect(last(t.sc.calls.select)).toBe("c");
+      key(t, "ArrowLeft"); // from c (100,100): a lies exactly on the edge, so e is the one to the west
+      expect(last(t.sc.calls.select)).toBe("e");
+      key(t, "ArrowRight"); // from e: a (300 away, nearly level) is nearest in the east cone
+      expect(last(t.sc.calls.select)).toBe("a");
+      key(t, "ArrowUp");
+      expect(last(t.sc.calls.select)).toBe("d");
+    });
+
+    it("an_empty_cone_does_not_move", async () => {
+      const t = await ready();
+      key(t, "Enter"); // a
+      key(t, "ArrowUp"); // d
+      const n = t.sc.calls.select.length;
+      key(t, "ArrowUp"); // nothing north of d
+      expect(t.sc.calls.select.length).toBe(n);
+      expect(last(t.sc.calls.select)).toBe("d");
+    });
+
+    it("arrows_without_a_selection_are_left_to_the_scene", async () => {
+      const t = await ready();
+      const n = t.sc.calls.select.length;
+      key(t, "ArrowRight"); // the scene pans
+      expect(t.sc.calls.select.length).toBe(n);
+    });
   });
 
   it("empty_library_copy", async () => {

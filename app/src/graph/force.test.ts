@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Edge } from "../api";
+import { NODE } from "./constants";
 import { createForce, initialPosition, runForce, type XY } from "./force";
 
 const dist = (a: XY, b: XY) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -68,6 +69,15 @@ describe("force layout", () => {
     expect(runForce({ ids: [], edges: [], seed: 1 }, 10)).toEqual({});
     const one = runForce({ ids: ["only"], edges: [], seed: 1 }, 10);
     expect(Number.isFinite(one.only.x) && Number.isFinite(one.only.y)).toBe(true);
+  });
+
+  it("tiles_in_a_cluster_do_not_overlap", () => {
+    // I3: forceCollide keeps tiles inside a tight clique legible (radius NODE/2 + 4).
+    const { ids, edges } = clique("k", 10, 0.8);
+    const p = runForce({ ids, edges, seed: 5 }, 600);
+    let closest = Infinity;
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) closest = Math.min(closest, dist(p[ids[i]], p[ids[j]]));
+    expect(closest).toBeGreaterThan(NODE * 0.9);
   });
 
   it("edges_to_unknown_ids_are_ignored", () => {

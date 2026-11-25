@@ -14,7 +14,7 @@ let run = 0;
 scope.onmessage = (e) => {
   const mine = ++run;
   if (e.data.type !== "start") return;
-  const { input } = e.data;
+  const { input, run: runId } = e.data;
   const f = createForce(input);
   const ids = input.ids;
   const batch = () => {
@@ -26,8 +26,8 @@ scope.onmessage = (e) => {
       xy[2 * i] = p[id].x;
       xy[2 * i + 1] = p[id].y;
     });
-    scope.postMessage({ type: "tick", ids, xy, alpha: f.alpha() }, [xy.buffer]);
-    if (done) scope.postMessage({ type: "end" });
+    scope.postMessage({ type: "tick", run: runId, ids, xy, alpha: f.alpha() }, [xy.buffer]);
+    if (done) scope.postMessage({ type: "end", run: runId });
     else setTimeout(batch, 0); // yield, so a stop or a newer start is read between batches
   };
   batch();
