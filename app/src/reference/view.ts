@@ -25,6 +25,7 @@ export function mountReference(
   root: HTMLElement,
   api: Api,
   store: Store,
+  opts: { onNavigate?(): void } = {},
 ): { show(id: string): void; ready: Promise<void>; destroy(): void } {
   const life = new AbortController();
   const signal = life.signal;
@@ -524,8 +525,9 @@ export function mountReference(
     techniqueName: techName,
     operationLabel: (id) => ({ ...opLabel(store.tax, id), color: opColor(id) }),
     referenceTitle: (id) => store.refs.get(id)?.title,
-    onTechnique: applyFilter,
-    onReference: (id) => show(id),
+    // R5: search works from any view; onNavigate (the shell's select("reference")) runs first.
+    onTechnique: (id) => (opts.onNavigate?.(), applyFilter(id)),
+    onReference: (id) => (opts.onNavigate?.(), show(id)),
   }, signal);
 
   const notify = mountImport(root, api, {
