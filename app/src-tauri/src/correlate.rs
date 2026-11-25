@@ -451,7 +451,9 @@ mod tests {
                         _ => tech(&format!("t{}", rng.next(30)), &format!("b{}", rng.next(6))),
                     })
                     .collect();
-                r(&format!("r{i:03}"), tags)
+                // Permuted ids (37 is coprime with 200): id order is not index order, so the
+                // (score desc, id asc) tie-break is exercised.
+                r(&format!("r{:03}", (i * 37) % 200), tags)
             })
             .collect();
         lib(refs)

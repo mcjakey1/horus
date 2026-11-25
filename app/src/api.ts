@@ -127,7 +127,7 @@ export interface Api {
   openLibrary(path: string): Promise<LibraryView>;
   getTaxonomy(): Promise<Taxonomy>;
   related(id: string): Promise<Scored[]>;
-  /** The union of every visible reference's top `k` related, deduplicated. */
+  /** The union of every visible reference's top `k` neighbours among those sharing a technique, deduplicated. */
   graphEdges(k: number): Promise<Edge[]>;
   importPaths(paths: string[], meta?: IntakeMeta): Promise<ImportResult>;
   /** A pasted image: `name` is a file name (only its last part is kept). */
