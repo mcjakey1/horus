@@ -10,9 +10,11 @@ import { TEX_CAP } from "./constants";
 import {
   buildGrids,
   classifyDrag,
+  EdgeGate,
   nodeRect,
   planFrame,
   WebGLUnavailable,
+  wireContextLoss,
   type FramePlan,
   type Mods,
   type Scene,
@@ -143,6 +145,9 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   let ghost: { id: string; x: number; y: number } | null = null;
   let draggable: (id: string) => boolean = () => false;
   let dirty = true;
+  let nodesVersion = 0; // bumped by setNodes: edge endpoints may have moved
+  let themeVersion = 0; // bumped on a theme change or a restored context
+  const edgeGate = new EdgeGate();
   const handlers: Record<"hover" | "select" | "activate", ((id: string | null, m: Mods) => void)[]> = {
     hover: [], select: [], activate: [],
   };
@@ -313,7 +318,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     // can drop from thumb to dot while still on screen. Only loads a thumbnail wants stay in flight.
     for (const url of tex.loading()) if (!wanted.has(url)) tex.cancel(url);
     shown = next;
-    drawEdges();
+    if (edgeGate.needs(edges, nodesVersion, cam.scale, themeVersion)) drawEdges(); // I2: never on a pan alone
     drawMarks();
     return loading;
   }
@@ -473,6 +478,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   const themeObserver = new MutationObserver(() => {
     clearColorCache();
     clearObjs(); // rebuilt with the new theme's colours on the next frame
+    themeVersion++;
     dirty = true;
   });
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
@@ -484,17 +490,18 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     })
     : null;
   resize?.observe(host);
-  canvas.addEventListener("webglcontextlost", (e) => {
-    e.preventDefault(); // lets the browser restore the context
-    app.ticker.stop();
-  }, { signal });
-  canvas.addEventListener("webglcontextrestored", () => {
-    // The GPU lost every texture: drop them and the sprites holding them; visible ones reload.
-    clearObjs();
-    tex.clear();
-    dirty = true;
-    app.ticker.start();
-  }, { signal });
+  // I1: a lost context shows the fallback sentence over this view only; a restore rebuilds.
+  const unwireContext = wireContextLoss(canvas, host, {
+    lost: () => app.ticker.stop(),
+    restored: () => {
+      // The GPU lost every texture: drop them and the sprites holding them; visible ones reload.
+      clearObjs();
+      tex.clear();
+      themeVersion++; // the edge layer is GPU state too: redraw it
+      dirty = true;
+      app.ticker.start();
+    },
+  });
 
   return {
     setNodes(list) {
@@ -504,6 +511,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       nodes = new Map(list.map((n) => [n.id, n]));
       order = new Map(list.map((n, i) => [n.id, i]));
       grids = buildGrids(nodes);
+      nodesVersion++;
       if (selected && !ids.has(selected)) selected = null;
       if (hovered && !ids.has(hovered)) hovered = null;
       dirty = true;
@@ -530,6 +538,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     },
     destroy() {
       life.abort();
+      unwireContext();
       themeObserver.disconnect();
       resize?.disconnect();
       app.ticker.remove(tick);

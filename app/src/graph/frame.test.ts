@@ -10,7 +10,10 @@ import {
   nodeRect,
   planFrame,
   WebGLUnavailable,
+  EdgeGate,
+  wireContextLoss,
   type Scene,
+  type SceneEdge,
   type SceneNode,
 } from "./frame";
 
@@ -132,5 +135,69 @@ describe("mountCanvasOrFallback", () => {
     const scene = { destroy() {} } as unknown as Scene;
     await expect(mountCanvasOrFallback(host, async () => scene)).resolves.toBe(scene);
     expect(host.textContent).toBe("");
+  });
+});
+
+describe("lost WebGL context (Review Focus 1, I1)", () => {
+  const setup = () => {
+    const host = document.createElement("div");
+    const canvas = document.createElement("canvas");
+    host.append(canvas);
+    const calls: string[] = [];
+    const off = wireContextLoss(canvas, host, { lost: () => calls.push("lost"), restored: () => calls.push("restored") });
+    return { host, canvas, calls, off };
+  };
+
+  it("lost_context_shows_fallback_and_hides_canvas", () => {
+    const { host, canvas, calls } = setup();
+    const e = new Event("webglcontextlost", { cancelable: true });
+    canvas.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true); // lets the browser restore it
+    expect(host.querySelector(".graph-fallback")?.textContent).toBe(FALLBACK);
+    expect(canvas.hidden).toBe(true);
+    expect(calls).toEqual(["lost"]);
+    canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+    expect(host.querySelectorAll(".graph-fallback").length).toBe(1); // never twice
+  });
+
+  it("restored_context_removes_fallback_and_rebuilds", () => {
+    const { host, canvas, calls } = setup();
+    canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+    canvas.dispatchEvent(new Event("webglcontextrestored"));
+    expect(host.querySelector(".graph-fallback")).toBeNull();
+    expect(canvas.hidden).toBe(false);
+    expect(calls).toEqual(["lost", "restored"]);
+  });
+
+  it("unwired_after_destroy", () => {
+    const { host, canvas, calls, off } = setup();
+    off();
+    canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+    expect(calls).toEqual([]);
+    expect(host.querySelector(".graph-fallback")).toBeNull();
+  });
+});
+
+describe("EdgeGate (I2)", () => {
+  it("edges_redraw_only_when_inputs_change", () => {
+    const g = new EdgeGate();
+    const edges: SceneEdge[] = [{ from: "a", to: "b", width: 1, color: "var(--ink-2)" }];
+    let redraws = 0;
+    const frame = (e: SceneEdge[], nodesV: number, scale: number, themeV: number) => {
+      if (g.needs(e, nodesV, scale, themeV)) redraws++;
+    };
+    frame(edges, 1, 1, 0); // first frame draws
+    for (let i = 0; i < 100; i++) frame(edges, 1, 1, 0); // 100 pan frames: same scale, nothing redrawn
+    expect(redraws).toBe(1);
+    frame([...edges], 1, 1, 0); // new edge list
+    frame([...edges].slice(), 2, 1, 0); // new list and new node positions
+    expect(redraws).toBe(3);
+    const same = [...edges];
+    frame(same, 2, 1, 0);
+    frame(same, 3, 1, 0); // node positions changed
+    frame(same, 3, 1.25, 0); // zoom
+    frame(same, 3, 1.25, 1); // theme
+    frame(same, 3, 1.25, 1);
+    expect(redraws).toBe(7);
   });
 });

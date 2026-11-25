@@ -62,7 +62,15 @@ export async function runSceneDemo(root: HTMLElement): Promise<void> {
   if (!scene) return;
   (window as unknown as { __scene: unknown }).__scene = scene; // for the manual check's console
   scene.setNodes(nodes);
-  scene.setEdges([{ from: "op:seq", to: "tech:demo", width: 1.5, color: "var(--seq)" }]);
+  const edges = [{ from: "op:seq", to: "tech:demo", width: 1.5, color: "var(--seq)" }];
+  // `&edges` adds the Galaxy's worst case: K_EDGES = 8 neutral edges for each of the 2,000 nodes (~16k).
+  if (new URLSearchParams(location.search).has("edges"))
+    for (let k = 0; k < 2000; k++)
+      for (let d = 1; d <= 8; d++) {
+        const score = ((k * 7 + d * 13) % 100) / 100;
+        edges.push({ from: `ref:${k}`, to: `ref:${(k + d * 41) % 2000}`, width: 0.75 + 2.25 * score, color: "var(--ink-2)" });
+      }
+  scene.setEdges(edges);
   scene.setDraggable((id) => id.startsWith("tech:"));
   scene.on("select", (id, m) => console.info("select", id, m.shift));
   scene.onDrop((d, t) => console.info("drop", d, t));

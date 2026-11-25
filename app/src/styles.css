@@ -351,6 +351,7 @@ body:not([data-view="inbox"]) > .inbox { display: none; }
 
 /* Plan 3 Task 4: the graph canvas, its WebGL fallback, and the dev-only scene harness */
 .graph-canvas { display: block; width: 100%; height: 100%; outline-offset: -2px; touch-action: none; }
+.graph-canvas[hidden] { display: none; } /* a lost WebGL context: the fallback shows instead */
 .graph-fallback { margin: 48px auto; max-width: 36ch; color: var(--ink-2); font: 15px/1.5 var(--serif); text-align: center; }
 .scene-demo-bar { position: fixed; top: 0; left: 0; right: 0; height: 40px; display: flex; gap: 16px; align-items: center; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .scene-demo-host { position: fixed; top: 40px; left: 0; right: 0; bottom: 0; background: var(--shell); }
