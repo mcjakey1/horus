@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DemoExample, Reference, Tag, Taxonomy, Technique } from "../api";
 import seedJson from "../../src-tauri/resources/taxonomy.json";
 import cases from "./match-cases.json";
-import { domainChoice, examplesFor, matchesQuery, presetFrom, techniquesFor } from "./model";
+import { domainChoice, examplesFor, matchesQuery, presetFrom, rankByQuery, techniquesFor } from "./model";
 
 const seed = seedJson as unknown as Taxonomy;
 
@@ -52,6 +52,14 @@ describe("tagging model", () => {
       expect(matchesQuery(t, c.q), `${c.q} -> ${c.technique}`).toBe(c.match);
     }
     expect(matchesQuery(all[0], "  ")).toBe(true);
+  });
+
+  it("rankByQuery puts the best tier first, as search.rs does (match-cases.json order, QA F1)", () => {
+    const all = [...seed.techniques, ...(cases.extraTechniques as Technique[])];
+    for (const c of cases.order) expect(rankByQuery(all, c.q)[0]?.id, c.q).toBe(c.first);
+    const ranked = rankByQuery(all, "light").map((t) => t.id);
+    expect(ranked.indexOf("rim-light")).toBeLessThan(ranked.indexOf("chiaroscuro")); // name before description
+    expect(rankByQuery(all, "").map((t) => t.id)).toEqual(all.map((t) => t.id)); // blank: taxonomy order
   });
 
   it("examplesFor ranks confirmed above suggested, newest first, at most n", () => {

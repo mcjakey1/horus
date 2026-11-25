@@ -23,18 +23,33 @@ const normalise = (s: string) =>
   s.normalize("NFC").toLowerCase().replace(/[^\p{Alphabetic}\p{N}]+/gu, " ").trim();
 const hasPhrase = (hay: string, phrase: string) => phrase !== "" && ` ${hay} `.includes(` ${phrase} `);
 
-/** search.rs's technique rules. A blank query matches everything. */
-export function matchesQuery(t: Technique, q: string): boolean {
+/** search.rs's `tier`: 0 the exact name, 1 the name, 2 a synonym, 3 the description's words,
+ * null no match. A blank query is tier 0 for everything. */
+export function matchTier(t: Technique, q: string): number | null {
   const n = normalise(q);
-  if (!n) return true;
+  if (!n) return 0;
   const field = (s: string) => {
     const f = normalise(s);
     return f.includes(n) || hasPhrase(n, f);
   };
-  if (field(t.name) || t.synonyms.some(field)) return true;
+  if (normalise(t.name) === n) return 0;
+  if (field(t.name)) return 1;
+  if (t.synonyms.some(field)) return 2;
   const words = n.split(" ").filter((w) => [...w].length > 3); // code points, as Rust's chars().count()
   const d = normalise(t.description);
-  return words.length > 0 && words.every((w) => hasPhrase(d, w));
+  return words.length > 0 && words.every((w) => hasPhrase(d, w)) ? 3 : null;
+}
+
+/** search.rs's technique rules. A blank query matches everything. */
+export const matchesQuery = (t: Technique, q: string): boolean => matchTier(t, q) !== null;
+
+/** The techniques matching `q`, best tier first; the given order within a tier (sort is stable). */
+export function rankByQuery(ts: Technique[], q: string): Technique[] {
+  return ts
+    .map((t) => ({ t, k: matchTier(t, q) }))
+    .filter((x): x is { t: Technique; k: number } => x.k !== null)
+    .sort((a, b) => a.k - b.k)
+    .map((x) => x.t);
 }
 
 export type Example = { kind: "library"; ref: Reference } | { kind: "demo"; demo: DemoExample };

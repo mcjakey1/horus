@@ -24,5 +24,10 @@
     { "q": "pop out", "technique": "pop-out", "match": true },
     { "q": "eyesore", "technique": "face-schema", "match": false },
     { "q": "छाया", "technique": "chhaya-fixture", "match": true }
+  ],
+  "_aboutOrder": "Ranking: exact name, then name, then synonym, then description words; taxonomy order within a tier (search.rs also by count). Each case: the first matching technique for q, with an empty library.",
+  "order": [
+    { "q": "rim light", "first": "rim-light" },
+    { "q": "Rim-Light!", "first": "rim-light" }
   ]
 }

@@ -40,7 +40,7 @@ function setup(refs: Reference[]) {
   const root = document.getElementById("inbox")!;
   let dock!: ReturnType<typeof dockPicker>;
   const openPicker = vi.fn((o: PickerOpts) => dock(o));
-  const inbox = mountInbox(root, api, store, { openPicker });
+  const inbox = mountInbox(root, api, store, { openPicker, closePicker: () => dock.hide() });
   dock = dockPicker(root.querySelector<HTMLElement>(".inbox-dock")!, api, store);
   off = () => (dock.close(), inbox.destroy());
   return { api, store, root, inbox, openPicker, dock };

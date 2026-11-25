@@ -17,22 +17,26 @@ export function dockPicker(
   dock: HTMLElement,
   api: Api,
   store: Store,
-): ((o: PickerOpts) => void) & { remember(refId: string, preset: NewTag[]): void; close(): void } {
+): ((o: PickerOpts) => void) & { remember(refId: string, preset: NewTag[]): void; hide(): void; close(): void } {
   let open: ReturnType<typeof mountPicker> | null = null;
   const presets = new Map<string, NewTag[]>();
   const unsubscribe = store.subscribe(() => {
     for (const id of [...presets.keys()]) if (!store.refs.get(id) || store.refs.get(id)!.tags.length) presets.delete(id);
   });
-  const openPicker = (o: PickerOpts) => {
+  const hide = () => {
     open?.close();
+    open = null;
+  };
+  const openPicker = (o: PickerOpts) => {
+    hide();
     const preset = o.preset ?? presets.get(o.refId);
     open = mountPicker(dock, api, store, preset ? { ...o, preset } : o);
   };
   return Object.assign(openPicker, {
     remember: (refId: string, preset: NewTag[]) => void presets.set(refId, preset),
+    hide, // close the docked picker, keeping the presets
     close() {
-      open?.close();
-      open = null;
+      hide();
       unsubscribe();
     },
   });
@@ -42,7 +46,7 @@ export function mountInbox(
   root: HTMLElement,
   api: Api,
   store: Store,
-  deps: { openPicker(o: PickerOpts): void },
+  deps: { openPicker(o: PickerOpts): void; closePicker(): void },
 ): { focus(i: number): void; focusId(id: string): void; destroy(): void } {
   root.innerHTML = `<header class="inbox-head">
       <h2 class="inbox-title">Inbox <span class="count" data-inbox-count></span></h2>
@@ -147,17 +151,23 @@ export function mountInbox(
   derive();
   render();
 
+  /** Coming back to the Inbox: a tagged current item is done with (QA F2). False when it is empty. */
+  function enter(): boolean {
+    if (S.cur && store.refs.get(S.cur)?.tags.length) S.cur = null;
+    derive();
+    if (S.list.length) return true;
+    render();
+    deps.closePicker();
+    return false;
+  }
+
   return {
     focus(i) {
-      derive();
-      if (!S.list.length) return;
-      select(S.list[Math.max(0, Math.min(S.list.length - 1, i))]);
+      if (enter()) select(S.list[Math.max(0, Math.min(S.list.length - 1, i))]);
     },
     /** By id, not index: a retained tagged item shifts indexes (fix round 1, I1). */
     focusId(id) {
-      derive();
-      if (S.list.includes(id)) select(id);
-      else if (S.list.length) select(S.list[0]);
+      if (enter()) select(S.list.includes(id) ? id : S.list[0]);
     },
     destroy() {
       unsubscribe();

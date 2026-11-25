@@ -161,4 +161,33 @@ describe("boot wiring (Task 9)", () => {
     expect([...picker.querySelectorAll<HTMLElement>(".pk-card.is-ticked")].map((c) => c.dataset.tech)).toEqual(["chiaroscuro"]);
     view.destroy();
   });
+
+  it("a finished Inbox shows the empty copy on return, with no picker docked (QA F2)", async () => {
+    const full: Tag = { id: "t1", operationId: "differentiate", techniqueId: "chiaroscuro", branchId: "differentiate.feature", suggested: false };
+    const mk = (id: string, tags: Tag[] = []): Reference => ({
+      id, title: `Plate ${id}`, file: `images/${id}.jpg`, hash: id, width: 3, height: 4,
+      addedAt: "2026-11-25T00:00:00Z", tags, thumb256: id, thumb1024: id,
+    });
+    const library: LibraryView = { root: "C:/lib", references: [mk("s"), mk("r1", [full])], links: [], warning: null, taxonomyReadOnly: false };
+    const api: Api = {
+      ...fakeApi("C:/lib"),
+      openLibrary: vi.fn(async () => library),
+      getTaxonomy: vi.fn(async () => seedJson as unknown as Taxonomy),
+    };
+    const view = await boot(document.body, api);
+    await view.ready;
+
+    $<HTMLButtonElement>('[data-view-tab="inbox"]').click();
+    expect($(".inbox-tile.is-cur").dataset.id).toBe("s");
+    view.store.apply({ references: [mk("s", [{ ...full, id: "t2" }])], removed: [], canUndo: true, canRedo: false });
+    expect($(".inbox-tile.is-tagged").dataset.id).toBe("s"); // Task 9: it stays while the artist is on it
+    expect(document.querySelector(".inbox-dock .picker")).not.toBeNull();
+
+    $<HTMLButtonElement>('[data-view-tab="reference"]').click();
+    $<HTMLButtonElement>('[data-view-tab="inbox"]').click();
+    expect($(".inbox-empty").hidden).toBe(false);
+    expect(document.querySelector(".inbox-tile")).toBeNull();
+    expect(document.querySelector(".inbox-dock .picker")).toBeNull();
+    view.destroy();
+  });
 });

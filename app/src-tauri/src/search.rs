@@ -52,8 +52,9 @@ fn has_phrase(hay: &str, phrase: &str) -> bool {
 ///
 /// One hit per technique. Its `operation_id` is the matched operation, if the query
 /// matched one. Otherwise it is the operation the library tags it under most, and failing
-/// that, the first operation it sits under in taxonomy order. Techniques are ranked by how
-/// many references are tagged with them; ties keep taxonomy order.
+/// that, the first operation it sits under in taxonomy order. Techniques are ranked by match
+/// tier (exact name, name, synonym, description words, operation only), then by how many
+/// references are tagged with them; ties keep taxonomy order.
 pub fn search(tax: &Taxonomy, data: &LibraryData, q: &str) -> Vec<Hit> {
     let q = normalise(q);
     if q.chars().count() < MIN_QUERY_CHARS {
@@ -74,7 +75,7 @@ pub fn search(tax: &Taxonomy, data: &LibraryData, q: &str) -> Vec<Hit> {
         .map(|o| o.id.as_str())
         .collect();
 
-    let mut techs: Vec<(usize, Hit)> = Vec::new();
+    let mut techs: Vec<((u8, std::cmp::Reverse<usize>), Hit)> = Vec::new();
     for t in &tax.techniques {
         // operations this technique sits under, in taxonomy branch order
         let mut ops: Vec<&str> = Vec::new();
@@ -92,15 +93,23 @@ pub fn search(tax: &Taxonomy, data: &LibraryData, q: &str) -> Vec<Hit> {
             continue;
         }
         let op_match = ops.iter().find(|o| op_hits.contains(o)).copied();
-        let text_match = field(&t.name)
-            || t.synonyms.iter().any(|s| field(s))
-            || (!words.is_empty() && {
-                let d = normalise(&t.description);
-                words.iter().all(|w| has_phrase(&d, w))
-            });
-        if op_match.is_none() && !text_match {
+        // 0 exact name, 1 name, 2 synonym, 3 description words (model.ts `matchTier`), 4 operation only
+        let tier = if normalise(&t.name) == q {
+            0
+        } else if field(&t.name) {
+            1
+        } else if t.synonyms.iter().any(|s| field(s)) {
+            2
+        } else if !words.is_empty() && {
+            let d = normalise(&t.description);
+            words.iter().all(|w| has_phrase(&d, w))
+        } {
+            3
+        } else if op_match.is_some() {
+            4
+        } else {
             continue;
-        }
+        };
 
         let tagged = |g: &crate::model::Tag| g.technique_id.as_deref() == Some(t.id.as_str());
         let count = data
@@ -123,7 +132,7 @@ pub fn search(tax: &Taxonomy, data: &LibraryData, q: &str) -> Vec<Hit> {
             )
         });
         techs.push((
-            count,
+            (tier, std::cmp::Reverse(count)),
             Hit::Technique {
                 id: t.id.clone(),
                 operation_id: operation_id.to_string(),
@@ -131,7 +140,7 @@ pub fn search(tax: &Taxonomy, data: &LibraryData, q: &str) -> Vec<Hit> {
             },
         ));
     }
-    techs.sort_by_key(|t| std::cmp::Reverse(t.0)); // stable: ties keep taxonomy order
+    techs.sort_by_key(|t| t.0); // stable: ties keep taxonomy order
 
     let refs = data
         .references
@@ -556,5 +565,43 @@ mod tests {
                 "{q:?} -> {id}"
             );
         }
+        for c in file["order"].as_array().unwrap() {
+            let q = c["q"].as_str().unwrap();
+            let hits = search(&tax, &empty(), q);
+            assert_eq!(
+                technique_ids(&hits).first().copied(),
+                c["first"].as_str(),
+                "{q:?}"
+            );
+        }
+    }
+
+    /// QA F1: "rim light" once tagged Chiaroscuro, whose description has "light". An exact
+    /// name ranks first, above description hits with more uses, and survives MAX_TECHNIQUES.
+    #[test]
+    fn exact_name_outranks_count_and_survives_cap() {
+        let mut tax = seed();
+        let mut refs = Vec::new();
+        for i in 0..MAX_TECHNIQUES + 1 {
+            let id = format!("lit-{i}");
+            tax.techniques.push(
+                serde_json::from_value(serde_json::json!({"id": id, "name": format!("Lit {i}"),
+                    "icon": "", "description": "a pool of light", "synonyms": [],
+                    "citation": null, "examples": [], "custom": true}))
+                .unwrap(),
+            );
+            tax.branch_techniques.push(
+                serde_json::from_value(serde_json::json!({"branchId": "differentiate.feature",
+                    "techniqueId": id, "source": "user", "rationale": "fixture"}))
+                .unwrap(),
+            );
+            let tags = vec![tag("differentiate", &id, "differentiate.feature")];
+            refs.push(reference(&format!("r{i}"), "x", tags.clone()));
+            refs.push(reference(&format!("s{i}"), "x", tags));
+        }
+        let hits = search(&tax, &refs_lib(refs), "rim light");
+        let ids = technique_ids(&hits);
+        assert_eq!(ids.len(), MAX_TECHNIQUES);
+        assert_eq!(ids[0], "rim-light");
     }
 }

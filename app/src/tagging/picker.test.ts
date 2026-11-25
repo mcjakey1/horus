@@ -189,6 +189,18 @@ describe("technique picker", () => {
     ]);
   });
 
+  it("exact_name_ranks_first: 1, then rim light, highlights Rim light, not Chiaroscuro; Enter tags it (QA F1)", () => {
+    const { el, api } = mount();
+    key(row(el), "1");
+    type(el, "rim light");
+    expect(cards(el)[0]).toBe("rim-light");
+    expect(hi(el)?.dataset.tech).toBe("rim-light");
+    key(search(el), "Enter");
+    expect(sent(api)).toEqual([
+      ["r", [{ operationId: "differentiate", techniqueId: "rim-light", branchId: "differentiate.feature" }]],
+    ]);
+  });
+
   it("digits_type_in_search: a digit in the search field is text, not an operation", () => {
     const { el } = mount();
     key(row(el), "1");

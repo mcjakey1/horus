@@ -7,7 +7,7 @@ import { esc } from "../esc";
 import { digitOf, isTextEntry } from "../keys";
 import { opInk, opLabel } from "../ops";
 import type { Store } from "../store";
-import { domainChoice, examplesFor, matchesQuery, techniquesFor } from "./model";
+import { domainChoice, examplesFor, rankByQuery, techniquesFor } from "./model";
 
 export type PickerOpts = {
   refId: string;
@@ -72,7 +72,7 @@ export function mountPicker(
     return b ? (tax().domains.find((d) => d.id === b.domainId)?.name ?? b.domainId) : branchId;
   };
   const withRegion = <T extends object>(t: T): T => (opts.region ? { ...t, region: opts.region } : t);
-  const visible = (): Technique[] => (S.op ? techniquesFor(tax(), S.op).filter((t) => matchesQuery(t, S.q)) : []);
+  const visible = (): Technique[] => (S.op ? rankByQuery(techniquesFor(tax(), S.op), S.q) : []); // best match first (QA F1)
   const showNew = () => !!S.op && S.q.trim() !== "";
   const count = () => visible().length + (showNew() ? 1 : 0);
   const hiIndex = () => (S.nav ? Math.min(S.hi, count() - 1) : S.q.trim() ? 0 : -1);

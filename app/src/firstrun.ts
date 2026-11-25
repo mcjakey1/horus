@@ -44,7 +44,7 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   // Task 9: the Inbox, intake, the view toggle and the Library menu.
   const inboxRoot = root.querySelector<HTMLElement>("#inbox")!;
   let dock: ReturnType<typeof dockPicker> | null = null;
-  const inbox = mountInbox(inboxRoot, api, store, { openPicker: (o) => dock?.(o) });
+  const inbox = mountInbox(inboxRoot, api, store, { openPicker: (o) => dock?.(o), closePicker: () => dock?.hide() });
   dock = dockPicker(inboxRoot.querySelector<HTMLElement>(".inbox-dock")!, api, store);
   // Switching to the Inbox lands on its first item, or on the one intake is opening.
   let landOn: string | null = null;
