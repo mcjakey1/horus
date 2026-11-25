@@ -116,6 +116,10 @@ pub struct Change {
     pub taxonomy: Option<Taxonomy>,
     /// The new item's id (technique, operation or domain).
     pub created: Option<String>,
+    /// Tags an operation or domain move could not re-point, because their technique or branch
+    /// was already missing (dangling ids, R16): they became partial tags in the same undo step.
+    /// 0 for every other command.
+    pub made_partial: usize,
     pub can_undo: bool,
     pub can_redo: bool,
 }
@@ -587,6 +591,7 @@ fn change(o: &Open, touched: &Touched, created: Option<String>) -> Change {
         removed,
         taxonomy: touched.taxonomy.then(|| o.tax.clone()),
         created,
+        made_partial: 0,
         can_undo: o.history.can_undo(),
         can_redo: o.history.can_redo(),
     }
@@ -628,11 +633,19 @@ fn commit<R: Runtime>(
     app: &AppHandle<R>,
     build: impl FnOnce(&Open) -> Result<(Edit, Option<String>), String>,
 ) -> Result<Change, String> {
+    commit_counted(app, |o| build(o).map(|(e, created)| (e, created, 0)))
+}
+
+/// `commit`, where `build` also returns `Change.made_partial` (the operation and domain moves).
+fn commit_counted<R: Runtime>(
+    app: &AppHandle<R>,
+    build: impl FnOnce(&Open) -> Result<(Edit, Option<String>, usize), String>,
+) -> Result<Change, String> {
     let st = app.state::<AppState>();
     let change = {
         let mut open = lock(&st.open);
         let o = open.as_mut().ok_or(NO_LIBRARY)?;
-        let (edit, created) = build(o)?;
+        let (edit, created, made_partial) = build(o)?;
         // The single read-only check; it covers Plan 3's taxonomy edits too.
         if edit.touches_taxonomy() && o.tax_source == TaxSource::SeedReadOnly {
             return Err("TaxonomyReadOnly".into());
@@ -657,7 +670,10 @@ fn commit<R: Runtime>(
         if !is_noop(&applied.inverse) {
             o.history.record(applied.inverse);
         }
-        settle(o, &applied.touched, created)
+        Change {
+            made_partial,
+            ..settle(o, &applied.touched, created)
+        }
     };
     st.saver.notify_one();
     hooks::after_change(app, &change);
@@ -834,6 +850,8 @@ struct Plan {
     branches: Vec<String>,
     domains: Vec<String>,
     operations: Vec<String>,
+    /// Stale tags a re-key turned partial (`Change.made_partial`).
+    made_partial: usize,
 }
 
 impl Plan {
@@ -847,6 +865,7 @@ impl Plan {
             branches: vec![],
             domains: vec![],
             operations: vec![],
+            made_partial: 0,
         }
     }
 
@@ -920,6 +939,9 @@ fn descending<T>(list: &[T], hit: impl Fn(&T) -> bool) -> Vec<usize> {
 /// Moves branch `from` onto the branch `(to_op, to_domain)`, minting `<to_op>.<to_domain>` if
 /// no branch has that pair (C16): its missing links, then its tags (which take `to_op`), then
 /// `from`'s links and `from` itself are queued for removal. Every operation or domain move.
+/// A tag that would not be valid on `to` (a dangling technique or branch, R16) becomes a
+/// partial tag under `to_op` instead, so stale data never refuses the move (I1); its region
+/// goes too if it is out of bounds. Undo restores each tag's `before`.
 fn rekey_branch(p: &mut Plan, from: &str, to_op: &str, to_domain: &str) -> Result<(), String> {
     let pair = |b: &&Branch| b.operation_id == to_op && b.domain_id == to_domain;
     let to = match p.tax.branches.iter().find(pair) {
@@ -950,11 +972,19 @@ fn rekey_branch(p: &mut Plan, from: &str, to_op: &str, to_domain: &str) -> Resul
         }
     }
     for tagged in p.tags(|t| t.branch_id.as_deref() == Some(from)) {
-        let after = Tag {
+        let mut after = Tag {
             operation_id: to_op.into(),
             branch_id: Some(to.clone()),
             ..tagged.1.clone()
         };
+        if edit::validate_tag(&p.tax, &after).is_err() {
+            p.made_partial += 1;
+            after.technique_id = None;
+            after.branch_id = None;
+            if edit::validate_tag(&p.tax, &after).is_err() {
+                after.region = None;
+            }
+        }
         p.replace(tagged, after)?;
     }
     let pairs = links.into_iter().map(|l| (l.branch_id, l.technique_id));
@@ -1192,7 +1222,7 @@ pub fn delete_domain<R: Runtime>(
     id: String,
     move_to: Option<DomainMove>,
 ) -> Result<Change, String> {
-    commit(&app, |o| {
+    commit_counted(&app, |o| {
         if !o.tax.domains.iter().any(|d| d.id == id) {
             return Err(unknown("domain", &id));
         }
@@ -1218,7 +1248,8 @@ pub fn delete_domain<R: Runtime>(
             }
         }
         p.domains.push(id.clone());
-        Ok((p.finish()?, None))
+        let made_partial = p.made_partial;
+        Ok((p.finish()?, None, made_partial))
     })
 }
 
@@ -1304,7 +1335,7 @@ pub fn delete_operation<R: Runtime>(
     id: String,
     move_to: Option<OpMove>,
 ) -> Result<Change, String> {
-    commit(&app, |o| {
+    commit_counted(&app, |o| {
         if !o.tax.operations.iter().any(|x| x.id == id) {
             return Err(unknown("operation", &id));
         }
@@ -1347,7 +1378,8 @@ pub fn delete_operation<R: Runtime>(
             }
         }
         p.operations.push(id.clone());
-        Ok((p.finish()?, None))
+        let made_partial = p.made_partial;
+        Ok((p.finish()?, None, made_partial))
     })
 }
 
@@ -3354,6 +3386,7 @@ mod tests {
     #[test]
     fn delete_to_partial() {
         let e = lib3();
+        let before = snapshot(&e);
         delete_technique(e.handle(), "rim-light".into(), Some(TagMove::Partial)).unwrap();
         let t1 = tag_of(&e, "t1");
         assert_eq!(
@@ -3362,6 +3395,84 @@ mod tests {
             "operation and region only"
         );
         assert_eq!(tag_of(&e, "t3"), tg("t3", "differentiate", None));
+        // Review Focus 4: one undo restores the technique, its link and both tags in place.
+        let c = undo(e.handle()).unwrap();
+        assert!(!c.can_undo, "one step");
+        assert_eq!(snapshot(&e), before);
+    }
+
+    #[test]
+    fn unlink_with_move_undo_restores() {
+        let e = lib3();
+        let before = snapshot(&e);
+        unlink_technique(
+            e.handle(),
+            "chiaroscuro".into(),
+            "sequence.feature".into(),
+            to("size-hierarchy", "sequence.feature"),
+        )
+        .unwrap();
+        assert!(!has_link(&tax_of(&e), "sequence.feature", "chiaroscuro"));
+        assert_eq!(
+            tag_of(&e, "t5").technique_id.as_deref(),
+            Some("size-hierarchy")
+        );
+        // Review Focus 4: one undo restores the link (at its index) and the tag in place.
+        let c = undo(e.handle()).unwrap();
+        assert!(!c.can_undo, "one step");
+        assert_eq!(snapshot(&e), before);
+    }
+
+    /// I1: dangling tags (R16) on a re-keyed branch become partial tags; the move goes ahead.
+    #[test]
+    fn rekey_turns_stale_tags_partial() {
+        let gf = "group.feature";
+        let e = lib3_with([
+            vec![tg("t1", "group", Some(("color-blocking", gf)))],
+            vec![
+                // A removed technique, and one that is not linked on its branch.
+                with_region(tg("s1", "group", Some(("ghost", gf)))),
+                tg("s2", "group", Some(("leading-lines", gf))),
+            ],
+            vec![tg(
+                "t2",
+                "differentiate",
+                Some(("chiaroscuro", "differentiate.feature")),
+            )],
+        ]);
+        let before = snapshot(&e);
+        let target = Some(OpMove::Operation {
+            operation_id: "differentiate".into(),
+        });
+        let c = delete_operation(e.handle(), "group".into(), target).unwrap();
+        assert_eq!(c.made_partial, 2);
+        assert_eq!(serde_json::to_value(&c).unwrap()["madePartial"], 2);
+        assert_eq!(
+            tag_of(&e, "s1"),
+            with_region(tg("s1", "differentiate", None))
+        );
+        assert_eq!(tag_of(&e, "s2"), tg("s2", "differentiate", None));
+        let t1 = tag_of(&e, "t1");
+        assert_eq!(t1.branch_id.as_deref(), Some("differentiate.feature"));
+        // Undo puts the stale tags back exactly, in position.
+        let c = undo(e.handle()).unwrap();
+        assert_eq!(c.made_partial, 0);
+        assert_eq!(snapshot(&e), before);
+        assert_eq!(tag_of(&e, "s1").technique_id.as_deref(), Some("ghost"));
+
+        // A domain move takes the same path.
+        let target = Some(DomainMove::Domain {
+            domain_id: "grouping".into(),
+        });
+        let c = delete_domain(e.handle(), "feature".into(), target).unwrap();
+        assert_eq!(c.made_partial, 2);
+        assert_eq!(tag_of(&e, "s2"), tg("s2", "group", None));
+        assert_eq!(
+            tag_of(&e, "t2").branch_id.as_deref(),
+            Some("differentiate.grouping")
+        );
+        undo(e.handle()).unwrap();
+        assert_eq!(snapshot(&e), before);
     }
 
     #[test]

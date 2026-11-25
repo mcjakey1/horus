@@ -85,6 +85,11 @@ export type Change = {
   removed: string[];
   taxonomy?: Taxonomy | null;
   created?: string | null;
+  /**
+   * Tags an operation or domain move could not re-point (their technique or branch was already
+   * missing) and kept as partial tags in the same undo step; 0 otherwise. Rust always sends it.
+   */
+  madePartial?: number;
   canUndo: boolean;
   canRedo: boolean;
 };
