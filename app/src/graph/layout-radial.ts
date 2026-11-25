@@ -58,13 +58,15 @@ export function layoutRadial(g: TaxGraph, opId: string): Placed {
   );
   const techAngle = new Map(techs.map((t, i) => [t, techAngles[i]]));
   techs.forEach((t, i) => p.set(t, polar(2 * BAND_GAP, techAngles[i])));
-  // Ring 3: one point per reference, at the mean angle of its techniques here; its nodes under
-  // each of those techniques share that point. The ring grows to keep REF_ARC between references.
+  // Ring 3: every reference tagged under this operation (a `vias` entry on one of its branches),
+  // one point each, at the mean angle of its techniques here; its nodes under each of those
+  // techniques share that point. The ring grows to keep REF_ARC between the kept references.
+  const here = new Set(branches.map((b) => (g.nodes.get(b) as { branchId: string }).branchId));
   const byRef = new Map<string, { nodes: string[]; angles: number[] }>();
   for (const t of techs)
     for (const r of kids(t)) {
       const n = g.nodes.get(r);
-      if (n?.kind !== "ref") continue;
+      if (n?.kind !== "ref" || !n.vias.some((v) => here.has(v.branchId))) continue;
       const e = byRef.get(n.refId) ?? { nodes: [], angles: [] };
       e.nodes.push(r);
       e.angles.push(techAngle.get(t)!);

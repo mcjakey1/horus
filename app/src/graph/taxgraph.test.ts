@@ -25,6 +25,12 @@ describe("buildTaxGraph", () => {
     expect(g.children.get("tech:chiaroscuro")).toEqual(["ref:chiaroscuro:a", "ref:chiaroscuro:b"]);
     expect(g.nodes.get("ref:chiaroscuro:b")).toMatchObject({ kind: "ref", refId: "b", via: { techId: "chiaroscuro", branchId: "differentiate.feature", state: "region" } });
     expect(g.nodes.get("ref:chiaroscuro:a")).toMatchObject({ via: { state: "full" } });
+    // vias: every tag of the reference on that technique, one per branch; via is the first
+    expect(g.nodes.get("ref:chiaroscuro:a")).toMatchObject({
+      via: { branchId: "differentiate.feature" },
+      vias: [{ techId: "chiaroscuro", branchId: "differentiate.feature", state: "full" }, { techId: "chiaroscuro", branchId: "sequence.feature", state: "full" }],
+    });
+    expect(g.nodes.get("ref:chiaroscuro:b")).toMatchObject({ vias: [{ branchId: "differentiate.feature", state: "region" }] });
   });
 
   it("node ids, taxonomy order and multi-parent techniques", () => {

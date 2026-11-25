@@ -43,6 +43,23 @@ describe("layoutRadial", () => {
     expect([...p.values()].every((q) => Number.isFinite(q.x) && Number.isFinite(q.y))).toBe(true);
   });
 
+  it("radial_ring3_only_this_operation (fix round 1, I1)", () => {
+    const seqOnly = refOf("s", [tagOf(seed, { tech: "chiaroscuro", branch: "sequence.feature" })]);
+    const both = refOf("w", [tagOf(seed, { tech: "chiaroscuro", branch: "sequence.feature" }), tagOf(seed, { tech: "chiaroscuro" }, 1)]);
+    const crowd = Array.from({ length: 60 }, (_, i) => refOf(`q${i}`, [tagOf(seed, { tech: "chiaroscuro", branch: "sequence.feature" })]));
+    const g = buildTaxGraph(snap(seed, [seqOnly, both, ...crowd]), "all");
+    const diff = layoutRadial(g, "differentiate");
+    expect(diff.has("ref:chiaroscuro:s")).toBe(false);
+    expect(diff.has("ref:chiaroscuro:w")).toBe(true); // a second tag goes through differentiate.feature
+    // ring 3 counts only the kept references: one, so it stays at 3·BAND_GAP
+    expect(r(diff.get("ref:chiaroscuro:w")!)).toBeCloseTo(3 * BAND_GAP, 6);
+    expect([...diff.keys()].filter((k) => k.startsWith("ref:"))).toEqual(["ref:chiaroscuro:w"]);
+    const seq = layoutRadial(g, "sequence");
+    expect(seq.has("ref:chiaroscuro:s")).toBe(true);
+    expect(seq.has("ref:chiaroscuro:w")).toBe(true);
+    expect(r(seq.get("ref:chiaroscuro:s")!)).toBeGreaterThan(3 * BAND_GAP); // 62 references grow it
+  });
+
   it("radial_single_tech_ref_angle", () => {
     const g = buildTaxGraph(snap(seed, [refOf("a", [tagOf(seed, { tech: "silhouette" })]), refOf("b", [tagOf(seed, { tech: "chiaroscuro" })])]), "all");
     const p = layoutRadial(g, "differentiate");

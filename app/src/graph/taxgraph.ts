@@ -8,7 +8,9 @@ export type TaxNode =
   | { id: string; kind: "op"; opId: string; count: number }
   | { id: string; kind: "branch"; branchId: string; opId: string; domainId: string; count: number }
   | { id: string; kind: "tech"; techId: string; parents: string[] /* branch ids, taxonomy order */; count: number }
-  | { id: string; kind: "ref"; refId: string; via: { techId: string; branchId: string; region?: Region; state: "full" | "region" } };
+  | { id: string; kind: "ref"; refId: string; via: Via; vias: Via[] };
+/** One tag of a reference on a technique. `vias` holds one per branch, in tag order; `via` is the first. */
+export type Via = { techId: string; branchId: string; region?: Region; state: "full" | "region" };
 /** op→branches, branch→techs, tech→refs. Every node has an entry, possibly empty. */
 export type TaxGraph = { nodes: Map<string, TaxNode>; children: Map<string, string[]> };
 
@@ -21,8 +23,8 @@ export function buildTaxGraph(s: Snapshot, expanded: Set<string> | "all" = new S
   const { tax } = s;
   const opRefs = new Map(tax.operations.map((o) => [o.id, new Set<string>()]));
   const branchRefs = new Map(tax.branches.map((b) => [b.id, new Set<string>()]));
-  /** techId → refId → the reference's first tag with that technique, in library order. */
-  const techTags = new Map(tax.techniques.map((t) => [t.id, new Map<string, Tag>()]));
+  /** techId → refId → the reference's tags with that technique, the first per branch, in library order. */
+  const techTags = new Map(tax.techniques.map((t) => [t.id, new Map<string, Tag[]>()]));
   // Board scope (Plan 4) does not filter here: an out-of-scope reference stays in the graph, and
   // the views draw it as a dot (audit row 10).
   for (const r of s.refs.values()) {
@@ -31,7 +33,8 @@ export function buildTaxGraph(s: Snapshot, expanded: Set<string> | "all" = new S
       const byRef = t.techniqueId ? techTags.get(t.techniqueId) : undefined;
       if (!byRef) continue; // partial, or a technique the taxonomy no longer has
       if (t.branchId) branchRefs.get(t.branchId)?.add(r.id);
-      if (!byRef.has(r.id)) byRef.set(r.id, t);
+      const tags = byRef.get(r.id) ?? [];
+      if (!tags.some((x) => x.branchId === t.branchId)) byRef.set(r.id, [...tags, t]);
     }
   }
 
@@ -57,11 +60,10 @@ export function buildTaxGraph(s: Snapshot, expanded: Set<string> | "all" = new S
     const byRef = techTags.get(t.id)!;
     add({ id, kind: "tech", techId: t.id, parents, count: byRef.size }, parents.map((b) => `br:${b}`));
     if (expanded !== "all" && !expanded.has(id)) continue;
-    for (const [refId, tag] of byRef)
-      add({
-        id: `ref:${t.id}:${refId}`, kind: "ref", refId,
-        via: { techId: t.id, branchId: tag.branchId ?? "", region: tag.region, state: tag.region ? "region" : "full" },
-      }, [id]);
+    for (const [refId, tags] of byRef) {
+      const vias = tags.map((tag): Via => ({ techId: t.id, branchId: tag.branchId ?? "", region: tag.region, state: tag.region ? "region" : "full" }));
+      add({ id: `ref:${t.id}:${refId}`, kind: "ref", refId, via: vias[0], vias }, [id]);
+    }
   }
   return { nodes, children };
 }
