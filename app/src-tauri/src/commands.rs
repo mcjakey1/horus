@@ -798,6 +798,9 @@ fn run_import<R: Runtime>(
                 if !pending {
                     o.debounce.clear_library(); // the rollback left nothing to save
                 }
+                // A close that waited for this import would now flush nothing and close,
+                // losing the import unseen: drop it, so the artist sees why (R1).
+                st.close_owed.store(false, Ordering::SeqCst);
                 return Err(e);
             }
             o.history.record(applied.inverse);
@@ -2099,6 +2102,26 @@ mod tests {
         assert!(state.close_owed.load(Ordering::SeqCst), "still owed");
         intake_busy(e.handle(), false);
         assert!(!state.close_owed.load(Ordering::SeqCst));
+    }
+
+    /// R1: a waited import whose save fails drops the owed close, so the window stays open
+    /// and shows the failure; the next close is a fresh decision.
+    #[test]
+    fn a_failed_import_drops_the_owed_close() {
+        let e = created();
+        let state = st(&e);
+        intake_busy(e.handle(), true); // a UI import runs inside the intake queue
+        assert_eq!(close_decision(&state), CloseDecision::Wait);
+        let blocker = Path::new(&e.lib).join("library.json.tmp");
+        fs::create_dir(&blocker).unwrap();
+        assert!(e.import("small.jpg").is_err());
+        assert!(
+            !state.close_owed.load(Ordering::SeqCst),
+            "the failure dropped the close"
+        );
+        intake_busy(e.handle(), false);
+        fs::remove_dir(&blocker).unwrap();
+        assert_eq!(close_decision(&state), CloseDecision::Close);
     }
 
     #[test]
