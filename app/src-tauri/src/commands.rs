@@ -829,9 +829,13 @@ pub async fn import_bytes<R: Runtime>(
     let meta = request.headers().get("x-meta").map(|v| v.to_str());
     let meta = meta.and_then(Result::ok).unwrap_or_default().to_owned();
     let bytes = bytes.clone();
+    let app2 = app.clone();
     tauri::async_runtime::spawn_blocking(move || paste(&app, &std::env::temp_dir(), &bytes, &meta))
         .await
-        .map_err(|e| format!("The import stopped unexpectedly: {e}"))?
+        .map_err(|e| {
+            drop_owed_close(&app2);
+            format!("The import stopped unexpectedly: {e}")
+        })?
 }
 
 #[derive(Deserialize)]
@@ -851,14 +855,37 @@ fn paste<R: Runtime>(
     bytes: &[u8],
     meta: &str,
 ) -> Result<ImportResult, String> {
-    let unreadable = |e: String| format!("The pasted image's details could not be read: {e}");
-    let meta = percent_decode(meta).map_err(unreadable)?;
-    let meta: PasteMeta = serde_json::from_str(&meta).map_err(|e| unreadable(e.to_string()))?;
-    let staged = |e: std::io::Error| format!("The pasted image could not be staged: {e}");
-    let dir = tempfile::tempdir_in(staging).map_err(staged)?;
-    let path = dir.path().join(paste_name(&meta.name));
-    std::fs::write(&path, bytes).map_err(staged)?;
-    run_import(app, vec![path], meta.note, meta.source_url)
+    let out = (|| {
+        let unreadable = |e: String| format!("The pasted image's details could not be read: {e}");
+        let meta = percent_decode(meta).map_err(unreadable)?;
+        let meta: PasteMeta = serde_json::from_str(&meta).map_err(|e| unreadable(e.to_string()))?;
+        let staged = |e: std::io::Error| format!("The pasted image could not be staged: {e}");
+        let dir = tempfile::tempdir_in(staging).map_err(staged)?;
+        let path = dir.path().join(paste_name(&meta.name));
+        std::fs::write(&path, bytes).map_err(staged)?;
+        run_import(app, vec![path], meta.note, meta.source_url)
+    })();
+    let lost = match &out {
+        Err(_) => true,
+        Ok(r) => r
+            .report
+            .skipped
+            .iter()
+            .any(|(_, s)| matches!(s, import::Skip::WriteFailed(_))),
+    };
+    if lost {
+        drop_owed_close(app);
+    }
+    out
+}
+
+/// A paste's bytes exist nowhere else: when it fails, a close owed meanwhile is dropped, so the
+/// window stays open on the failure (R1, round 2). The intake is busy during a paste, so no gate
+/// has taken the close yet.
+fn drop_owed_close<R: Runtime>(app: &AppHandle<R>) {
+    app.state::<AppState>()
+        .close_owed
+        .store(false, Ordering::SeqCst);
 }
 
 /// The last path component, with `< > : " / \ | ? *` and control characters as `_`. Nothing
@@ -2122,6 +2149,44 @@ mod tests {
         intake_busy(e.handle(), false);
         fs::remove_dir(&blocker).unwrap();
         assert_eq!(close_decision(&state), CloseDecision::Close);
+    }
+
+    /// Round 2: a paste whose copy fails exists nowhere else, so a close owed meanwhile is
+    /// dropped and the skip row shows.
+    #[test]
+    fn a_paste_that_could_not_be_written_drops_the_owed_close() {
+        let e = created();
+        let state = st(&e);
+        intake_busy(e.handle(), true);
+        assert_eq!(close_decision(&state), CloseDecision::Wait);
+        let bytes = fs::read(fixture("small.jpg")).unwrap();
+        let hash = blake3::hash(&bytes).to_hex().to_string();
+        // A folder squatting on the destination makes the copy fail.
+        fs::create_dir_all(
+            crate::library::image_path_in(Path::new(&e.lib), &format!("{hash}.jpg")).unwrap(),
+        )
+        .unwrap();
+        let staging = tempfile::tempdir().unwrap();
+        let meta = "%7B%22name%22%3A%22pasted.jpg%22%7D";
+        let out = paste(&e.handle(), staging.path(), &bytes, meta).unwrap();
+        assert!(matches!(
+            out.report.skipped.as_slice(),
+            [(_, import::Skip::WriteFailed(_))]
+        ));
+        assert!(!state.close_owed.load(Ordering::SeqCst));
+    }
+
+    /// Round 2: a paste that fails before it reaches the gate drops the owed close too.
+    #[test]
+    fn a_paste_that_could_not_be_staged_drops_the_owed_close() {
+        let e = created();
+        let state = st(&e);
+        intake_busy(e.handle(), true);
+        assert_eq!(close_decision(&state), CloseDecision::Wait);
+        let gone = tempfile::tempdir().unwrap().path().join("gone");
+        let meta = "%7B%22name%22%3A%22pasted.jpg%22%7D";
+        assert!(paste(&e.handle(), &gone, b"x", meta).is_err());
+        assert!(!state.close_owed.load(Ordering::SeqCst));
     }
 
     #[test]
