@@ -37,14 +37,14 @@ describe("buildTaxGraph", () => {
     expect([...g.nodes.values()].filter((x) => x.kind === "tech")).toHaveLength(seed.techniques.length);
   });
 
-  it("expands only the listed techniques, and skips out-of-scope references", () => {
+  it("expands only the listed techniques, and keeps out-of-scope references (drawn as dots)", () => {
     const s = snap(seed, refs);
     expect(buildTaxGraph(s).children.get("tech:chiaroscuro")).toEqual([]);
     expect([...buildTaxGraph(s).nodes.values()].some((x) => x.kind === "ref")).toBe(false);
     expect(buildTaxGraph(s, new Set(["tech:chiaroscuro"])).children.get("tech:chiaroscuro")).toHaveLength(2);
     const scoped = buildTaxGraph({ ...s, inScope: (id) => id !== "a" }, "all");
-    expect(scoped.children.get("tech:chiaroscuro")).toEqual(["ref:chiaroscuro:b"]);
-    expect((scoped.nodes.get("tech:chiaroscuro") as { count: number }).count).toBe(1);
+    expect(scoped.children.get("tech:chiaroscuro")).toEqual(["ref:chiaroscuro:a", "ref:chiaroscuro:b"]);
+    expect((scoped.nodes.get("tech:chiaroscuro") as { count: number }).count).toBe(2);
   });
 
   it("ignores a tag whose technique is not in the taxonomy", () => {

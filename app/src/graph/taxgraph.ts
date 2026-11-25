@@ -23,8 +23,9 @@ export function buildTaxGraph(s: Snapshot, expanded: Set<string> | "all" = new S
   const branchRefs = new Map(tax.branches.map((b) => [b.id, new Set<string>()]));
   /** techId → refId → the reference's first tag with that technique, in library order. */
   const techTags = new Map(tax.techniques.map((t) => [t.id, new Map<string, Tag>()]));
+  // Board scope (Plan 4) does not filter here: an out-of-scope reference stays in the graph, and
+  // the views draw it as a dot (audit row 10).
   for (const r of s.refs.values()) {
-    if (!s.inScope(r.id)) continue;
     for (const t of r.tags) {
       opRefs.get(t.operationId)?.add(r.id);
       const byRef = t.techniqueId ? techTags.get(t.techniqueId) : undefined;
