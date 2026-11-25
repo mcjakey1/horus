@@ -71,6 +71,7 @@ function fakeApi(): Api {
     openLibrary: vi.fn(async () => library),
     getTaxonomy: vi.fn(async () => taxonomy),
     related: vi.fn(async (id: string) => scored[id] ?? []),
+    graphEdges: vi.fn(),
     importPaths: vi.fn(async () => imported([])),
     search: vi.fn(async () => []),
     getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "unset" as const })),

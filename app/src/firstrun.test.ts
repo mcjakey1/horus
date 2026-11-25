@@ -24,6 +24,7 @@ function fakeApi(lastLibrary: string | null): Api {
     }),
     getTaxonomy: vi.fn(async () => ({ operations: [], domains: [], branches: [], techniques: [], branchTechniques: [] })),
     related: vi.fn(async () => []),
+    graphEdges: vi.fn(),
     importPaths: vi.fn(async () => ({
       report: { added: [], duplicates: [], skipped: [] },
       change: { references: [], removed: [], canUndo: false, canRedo: false },

@@ -90,6 +90,8 @@ export type Change = {
 };
 
 export type Scored = { id: string; score: number; sharedTechniques: string[]; sharedBranches: string[] };
+/** A Galaxy edge: one per pair, `a < b`. */
+export type Edge = { a: string; b: string; score: number };
 
 /** Why a file was skipped; `detail` is a message, or the byte size for `tooLarge`. */
 export type Skip =
@@ -125,6 +127,8 @@ export interface Api {
   openLibrary(path: string): Promise<LibraryView>;
   getTaxonomy(): Promise<Taxonomy>;
   related(id: string): Promise<Scored[]>;
+  /** The union of every visible reference's top `k` related, deduplicated. */
+  graphEdges(k: number): Promise<Edge[]>;
   importPaths(paths: string[], meta?: IntakeMeta): Promise<ImportResult>;
   /** A pasted image: `name` is a file name (only its last part is kept). */
   importBytes(name: string, bytes: ArrayBuffer | Uint8Array, meta?: IntakeMeta): Promise<ImportResult>;
@@ -175,6 +179,7 @@ export const tauriApi: Api = {
   openLibrary: (path) => invoke("open_library", { path }),
   getTaxonomy: () => invoke("get_taxonomy"),
   related: (id) => invoke("related", { id }),
+  graphEdges: (k) => invoke("graph_edges", { k }),
   importPaths: (paths, meta) =>
     invoke("import_paths", { paths, note: meta?.note ?? null, sourceUrl: meta?.sourceUrl ?? null }),
   // Headers carry ASCII only, so the metadata travels percent-encoded.

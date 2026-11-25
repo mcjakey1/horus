@@ -1,7 +1,7 @@
 //! Tauri commands: the IPC surface `src/api.ts` calls. Every command returns
 //! `Result<T, String>` with a message the UI can show as-is. All JSON is camelCase.
 
-use crate::correlate::{Index, Scored};
+use crate::correlate::{Edge, Index, Scored};
 use crate::demo::{self, DemoExample};
 use crate::edit::{self, Edit, EditError, Field, Touched, new_id};
 use crate::history::History;
@@ -463,6 +463,20 @@ pub fn related<R: Runtime>(app: AppHandle<R>, id: String) -> Result<Vec<Scored>,
     let open = lock(&st.open);
     let o = open.as_ref().ok_or(NO_LIBRARY)?;
     Ok(o.index.related(&visible(&o.lib), &id))
+}
+
+/// Galaxy edges over the visible references (hidden ones never appear). `async` runs it off
+/// the main thread, and the scoring runs on a clone, outside the state lock, so it blocks
+/// neither the saver nor other commands. The index is rebuilt from the clone (O(tags)).
+/// IPC args: `{ k }`.
+#[tauri::command(async)]
+pub fn graph_edges<R: Runtime>(app: AppHandle<R>, k: u32) -> Result<Vec<Edge>, String> {
+    let st = app.state::<AppState>();
+    let data = {
+        let open = lock(&st.open);
+        visible(&open.as_ref().ok_or(NO_LIBRARY)?.lib).into_owned()
+    };
+    Ok(Index::build(&data).graph_edges(&data, k as usize))
 }
 
 /// The delta for `touched`, read after the edit. An id both changed and removed counts as
@@ -1096,7 +1110,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let res = Path::new(env!("CARGO_MANIFEST_DIR")).join("resources");
         let app = mock_builder()
-            .invoke_handler(tauri::generate_handler![create_library, import_bytes])
+            .invoke_handler(tauri::generate_handler![
+                create_library,
+                import_bytes,
+                graph_edges
+            ])
             .manage(AppState::new(
                 dir.path().join("config"),
                 res.join("taxonomy.json"),
@@ -1460,6 +1478,56 @@ mod tests {
         assert_eq!(a.duplicates.len() + b.duplicates.len(), 1);
         let view = open_library(e.handle(), e.lib.clone()).unwrap();
         assert_eq!(view.references.len(), 1);
+    }
+
+    #[test]
+    fn graph_edges_command_roundtrip() {
+        let e = created();
+        let webview = tauri::WebviewWindowBuilder::new(&e.app, "main", Default::default())
+            .build()
+            .unwrap();
+        let res = tauri::test::get_ipc_response(
+            &webview,
+            tauri::webview::InvokeRequest {
+                cmd: "graph_edges".into(),
+                callback: tauri::ipc::CallbackFn(0),
+                error: tauri::ipc::CallbackFn(1),
+                url: "http://tauri.localhost".parse().unwrap(),
+                body: serde_json::json!({ "k": 8 }).into(),
+                headers: Default::default(),
+                invoke_key: tauri::test::INVOKE_KEY.to_string(),
+            },
+        );
+        let edges: serde_json::Value = res.unwrap().deserialize().unwrap();
+        assert_eq!(edges, serde_json::json!([]));
+    }
+
+    #[test]
+    fn graph_edges_skip_hidden() {
+        let e = created();
+        e.import("small.jpg").unwrap();
+        e.import("p3_red.png").unwrap();
+        // Two good references and a hidden one (bad hash), all sharing Chiaroscuro.
+        let path = Path::new(&e.lib).join("library.json");
+        let mut json: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let tag = serde_json::json!([{ "id": "t1", "operationId": "differentiate",
+            "techniqueId": "chiaroscuro", "branchId": "differentiate.feature", "suggested": false }]);
+        json["references"][0]["tags"] = tag.clone();
+        json["references"][1]["tags"] = tag.clone();
+        let mut bad = json["references"][0].clone();
+        bad["id"] = "bad".into();
+        bad["hash"] = "../../evil".into();
+        json["references"].as_array_mut().unwrap().push(bad);
+        fs::write(&path, serde_json::to_vec(&json).unwrap()).unwrap();
+        open_library(e.handle(), e.lib.clone()).unwrap();
+
+        let edges = graph_edges(e.handle(), 8).unwrap();
+        assert_eq!(edges.len(), 1, "{edges:?}"); // the two good ones still link
+        assert!(
+            edges.iter().all(|x| x.a != "bad" && x.b != "bad"),
+            "{edges:?}"
+        );
     }
 
     #[test]

@@ -21,6 +21,7 @@ const rows: [keyof Api, string, string[], (a: Api) => Promise<unknown>][] = [
   ["openLibrary", "open_library", ["path"], (a) => a.openLibrary("p")],
   ["getTaxonomy", "get_taxonomy", [], (a) => a.getTaxonomy()],
   ["related", "related", ["id"], (a) => a.related("r")],
+  ["graphEdges", "graph_edges", ["k"], (a) => a.graphEdges(8)],
   ["search", "search", ["q"], (a) => a.search("q")],
   ["getSettings", "get_settings", [], (a) => a.getSettings()],
   ["setSettings", "set_settings", ["s"], (a) => a.setSettings({ theme: "dark" })],

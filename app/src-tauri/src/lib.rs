@@ -61,6 +61,7 @@ pub fn run() {
             commands::open_library,
             commands::get_taxonomy,
             commands::related,
+            commands::graph_edges,
             commands::import_paths,
             commands::import_bytes,
             commands::search,
