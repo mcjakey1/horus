@@ -38,6 +38,19 @@ describe("TexCache", () => {
     expect(cache.get("x")).toBe("failed");
   });
 
+  it("a loader that resolves nothing counts as failed", async () => {
+    const load = vi.fn(async () => undefined as unknown as string);
+    const unload = vi.fn();
+    const cache = new TexCache<string>(1, load, unload);
+    cache.get("x");
+    await settle();
+    expect(cache.get("x")).toBe("failed");
+    expect(load).toHaveBeenCalledOnce();
+    cache.get("y");
+    await settle();
+    expect(unload).not.toHaveBeenCalled();
+  });
+
   it("loading_dedupes", async () => {
     const load = vi.fn(async (url: string) => url);
     const cache = new TexCache<string>(2, load, () => {});

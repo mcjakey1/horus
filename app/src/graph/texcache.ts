@@ -24,6 +24,11 @@ export class TexCache<T> {
     // The executor turns a synchronous throw from `load` into a rejection.
     new Promise<T>((resolve) => resolve(this.load(url))).then(
       (tex) => {
+        // A loader that resolves nothing counts as failed, so it is not retried every frame.
+        if (tex == null) {
+          this.pending.set(url, "failed");
+          return;
+        }
         this.pending.delete(url);
         this.live.set(url, tex);
         for (const [old, oldTex] of this.live) {
