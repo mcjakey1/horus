@@ -175,7 +175,7 @@ Horus is an early beta. The project has six plans in [`docs/superpowers/plans/`]
 | Plan | Scope | Status |
 |---|---|---|
 | 1 | Foundation: library, import, related references, search, first run, Windows build | Done |
-| 2 | Tagging, Inbox, undo and redo, drag and drop, library menu | Planned |
+| 2 | Tagging, Inbox, undo and redo, drag and drop, library menu | Done |
 | 3 | Tree, Galaxy, and Radial views; taxonomy editing | Planned |
 | 4 | Boards, Lightbox, Compare, and links between references | Planned |
 | 5 | Find similar (local SigLIP image model) and Settings | Planned |
@@ -201,8 +201,8 @@ For the product design, read [`SPEC.md`](SPEC.md), [`PRODUCT.md`](PRODUCT.md), a
 
 ## Limits
 
-- This version does not let you add or edit tags. Plan 2 adds tagging.
-- The Tree, Galaxy, Radial, Inbox, and Boards tabs are not active yet.
+- The Tree, Galaxy, Radial, and Boards tabs are not active yet.
+- A long import shows "Importing…" only. It does not show a count or a Cancel button yet.
 - Only Windows builds are available. Plan 6 adds macOS and Linux builds.
 - Nobody has tested the installers on a computer without a network connection yet.
 - The security policy (CSP) still allows inline styles. Plan 6 removes this permission.

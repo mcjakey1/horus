@@ -618,3 +618,8 @@ These are checkable sign-offs, not code. A gate closes only with **evidence and 
    - macOS builds are ad-hoc signed (`signingIdentity: "-"`), so Apple Silicon offers "Open Anyway" rather than reporting the app as damaged.
 3. **Publisher, copyright and authors:** "Jake Manahan", exactly as given, for `bundle.publisher`, `bundle.copyright` ("© 2026 Jake Manahan") and Cargo `authors`. No email or contact field is set anywhere, because none was given.
 4. **Hosting:** GitHub Releases, built by GitHub Actions on Windows, macOS and Linux (Task 6). Each release is a draft prerelease until the user publishes it.
+
+## Carried from Plan 2 (user decision, 2026-11-25)
+
+- **Import progress and Cancel.** Plan 1 QA (M3) found that a long import shows only "Importing…". Add an "N of M" count and a Cancel button to the import notice. The user chose to do this in a later plan rather than in Plan 2.
+- **macOS close dialog.** The Plan 2 final review (M2) found that Cmd+Q may bypass the save-failure dialog (`lib.rs`, `ExitRequested`). Check it on the macOS build.
