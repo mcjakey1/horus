@@ -13,6 +13,7 @@ import { mountSaveDialog, wireSaveStatus } from "./save-dialog";
 import { storeSource } from "./data";
 import { createStore } from "./store";
 import { mountViews } from "./views";
+import { mountGalaxy } from "./views/galaxy";
 
 /** SPEC §5a, verbatim. */
 export const FIND_SIMILAR_COPY =
@@ -56,6 +57,8 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   const still = () => {};
   // The Reference view is always mounted; CSS shows it.
   shell.register("reference", () => ({ show: still, hide: still, destroy: still }));
+  // Plan 3 Task 7: the Galaxy.
+  shell.register("galaxy", () => mountGalaxy(root.querySelector<HTMLElement>('[data-view-host="galaxy"]')!, source, { api, openReference: shell.openReference }));
   shell.register("inbox", () => ({
     show: () => (landOn ? inbox.focusId(landOn) : inbox.focus(0)),
     hide: still,

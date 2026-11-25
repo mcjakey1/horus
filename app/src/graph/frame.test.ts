@@ -11,6 +11,7 @@ import {
   planFrame,
   WebGLUnavailable,
   EdgeGate,
+  sameLook,
   wireContextLoss,
   type Scene,
   type SceneEdge,
@@ -199,5 +200,18 @@ describe("EdgeGate (I2)", () => {
     frame(same, 3, 1.25, 1); // theme
     frame(same, 3, 1.25, 1);
     expect(redraws).toBe(7);
+  });
+});
+
+describe("sameLook (Task 7: streaming layouts move nodes, not rebuild them)", () => {
+  it("same_look_ignores_position_only", () => {
+    const a: SceneNode = { id: "a", kind: "ref", x: 0, y: 0, size: NODE, url: "u", aspect: 1 };
+    expect(sameLook(a, { ...a, x: 50, y: -3 })).toBe(true);
+    expect(sameLook(a, { ...a, dim: true })).toBe(false);
+    expect(sameLook(a, { ...a, url: "v" })).toBe(false);
+    expect(sameLook(a, { ...a, outline: { region: { x: 0, y: 0, w: 1, h: 1 }, color: "var(--seq)", state: "full" } })).toBe(false);
+    const t: SceneNode = { id: "t", kind: "tech", x: 0, y: 0, size: 32, color: "var(--seq)", label: "A" };
+    expect(sameLook(t, { ...t, x: 9 })).toBe(true);
+    expect(sameLook(t, { ...t, label: "B" })).toBe(false);
   });
 });

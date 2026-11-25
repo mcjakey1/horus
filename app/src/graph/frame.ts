@@ -158,3 +158,10 @@ export class EdgeGate {
     return true;
   }
 }
+
+/** Two versions of a node that draw the same apart from position: the scene moves, not rebuilds. */
+export function sameLook(a: SceneNode, b: SceneNode): boolean {
+  const { x: _ax, y: _ay, ...ra } = a;
+  const { x: _bx, y: _by, ...rb } = b;
+  return JSON.stringify(ra) === JSON.stringify(rb); // ponytail: key order is stable within one producer
+}

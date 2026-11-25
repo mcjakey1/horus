@@ -11,6 +11,7 @@ import {
   buildGrids,
   classifyDrag,
   EdgeGate,
+  sameLook,
   nodeRect,
   planFrame,
   WebGLUnavailable,
@@ -159,6 +160,9 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     (url) =>
       new Promise((resolve, reject) => {
         const img = new Image();
+        // http://asset.localhost is another origin: without CORS mode WebGL refuses the pixels
+        // ("contains cross-origin data"). Tauri's asset protocol answers with the window's origin.
+        img.crossOrigin = "anonymous";
         img.decoding = "async";
         img.onload = () => resolve(PIXI.Texture.from(img, true));
         img.onerror = () => reject(new Error(`thumbnail failed: ${url}`));
@@ -506,9 +510,15 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   return {
     setNodes(list) {
       const ids = new Set(list.map((n) => n.id));
-      for (const id of [...objs.keys()]) dropObj(id); // positions and looks may have changed
-      shown = new Set();
-      nodes = new Map(list.map((n) => [n.id, n]));
+      const next = new Map(list.map((n) => [n.id, n]));
+      // A node that only moved keeps its display objects (a streaming layout posts every 10 ticks).
+      for (const [id, o] of [...objs]) {
+        const was = nodes.get(id);
+        const now = next.get(id);
+        if (was && now && sameLook(was, now)) o.root.position.set(now.x, now.y);
+        else dropObj(id);
+      }
+      nodes = next;
       order = new Map(list.map((n, i) => [n.id, i]));
       grids = buildGrids(nodes);
       nodesVersion++;
