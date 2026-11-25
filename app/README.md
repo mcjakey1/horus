@@ -92,3 +92,19 @@ No console errors, and no external network requests (item 7's URL was never fetc
   - Item 6 took 565 ms to add and 601 ms to undo.
   - In item 8, the close came 33 ms after Enter.
 - **The harness change:** `focusId` now reads `[data-ref-drop]` instead of `#plate`.
+
+**Re-run after the final fix wave** (2026-11-25, at `f2df12a`, which `p2-t12-e2e` fast-forwarded to): a fresh release build and fresh libraries, deleted afterwards.
+- **Check 1, the full harness (`plan2-e2e.js`), items 1–9: all PASS.** No console errors, and no external requests.
+  - Item 1: the import took 5.1 s, undo 36 ms and redo 24 ms.
+  - Item 3: the tags took 89, 86, 60, 85 and 62 ms, and → alone advanced 4 of 4 times.
+  - Item 6: Halo glow was added in 574 ms and undone in 568 ms.
+  - Item 8: the close was asked 32 ms after Enter, and the window was gone 130 ms later.
+  - Item 9: the switch took 46 ms.
+- **Check 2, a close during an import (`plan2-e2e-close.js`): PASS.**
+  - The harness started `import_paths` on the folder of 20 through IPC, and sent the real `CloseMainWindow` 100 ms later. At that point, 0 references were on disk.
+  - "Finishing the import before closing." showed 31 ms after the close.
+  - The window closed by itself 4.8 s after `CloseMainWindow`, with 20 references on disk.
+  - On relaunch there were 20 references, in both the app and `library.json`.
+- **Check 3, Ctrl+Z on a Cyrillic layout: PASS.**
+  - The harness tagged a reference, then dispatched a synthetic `keydown` (`key: "я"`, `code: "KeyZ"`, Ctrl) on the page. The handler took it (`defaultPrevented`), and the tag was gone from `library.json` 589 ms later, which includes the save debounce.
+  - This is a deviation: it was a synthetic key event, not a real layout switch.
