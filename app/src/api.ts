@@ -89,7 +89,17 @@ export type Change = {
   canRedo: boolean;
 };
 
-export type Scored = { id: string; score: number; sharedTechniques: string[]; sharedBranches: string[] };
+// Plan 3 Task 9: taxonomy edits. Patches: an absent key keeps the field.
+export type TechniquePatch = { name?: string; description?: string; synonyms?: string[] };
+export type DomainPatch = { name?: string; description?: string; icon?: string };
+/** `color`: absent keeps it, `null` resets it (seed ink by id, or neutral), a name in EXTRA_INKS sets it. */
+export type OperationPatch = { name?: string; plainLabel?: string; description?: string; color?: string | null };
+/** Where the tags of a removed technique or link go: another linked pair, or kept as partial tags. */
+export type TagMove = { kind: "technique"; techniqueId: string; branchId: string } | { kind: "partial" };
+export type OpMove = { kind: "operation"; operationId: string } | { kind: "delete" };
+export type DomainMove = { kind: "domain"; domainId: string } | { kind: "delete" };
+
+export type Scored ={ id: string; score: number; sharedTechniques: string[]; sharedBranches: string[] };
 /** A Galaxy edge: one per pair, `a < b`. */
 export type Edge = { a: string; b: string; score: number };
 
@@ -159,6 +169,24 @@ export interface Api {
   setField(refIds: string[], patch: FieldPatch): Promise<Change>;
   /** Absolute path of the original image, for the lightbox. */
   imagePath(refId: string): Promise<string>;
+  // Plan 3 Task 9 taxonomy edits; each is one undo step. Errors: "NeedsMove", "LastLink",
+  // "LastOperation", "TooManyOperations", "UnknownInk", "UnknownIcon", "EmptyName",
+  // "BadMoveTarget", "NameTaken:<id>", "LabelTaken:<id>", "TaxonomyReadOnly".
+  updateTechnique(id: string, patch: TechniquePatch): Promise<Change>;
+  /** "NeedsMove" while tags use it and no `moveTo` is given. */
+  deleteTechnique(id: string, moveTo?: TagMove): Promise<Change>;
+  linkTechnique(techniqueId: string, branchId: string): Promise<Change>;
+  /** "LastLink" for its only link; "NeedsMove" while tags use the pair and no `moveTo` is given. */
+  unlinkTechnique(techniqueId: string, branchId: string, moveTo?: TagMove): Promise<Change>;
+  addBranch(operationId: string, domainId: string): Promise<Change>;
+  /** `Change.created` is the new id; with `operationId` its branch is added in the same step. */
+  addDomain(name: string, description: string, icon?: string, operationId?: string): Promise<Change>;
+  updateDomain(id: string, patch: DomainPatch): Promise<Change>;
+  deleteDomain(id: string, moveTo?: DomainMove): Promise<Change>;
+  /** `Change.created` is the new id; without `color` it takes the first free extra ink. */
+  addOperation(name: string, plainLabel: string, description: string, color?: string): Promise<Change>;
+  updateOperation(id: string, patch: OperationPatch): Promise<Change>;
+  deleteOperation(id: string, moveTo?: OpMove): Promise<Change>;
   /** The intake queue went busy or drained: a close waits while it is busy (R2). */
   intakeBusy(busy: boolean): Promise<void>;
   /** The save-failure dialog's "Try again"; on success Rust closes the window. */
@@ -205,6 +233,20 @@ export const tauriApi: Api = {
   demoExamples: () => invoke("demo_examples"),
   setField: (refIds, patch) => invoke("set_field", { refIds, patch }),
   imagePath: (refId) => invoke("image_path", { refId }),
+  updateTechnique: (id, patch) => invoke("update_technique", { id, patch }),
+  deleteTechnique: (id, moveTo) => invoke("delete_technique", { id, moveTo: moveTo ?? null }),
+  linkTechnique: (techniqueId, branchId) => invoke("link_technique", { techniqueId, branchId }),
+  unlinkTechnique: (techniqueId, branchId, moveTo) =>
+    invoke("unlink_technique", { techniqueId, branchId, moveTo: moveTo ?? null }),
+  addBranch: (operationId, domainId) => invoke("add_branch", { operationId, domainId }),
+  addDomain: (name, description, icon, operationId) =>
+    invoke("add_domain", { name, description, icon: icon ?? null, operationId: operationId ?? null }),
+  updateDomain: (id, patch) => invoke("update_domain", { id, patch }),
+  deleteDomain: (id, moveTo) => invoke("delete_domain", { id, moveTo: moveTo ?? null }),
+  addOperation: (name, plainLabel, description, color) =>
+    invoke("add_operation", { name, plainLabel, description, color: color ?? null }),
+  updateOperation: (id, patch) => invoke("update_operation", { id, patch }),
+  deleteOperation: (id, moveTo) => invoke("delete_operation", { id, moveTo: moveTo ?? null }),
   intakeBusy: (busy) => invoke("intake_busy", { busy }),
   retrySave: () => invoke("retry_save"),
   exitWithoutSaving: () => invoke("exit_without_saving"),

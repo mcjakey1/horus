@@ -45,6 +45,18 @@ const rows: [keyof Api, string, string[], (a: Api) => Promise<unknown>][] = [
   ["intakeBusy", "intake_busy", ["busy"], (a) => a.intakeBusy(true)],
   ["retrySave", "retry_save", [], (a) => a.retrySave()],
   ["exitWithoutSaving", "exit_without_saving", [], (a) => a.exitWithoutSaving()],
+  // Plan 3 Task 9
+  ["updateTechnique", "update_technique", ["id", "patch"], (a) => a.updateTechnique("t", { name: "n" })],
+  ["deleteTechnique", "delete_technique", ["id", "moveTo"], (a) => a.deleteTechnique("t", { kind: "partial" })],
+  ["linkTechnique", "link_technique", ["branchId", "techniqueId"], (a) => a.linkTechnique("t", "b")],
+  ["unlinkTechnique", "unlink_technique", ["branchId", "moveTo", "techniqueId"], (a) => a.unlinkTechnique("t", "b")],
+  ["addBranch", "add_branch", ["domainId", "operationId"], (a) => a.addBranch("op", "d")],
+  ["addDomain", "add_domain", ["description", "icon", "name", "operationId"], (a) => a.addDomain("n", "")],
+  ["updateDomain", "update_domain", ["id", "patch"], (a) => a.updateDomain("d", { icon: "i" })],
+  ["deleteDomain", "delete_domain", ["id", "moveTo"], (a) => a.deleteDomain("d", { kind: "delete" })],
+  ["addOperation", "add_operation", ["color", "description", "name", "plainLabel"], (a) => a.addOperation("n", "l", "")],
+  ["updateOperation", "update_operation", ["id", "patch"], (a) => a.updateOperation("op", { color: null })],
+  ["deleteOperation", "delete_operation", ["id", "moveTo"], (a) => a.deleteOperation("op")],
 ];
 
 describe("IPC contract", () => {

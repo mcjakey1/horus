@@ -2,7 +2,7 @@
 //! returns its inverse, or changes nothing and returns the error. Undo is applying the inverse.
 
 use crate::model::{LibraryData, Reference, Tag};
-use crate::taxonomy::{BranchTechnique, Taxonomy, Technique};
+use crate::taxonomy::{Branch, BranchTechnique, Domain, Operation, Taxonomy, Technique};
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -55,6 +55,53 @@ pub enum Edit {
         technique: Technique,
         links: Vec<BranchTechnique>,
     },
+    /// Same id; the inverse swaps.
+    UpdateTechnique {
+        before: Technique,
+        after: Technique,
+    },
+    /// Same id; the inverse swaps.
+    UpdateDomain {
+        before: Domain,
+        after: Domain,
+    },
+    /// Same id; the inverse swaps.
+    UpdateOperation {
+        before: Operation,
+        after: Operation,
+    },
+    AddOperation {
+        op: Operation,
+    },
+    /// `InUse` while a branch or a tag uses it.
+    RemoveOperation {
+        index: usize,
+        op: Operation,
+    },
+    AddDomain {
+        domain: Domain,
+    },
+    /// `InUse` while a branch uses it.
+    RemoveDomain {
+        index: usize,
+        domain: Domain,
+    },
+    LinkTechnique {
+        link: BranchTechnique,
+    },
+    /// `InUse` while a tag uses the pair.
+    UnlinkTechnique {
+        index: usize,
+        link: BranchTechnique,
+    },
+    AddBranch {
+        branch: Branch,
+    },
+    /// `InUse` while a link or a tag uses it.
+    RemoveBranch {
+        index: usize,
+        branch: Branch,
+    },
     Batch(Vec<Edit>),
     // The inverses of the removes: they put items back at their original positions, which the
     // appending `Add*` variants cannot. They restore a state that existed, so they check
@@ -78,6 +125,26 @@ pub enum Edit {
         links: Vec<(usize, BranchTechnique)>,
         sealed: Sealed,
     },
+    InsertOperation {
+        index: usize,
+        op: Operation,
+        sealed: Sealed,
+    },
+    InsertDomain {
+        index: usize,
+        domain: Domain,
+        sealed: Sealed,
+    },
+    InsertLink {
+        index: usize,
+        link: BranchTechnique,
+        sealed: Sealed,
+    },
+    InsertBranch {
+        index: usize,
+        branch: Branch,
+        sealed: Sealed,
+    },
 }
 
 /// Only `edit.rs` can construct this, so only it can build an `Insert*` edit.
@@ -93,7 +160,22 @@ impl Edit {
         match self {
             Edit::AddTechnique { .. }
             | Edit::RemoveTechnique { .. }
-            | Edit::InsertTechnique { .. } => true,
+            | Edit::InsertTechnique { .. }
+            | Edit::UpdateTechnique { .. }
+            | Edit::UpdateDomain { .. }
+            | Edit::UpdateOperation { .. }
+            | Edit::AddOperation { .. }
+            | Edit::RemoveOperation { .. }
+            | Edit::InsertOperation { .. }
+            | Edit::AddDomain { .. }
+            | Edit::RemoveDomain { .. }
+            | Edit::InsertDomain { .. }
+            | Edit::LinkTechnique { .. }
+            | Edit::UnlinkTechnique { .. }
+            | Edit::InsertLink { .. }
+            | Edit::AddBranch { .. }
+            | Edit::RemoveBranch { .. }
+            | Edit::InsertBranch { .. } => true,
             Edit::Batch(parts) => parts.iter().any(Edit::touches_taxonomy),
             _ => false,
         }
@@ -444,8 +526,233 @@ fn run(
                 sealed: Sealed(()),
             }
         }
+        Edit::UpdateTechnique { before, after } => {
+            update(&mut tax.techniques, &before, &after, &before.id, &after.id)?;
+            touched.taxonomy = true;
+            Edit::UpdateTechnique {
+                before: after,
+                after: before,
+            }
+        }
+        Edit::UpdateDomain { before, after } => {
+            update(&mut tax.domains, &before, &after, &before.id, &after.id)?;
+            touched.taxonomy = true;
+            Edit::UpdateDomain {
+                before: after,
+                after: before,
+            }
+        }
+        Edit::UpdateOperation { before, after } => {
+            update(&mut tax.operations, &before, &after, &before.id, &after.id)?;
+            touched.taxonomy = true;
+            Edit::UpdateOperation {
+                before: after,
+                after: before,
+            }
+        }
+        Edit::AddOperation { op } => {
+            if tax.operations.iter().any(|o| o.id == op.id) {
+                return Err(EditError::DuplicateId(op.id));
+            }
+            let index = tax.operations.len();
+            let insert = Edit::InsertOperation {
+                index,
+                op,
+                sealed: Sealed(()),
+            };
+            return run(data, tax, insert, check);
+        }
+        Edit::InsertOperation { index, op, .. } => {
+            insert(&mut tax.operations, index, &op, &op.id)?;
+            touched.taxonomy = true;
+            Edit::RemoveOperation { index, op }
+        }
+        Edit::RemoveOperation { index, op } => {
+            found(&tax.operations, index, &op, &op.id)?;
+            let mut tags = data.references.iter().flat_map(|r| &r.tags);
+            if check
+                && (tax.branches.iter().any(|b| b.operation_id == op.id)
+                    || tags.any(|t| t.operation_id == op.id))
+            {
+                return Err(EditError::InUse(op.id));
+            }
+            tax.operations.remove(index);
+            touched.taxonomy = true;
+            Edit::InsertOperation {
+                index,
+                op,
+                sealed: Sealed(()),
+            }
+        }
+        Edit::AddDomain { domain } => {
+            if tax.domains.iter().any(|d| d.id == domain.id) {
+                return Err(EditError::DuplicateId(domain.id));
+            }
+            let index = tax.domains.len();
+            let insert = Edit::InsertDomain {
+                index,
+                domain,
+                sealed: Sealed(()),
+            };
+            return run(data, tax, insert, check);
+        }
+        Edit::InsertDomain { index, domain, .. } => {
+            insert(&mut tax.domains, index, &domain, &domain.id)?;
+            touched.taxonomy = true;
+            Edit::RemoveDomain { index, domain }
+        }
+        Edit::RemoveDomain { index, domain } => {
+            found(&tax.domains, index, &domain, &domain.id)?;
+            if check && tax.branches.iter().any(|b| b.domain_id == domain.id) {
+                return Err(EditError::InUse(domain.id));
+            }
+            tax.domains.remove(index);
+            touched.taxonomy = true;
+            Edit::InsertDomain {
+                index,
+                domain,
+                sealed: Sealed(()),
+            }
+        }
+        Edit::LinkTechnique { link } => {
+            let at = format!("link {} -> {}", link.branch_id, link.technique_id);
+            let same = |l: &BranchTechnique| {
+                l.branch_id == link.branch_id && l.technique_id == link.technique_id
+            };
+            if tax.branch_techniques.iter().any(same) {
+                return Err(EditError::DuplicateId(at));
+            }
+            if !tax.techniques.iter().any(|t| t.id == link.technique_id)
+                || !tax.branches.iter().any(|b| b.id == link.branch_id)
+            {
+                return Err(EditError::InvalidTag(format!(
+                    "{at}: unknown technique or branch"
+                )));
+            }
+            let index = tax.branch_techniques.len();
+            let insert = Edit::InsertLink {
+                index,
+                link,
+                sealed: Sealed(()),
+            };
+            return run(data, tax, insert, check);
+        }
+        Edit::InsertLink { index, link, .. } => {
+            let at = format!("link {} -> {}", link.branch_id, link.technique_id);
+            insert(&mut tax.branch_techniques, index, &link, &at)?;
+            touched.taxonomy = true;
+            Edit::UnlinkTechnique { index, link }
+        }
+        Edit::UnlinkTechnique { index, link } => {
+            let at = format!("link {} -> {}", link.branch_id, link.technique_id);
+            found(&tax.branch_techniques, index, &link, &at)?;
+            let mut tags = data.references.iter().flat_map(|r| &r.tags);
+            if check
+                && tags.any(|t| {
+                    t.technique_id.as_ref() == Some(&link.technique_id)
+                        && t.branch_id.as_ref() == Some(&link.branch_id)
+                })
+            {
+                return Err(EditError::InUse(at));
+            }
+            tax.branch_techniques.remove(index);
+            touched.taxonomy = true;
+            Edit::InsertLink {
+                index,
+                link,
+                sealed: Sealed(()),
+            }
+        }
+        Edit::AddBranch { branch } => {
+            let pair = |b: &Branch| {
+                b.operation_id == branch.operation_id && b.domain_id == branch.domain_id
+            };
+            if let Some(b) = tax.branches.iter().find(|b| b.id == branch.id || pair(b)) {
+                return Err(EditError::DuplicateId(b.id.clone()));
+            }
+            if !tax.operations.iter().any(|o| o.id == branch.operation_id)
+                || !tax.domains.iter().any(|d| d.id == branch.domain_id)
+            {
+                let why = format!("branch {}: unknown operation or domain", branch.id);
+                return Err(EditError::InvalidTag(why));
+            }
+            let index = tax.branches.len();
+            let insert = Edit::InsertBranch {
+                index,
+                branch,
+                sealed: Sealed(()),
+            };
+            return run(data, tax, insert, check);
+        }
+        Edit::InsertBranch { index, branch, .. } => {
+            insert(&mut tax.branches, index, &branch, &branch.id)?;
+            touched.taxonomy = true;
+            Edit::RemoveBranch { index, branch }
+        }
+        Edit::RemoveBranch { index, branch } => {
+            found(&tax.branches, index, &branch, &branch.id)?;
+            let id = Some(&branch.id);
+            let mut tags = data.references.iter().flat_map(|r| &r.tags);
+            if check
+                && (tax
+                    .branch_techniques
+                    .iter()
+                    .any(|l| l.branch_id == branch.id)
+                    || tags.any(|t| t.branch_id.as_ref() == id))
+            {
+                return Err(EditError::InUse(branch.id));
+            }
+            tax.branches.remove(index);
+            touched.taxonomy = true;
+            Edit::InsertBranch {
+                index,
+                branch,
+                sealed: Sealed(()),
+            }
+        }
     };
     Ok(Applied { inverse, touched })
+}
+
+/// Puts `item` at `index`, which is at most the length. `what` names it in the error.
+fn insert<T: Clone>(
+    list: &mut Vec<T>,
+    index: usize,
+    item: &T,
+    what: &str,
+) -> Result<(), EditError> {
+    if index > list.len() {
+        return Err(EditError::UnknownTag(what.into()));
+    }
+    list.insert(index, item.clone());
+    Ok(())
+}
+
+/// `item` is at `index` now. `what` names it in the error.
+fn found<T: PartialEq>(list: &[T], index: usize, item: &T, what: &str) -> Result<(), EditError> {
+    if list.get(index) != Some(item) {
+        return Err(EditError::UnknownTag(what.into()));
+    }
+    Ok(())
+}
+
+/// Replaces the item equal to `before` (id `id`) with `after`, which keeps the id.
+fn update<T: PartialEq + Clone>(
+    list: &mut [T],
+    before: &T,
+    after: &T,
+    id: &str,
+    after_id: &str,
+) -> Result<(), EditError> {
+    let i = list.iter().position(|x| x == before);
+    let i = i.ok_or_else(|| EditError::UnknownTag(id.into()))?;
+    if after_id != id {
+        return Err(EditError::InvalidTag(format!(
+            "{id}: an update keeps the id"
+        )));
+    }
+    list[i] = after.clone();
+    Ok(())
 }
 
 fn ref_index(data: &LibraryData, id: &str) -> Result<usize, EditError> {
@@ -1008,6 +1315,229 @@ mod tests {
         let result = apply(&mut data, &mut tax, Edit::Batch(vec![add, failing()]));
         assert_eq!(result, Err(EditError::UnknownReference("nope".into())));
         assert_eq!((data, tax), (data0, tax0));
+    }
+
+    // ---------- Plan 3 Task 9: taxonomy edits ----------
+
+    #[test]
+    fn update_technique_inverse_restores() {
+        let (mut data, mut tax) = fixture();
+        let tax0 = tax.clone();
+        let before = tax.techniques[0].clone();
+        assert_eq!(before.id, "chiaroscuro");
+        let after = Technique {
+            name: "Light and shadow".into(),
+            ..before.clone()
+        };
+        let applied = apply(&mut data, &mut tax, Edit::UpdateTechnique { before, after }).unwrap();
+        assert!(applied.touched.taxonomy);
+        assert_eq!(tax.techniques[0].name, "Light and shadow");
+        assert_eq!(tax.techniques[0].id, "chiaroscuro");
+        apply_inverse(&mut data, &mut tax, applied.inverse).unwrap();
+        assert_eq!(tax, tax0);
+    }
+
+    #[test]
+    fn remove_branch_in_use() {
+        let (mut data, mut tax) = fixture();
+        let (data0, tax0) = (data.clone(), tax.clone());
+        let index = tax.branches.iter().position(|b| b.id == "group.feature");
+        let index = index.unwrap();
+        let branch = tax.branches[index].clone();
+        let remove = Edit::RemoveBranch { index, branch };
+        assert_eq!(
+            apply(&mut data, &mut tax, remove),
+            Err(EditError::InUse("group.feature".into()))
+        );
+        assert_eq!((data, tax), (data0, tax0));
+    }
+
+    /// Each new collection: append, remove, and the sealed insert put the list back.
+    #[test]
+    fn taxonomy_edits_round_trip() {
+        let (mut data, mut tax) = fixture();
+        let tax0 = tax.clone();
+        let op = Operation {
+            id: "pulse".into(),
+            name: "Pulse".into(),
+            plain_label: "Beat".into(),
+            color: None,
+            icon: "a plain square".into(),
+            description: "".into(),
+            extra: Default::default(),
+        };
+        let domain = Domain {
+            id: "rhythm".into(),
+            name: "Rhythm".into(),
+            icon: "a plain square".into(),
+            description: "".into(),
+            extra: Default::default(),
+        };
+        let branch = Branch {
+            id: "pulse.rhythm".into(),
+            operation_id: "pulse".into(),
+            domain_id: "rhythm".into(),
+            extra: Default::default(),
+        };
+        let link = BranchTechnique {
+            branch_id: "pulse.rhythm".into(),
+            technique_id: "chiaroscuro".into(),
+            source: "drafted".into(),
+            rationale: "".into(),
+            extra: Default::default(),
+        };
+        let batch = Edit::Batch(vec![
+            Edit::AddOperation { op: op.clone() },
+            Edit::AddDomain { domain },
+            Edit::AddBranch { branch },
+            Edit::LinkTechnique { link },
+        ]);
+        let undo = apply(&mut data, &mut tax, batch).unwrap().inverse;
+        assert_eq!(tax.validate(), Ok(()));
+        let added = tax.clone();
+        let redo = apply_inverse(&mut data, &mut tax, undo).unwrap().inverse;
+        assert_eq!(tax, tax0);
+        apply_inverse(&mut data, &mut tax, redo).unwrap();
+        assert_eq!(tax, added);
+        // A duplicate id is refused; a used operation cannot go.
+        let dup = apply(&mut data, &mut tax, Edit::AddOperation { op: op.clone() });
+        assert_eq!(dup, Err(EditError::DuplicateId("pulse".into())));
+        let index = tax.operations.len() - 1;
+        let remove = Edit::RemoveOperation { index, op };
+        let used = apply(&mut data, &mut tax, remove);
+        assert_eq!(used, Err(EditError::InUse("pulse".into())));
+        // An unused seed operation in the middle: removed, then put back in place.
+        let (mut data, mut tax) = fixture();
+        let index = 2;
+        let op = tax.operations[index].clone();
+        tax.branches.retain(|b| b.operation_id != op.id);
+        tax.branch_techniques
+            .retain(|l| !l.branch_id.starts_with("sequence."));
+        let before = tax.clone();
+        let applied = apply(&mut data, &mut tax, Edit::RemoveOperation { index, op }).unwrap();
+        assert_eq!(tax.operations.len(), 3);
+        apply_inverse(&mut data, &mut tax, applied.inverse).unwrap();
+        assert_eq!(tax, before);
+    }
+
+    #[test]
+    fn touches_taxonomy_covers_new_variants() {
+        let tax = seed();
+        let (op, domain, branch, link) = (
+            tax.operations[0].clone(),
+            tax.domains[0].clone(),
+            tax.branches[0].clone(),
+            tax.branch_techniques[0].clone(),
+        );
+        let t = tax.techniques[0].clone();
+        let all = [
+            Edit::UpdateTechnique {
+                before: t.clone(),
+                after: t,
+            },
+            Edit::UpdateDomain {
+                before: domain.clone(),
+                after: domain.clone(),
+            },
+            Edit::UpdateOperation {
+                before: op.clone(),
+                after: op.clone(),
+            },
+            Edit::AddOperation { op: op.clone() },
+            Edit::RemoveOperation {
+                index: 0,
+                op: op.clone(),
+            },
+            Edit::InsertOperation {
+                index: 0,
+                op,
+                sealed: Sealed(()),
+            },
+            Edit::AddDomain {
+                domain: domain.clone(),
+            },
+            Edit::RemoveDomain {
+                index: 0,
+                domain: domain.clone(),
+            },
+            Edit::InsertDomain {
+                index: 0,
+                domain,
+                sealed: Sealed(()),
+            },
+            Edit::LinkTechnique { link: link.clone() },
+            Edit::UnlinkTechnique {
+                index: 0,
+                link: link.clone(),
+            },
+            Edit::InsertLink {
+                index: 0,
+                link,
+                sealed: Sealed(()),
+            },
+            Edit::AddBranch {
+                branch: branch.clone(),
+            },
+            Edit::RemoveBranch {
+                index: 0,
+                branch: branch.clone(),
+            },
+            Edit::InsertBranch {
+                index: 0,
+                branch,
+                sealed: Sealed(()),
+            },
+        ];
+        for e in all {
+            assert!(e.touches_taxonomy(), "{e:?}");
+        }
+    }
+
+    #[test]
+    fn validate_rejects_mutations() {
+        type Mutation = fn(&mut Taxonomy);
+        let cases: [(&str, Mutation, &str); 5] = [
+            (
+                "dangling techniqueId",
+                |t| t.branch_techniques[0].technique_id = "ghost".into(),
+                "unknown techniqueId ghost",
+            ),
+            (
+                "unknown operationId",
+                |t| t.branches[0].operation_id = "ghost".into(),
+                "unknown operationId ghost",
+            ),
+            (
+                "duplicate technique id",
+                |t| {
+                    let copy = t.techniques[0].clone();
+                    t.techniques.push(copy)
+                },
+                "duplicate technique id: chiaroscuro",
+            ),
+            (
+                "technique with no link",
+                |t| {
+                    t.branch_techniques
+                        .retain(|l| l.technique_id != "rim-light")
+                },
+                "rim-light: technique without a branch",
+            ),
+            (
+                "duplicate link",
+                |t| {
+                    let copy = t.branch_techniques[0].clone();
+                    t.branch_techniques.push(copy)
+                },
+                "duplicate link: differentiate.feature -> complementary-pairing",
+            ),
+        ];
+        for (what, mutate, want) in cases {
+            let mut t = seed();
+            mutate(&mut t);
+            let errs = t.validate().expect_err(what);
+            assert!(errs.iter().any(|e| e.contains(want)), "{what}: {errs:?}");
+        }
     }
 
     #[test]
