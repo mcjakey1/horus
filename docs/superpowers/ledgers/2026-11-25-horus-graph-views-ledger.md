@@ -70,3 +70,52 @@ Task 4: complete (commits 378f713..5cca872, review clean) on p3-t4. AGY #2 check
 Wave 3: Task 6 delegated to 8f in .worktrees/p3-t6 (base 2fecf79 = plan3-graph 6ae01c1 + p3-t4). Task 7 delegated to fb in .worktrees/p3-t7 (same base). Hand-merge boot() lines + styles.css blocks.
 Task 4: AGY #2 "PASS WITH NOTES" (B4, fallback, culling/TEX_CAP, edge gate, theme, reduced motion, bundle, deps verified).
 Task 6: peer 8f DONE (0e36b91, 672ef22 on p3-t6; vitest 322/322; Pixi own lazy chunk verified; AGY FAIL (double assetUrl) fixed in 672ef22). Carry to T8: pass InspectorOpts.assetUrl. Concerns (label overlap unchecked on screen, operation nodes off-path use --line-2, no aria-live, no tauri dev check) to reviewer. Review dispatched (opus).
+WIP backup: ledger copy committed on plan3-graph (dafa418); pushed plan3-graph, p3-t4, p3-t6 to origin (user approved WIP backups, HDD failing). User: stop after Plan 3 finishes.
+Task 6: review Needs fixes (spec ❌ 1, Important 2, 7 minors). ⚠️ tauri dev manual check not run; label overlap at 64-unit spacing unverified — both go to QA (ae) on the real app.
+Ruling (I2 copy): accept new inspector strings as plan copy — "Operations", "References", "No reference has this technique yet.", aria-label "Inspector", CSS " · on" marker — they're structural labels the brief's layout needs; fix the count to "1 reference" / "N references" — cost: copy pass in Plan 6 if the user wants different words.
+Ruling: off-path operations in --line-2 per brief stand (compliant with Operation-Only Chroma); QA judges at-rest look — cost: one-line change.
+Task 6: minor (deferred): 7 in task-6-review.md, incl. M1 whether on-path branch/technique nodes may take op ink (final review triages against DESIGN.md).
+Task 6: fix round 1/5 dispatched (peer 8f). Open: I1 inspector innerHTML rewrite drops focus to body; I2 count plural.
+Task 6: fix round 1/5 (2 addressed, 0 open; commits 672ef22..e8125ec).
+Task 6: minor (deferred): N1 empty-state "Operations" heading moved from mono label to 21px serif title class (restore class or accept); focus jumps to title after Show-all toggle; focus ring may show on title.
+Task 6: complete (commits 2fecf79..e8125ec, review clean) on p3-t6. AGY #2 check on final dispatched.
+Wave 4: Task 8 delegated to 8f in .worktrees/p3-t8 (base e8125ec = T1-T6). p3-t6 backup pushed.
+Task 6: AGY #2 "PASS WITH NOTES". Deferred minors added: selected ref turning out-of-scope not cleared; arrow move does not skip dim refs; inspector tile buttons title-only (no aria-label); no Tree-level empty-library test. Carry to T11: ~110 empty PIXI.Text joint nodes in perf check.
+Task 7: peer fb DONE (c3f294f, f3e6dee on p3-t7; vitest 328/328; worker same-origin chunk under exact CSP; demo settle 258 ms, warm 185 ms). Ruling: accept scene.ts img.crossOrigin='anonymous' fix (real T4 bug: WebGL rejects asset.localhost thumbs) and setNodes sameLook reuse, outside Files — cost: merge with p3-t6/p3-t8 scene.ts. Concerns to reviewer: no keyboard way to pick a first Galaxy ref (Global Constraint), cluster tile overlap, warm alpha 0.1, dev-only __galaxy hook. Review dispatched (opus). git push p3-t7 backup.
+Task 8: peer 8f DONE (a96eee4, 6b29b5d on p3-t8; vitest 338/338; AGY PASS, 2 notes fixed). Radial edges straight hairlines (elbows Tree-only); off-path centre line-2. Review dispatched (opus). p3-t8 backup pushed.
+Task 9: implementer DONE_WITH_CONCERNS (de4545e; cargo 205+1 doctest, vitest 286, clippy/fmt/tsc/build clean). Rulings: file growth (edit.rs 1559, commands.rs 4042) noted, split candidate for final review; seed group = 3 branches/9 links accepted; extra error strings EmptyName/BadMoveTarget/unknown <kind> accepted pending review. Concern 6 (stale tag blocks a move via validate_tag during re-key) to reviewer. Review dispatched (opus).
+Task 8: review Needs fixes (spec ✅, Important 2, 8 minors in task-8-review.md). ⚠️ scene-owned label ink/fonts/reduced motion match Tree; no tauri dev check (to QA). Task 8: fix round 1/5 dispatched (peer 8f). Open: I1 arrow move() walks whole graph (←/→/↓ dead or jump across ops on shared techniques); I2 inspector 'Used under' branch from another op does nothing on click.
+Task 8: fix round 1/5 (2 addressed, 0 open; commits 6b29b5d..3ba1f39). Ruling: ←/→ on the centre no longer switching op is accepted (brief requires buttons + 1-9 only) — cost: none.
+Task 8: minor (deferred): on a ref tagged under two techniques ←/→ walk the other technique's list; plus 8 in task-8-review.md.
+Task 8: complete (commits e8125ec..3ba1f39, review clean) on p3-t8. AGY #2 check on final dispatched.
+Task 8: AGY #2 "PASS WITH NOTES" (deferred: hover replaces not unions selection connectors; deleted active op fallback does not refit/update opSession).
+Task 7: review Needs fixes (spec ❌ Global Constraint keyboard; Important 2; 11 minors). crossOrigin + sameLook verified safe; dev hook absent from release.
+Ruling (I2 keyboard, brief vs Global Constraint — constraint wins): with nothing selected, the scene's `activate` (Enter) selects the in-scope reference nearest the viewport centre; with a selection, arrows move to the nearest in-scope reference in that direction (cone ±45°), Enter opens it — cost: ~20 lines + tests.
+Ruling (tile overlap): add d3 forceCollide in the worker, radius NODE/2 + 4 — references stay legible; cost: slightly longer settle, T11 measures.
+Task 7: minor (deferred): 11 in task-7-review.md, incl. deleted_selection_clears can't fail; no worker.onerror; outer ring may drift outward on warm starts.
+Task 7: fix round 1/5 dispatched (peer fb). Open: I1 worker messages lack run id (late tick/end from superseded run applied; late end spends the fit); I2 keyboard first pick + arrow moves; I3 forceCollide (ruling).
+Task 9: review Needs fixes (spec ✅ with 3 accepted deviations; Important 1; 7 minors). Concern 6 answered: undo can't stick (apply_inverse unchecked), delete stays possible; move can be blocked (I1).
+Ruling (I1): option (a) — during a re-key, tags that are already invalid (R16 dangling) become partial tags inside the same undo step, and the result reports how many, so T10 can say so; the move never refuses for stale tags — cost: a silent-ish data change, undoable.
+Ruling: the two missing undo tests (after a Partial delete; after an unlink with a move) join this round — Review Focus 4 "undo restores every tag in its original position" is load-bearing for T10 — cost: none.
+Task 9: minor (deferred): link_technique/add_branch leak raw EditError text; edit.rs reports taxonomy items as UnknownTag; api.ts:102 unrelated reformat; redo tested on one batch only; `Plan` name collides with "Plan N"; module split of commands.rs/edit.rs.
+Task 9: fix round 1/5 dispatched (resume implementer). Open: I1 stale tags block a move; RF4 undo tests.
+User (22:05): stop at Task 9. Finish in-flight T7 and T9 fix loops; do NOT start T10/T11/final review/QA. Then merge finished task branches into plan3-graph, verify, copy ledger to docs, push all, stand peers down.
+Task 7: fix round 1 implementer DONE (76d2e4f; vitest 334/334). Carry to T11: cold Galaxy settle 898 ms on demo incl. Pixi load (258 ms before forceCollide). Scoped re-review dispatched (opus).
+Task 7: fix round 1/5 (3 addressed, 0 open; commits f3e6dee..76d2e4f).
+Task 7: minor (deferred): N1 superseded test reset uses non-overlapping ids (prev assertion vacuous; use shared ids); N2 reduced-motion keypress mid-layout can select an undrawn ref (view/scene selection disagree until layout ends).
+Task 7: complete (commits 2fecf79..76d2e4f, review clean) on p3-t7. AGY #2 check dispatched.
+Task 7: AGY #2 "PASS WITH NOTES".
+Task 9: fix round 1 implementer DONE (5e0d301; cargo 207+1, vitest 286). Pushed. Scoped re-review dispatched (opus).
+Tasks 4,6,7,8 merged into plan3-graph (f1403f0); conflicts (firstrun.ts imports, styles.css blocks) resolved by union; merged tree: npm ci, tsc clean, vitest 386/386, build OK.
+Task 9: fix round 1/5 (2 addressed, 0 open; commits de4545e..5e0d301).
+Task 9: deferred (carry to T10 + final review): O3 an operation move still refuses with raw InUse when a tag's branch no longer exists (R16 can produce it; same class as I1, pre-existing). N1 a tag whose only problem is an out-of-image region loses technique+branch when made partial (undo restores).
+Task 9: complete (commits dafa418..5e0d301, review clean). AGY #2 check dispatched.
+Task 9: AGY #2 "PASS WITH NOTES".
+
+## PAUSED (user, 2026-11-25 ~22:30): stop at Task 9 — failing D: drive, files being moved
+State: Tasks 1-9 complete, reviewed, AGY-checked, all merged into plan3-graph (f1403f0 + this ledger commit). Merged tree: tsc clean, vitest 386/386, build OK; cargo 207+1 doctest at 5e0d301. main untouched (d7c52f5, Plan 2). Task branches p3-t4/t6/t7/t8 merged and pushed (backups only).
+Resume order:
+1. Fresh clone/worktree of plan3-graph; npm ci in app/; copy this ledger back to .superpowers/sdd/2026-11-25-horus-graph-views/progress.md (run sdd-workspace for the path).
+2. Task 10 (taxonomy editing in the Tree inspector). Carry-ins: InspectorOpts.assetUrl; keep renderInspector signature (T8 calls it); T9 Change.madePartial count → tell the artist; extra-ink table + B7 policy (plan T10); O3 operation move refuses with raw InUse when a tag's branch no longer exists (handle or surface in UI); ae N3 domain-ask radios re-check; T9 error strings EmptyName/BadMoveTarget/unknown <kind>.
+3. Task 11 (speed at 2,000+). Carry-ins: head-heavy graph_edges benchmark (one technique on >=80% of 2,500 refs; if over 1.5 s: score j>i once + visited-stamp array); ~110 empty PIXI.Text joints in the Tree; Galaxy cold settle 898 ms on demo with forceCollide; >TEX_CAP visible thrash.
+4. Final whole-branch review (most capable model) over all deferred minors above, one fix wave; then QA (ae + AGY #3), merge to main, README update, push, stop.

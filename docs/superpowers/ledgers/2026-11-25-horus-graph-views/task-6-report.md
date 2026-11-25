@@ -144,3 +144,30 @@
 4. **No manual check, and no `aria-live`.**
    - `npm run tauri dev` is a GUI session I can't drive from here, so Step 3 is not done.
    - The inspector has no `aria-live` region. Announcing the whole re-rendered aside would be noisy; a focused `aria-live` line for the breadcrumb could be added in polish.
+
+## Fix round 1 (commit `e8125ec`)
+
+### I1: a re-render dropped focus to `<body>` (`inspector.ts`)
+
+- **The fix:** `renderInspector` records `el.contains(document.activeElement)` before its single `innerHTML` write. If focus was inside the aside, it moves focus to `.insp-title` afterwards.
+- **Which titles:** every `h2.insp-title` now has `tabindex="-1"`. The empty-selection heading "Operations" is now also an `h2.insp-title`; the copy is unchanged.
+- **Focus outside the aside** (on the canvas or elsewhere) is left alone.
+- **Test:** `focus_survives_rerender (fix round 1, I1)`.
+  - Focusing a technique button in a branch, then re-rendering for that technique, puts focus on `.insp-title` (with `tabindex="-1"`).
+  - Going back to no selection focuses the "Operations" title.
+  - A button focused outside the aside keeps focus.
+
+### I2: the count's singular form
+
+- **The fix:** the operation count reads "1 reference" for one and "N references" otherwise. The other new strings are kept, as ruled.
+- **Test:** `reference_count_plural (fix round 1, I2)` checks Infer (1) "1 reference", Differentiate (2) "2 references" and Group (0) "0 references".
+
+### Runs
+
+- **RED:** `npx vitest run src/views/inspector` gave "Tests 2 failed | 6 passed (8)":
+  - "expected <body><aside>…(2)</aside></body> to be <h2 class=\"insp-title\"></h2>";
+  - "expected '1 references' to be '1 reference'".
+- **GREEN:**
+  - `npx vitest run src/views/inspector.test.ts src/views/tree.test.ts` gives "Test Files 2 passed (2), Tests 21 passed (21)".
+  - `npx tsc --noEmit` is clean.
+  - The full `npm test` gives "Test Files 32 passed (32), Tests 324 passed (324)".
