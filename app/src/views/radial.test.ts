@@ -252,6 +252,40 @@ describe("Radial view", () => {
     expect(fake.lastSel()).toBe("ref:chiaroscuro:q");
   });
 
+  it("arrows walk this operation's ring on a shared technique (fix round 1, I1)", async () => {
+    view.destroy();
+    const r = refOf("r", [tagOf(seed, { tech: "chiaroscuro", branch: "sequence.feature" })]);
+    await mount(snap(seed, [r]));
+    button("Lead the eye").click();
+    fake.emit("select", "tech:chiaroscuro"); // shared with differentiate.feature, its first parent overall
+    key("ArrowRight");
+    expect(fake.lastSel()).toBe("tech:size-hierarchy"); // its sibling under sequence.feature
+    key("ArrowLeft");
+    expect(fake.lastSel()).toBe("tech:chiaroscuro");
+    key("ArrowLeft");
+    expect(fake.lastSel()).toBe("tech:chiaroscuro"); // first on its branch here: nothing
+    key("ArrowDown");
+    expect(fake.lastSel()).toBe("ref:chiaroscuro:r");
+    key("ArrowUp");
+    expect(fake.lastSel()).toBe("tech:chiaroscuro");
+    key("ArrowUp");
+    expect(fake.lastSel()).toBe("br:sequence.feature");
+    key("ArrowUp");
+    expect(fake.lastSel()).toBe("op:sequence");
+    key("ArrowRight"); // the centre has no sibling on this ring
+    expect(fake.lastSel()).toBe("op:sequence");
+    expect(pressed()).toBe("Lead the eye");
+  });
+
+  it("a Used-under branch from another operation switches to it (fix round 1, I2)", () => {
+    button("Lead the eye").click();
+    fake.emit("select", "tech:chiaroscuro");
+    host.querySelector<HTMLElement>('.insp-used [data-sel="br:differentiate.feature"]')!.click();
+    expect(pressed()).toBe("Stand out");
+    expect(fake.lastSel()).toBe("br:differentiate.feature");
+    expect(host.querySelector('.insp-crumb .cell[data-level="op"] .v')!.textContent).toBe("Differentiate");
+  });
+
   it("the fallback keeps the switch and the inspector", async () => {
     view.destroy();
     src = fakeSource(snap(seed, refs));

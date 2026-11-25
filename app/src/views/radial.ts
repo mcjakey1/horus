@@ -34,6 +34,9 @@ type Layout = {
   /** Drawn ref node → its tags on this operation's branches (carry-in 3), and its techniques here. */
   vias: Map<string, Via[]>;
   techs: Map<string, string[]>;
+  /** The graph cut down to this ring, for the arrow keys: this operation's nodes and edges only,
+   * a technique's parents limited to this operation, one node per reference. */
+  ring: TaxGraph;
 };
 
 /** The operation with the most tagged references; ties go to taxonomy order. */
@@ -95,7 +98,15 @@ export function mountRadial(
       vias.set(r, [...(vias.get(r) ?? []), ...n.vias.filter((v) => here.has(v.branchId))]);
       techs.set(r, [...(techs.get(r) ?? []), `tech:${n.via.techId}`]);
     }
-    return (L = { key, g, placed, here, rep, vias, techs });
+    const ring: TaxGraph = { nodes: new Map(), children: new Map() };
+    for (const id of placed.keys()) {
+      const n = g.nodes.get(id)!;
+      if (n.kind === "ref" && rep.get(id) !== id) continue;
+      ring.nodes.set(id, n.kind === "tech" ? { ...n, parents: n.parents.filter((b) => here.has(b)) } : n);
+      const kids = (g.children.get(id) ?? []).filter((c) => placed.has(c)).map((c) => rep.get(c) ?? c);
+      ring.children.set(id, [...new Set(kids)]);
+    }
+    return (L = { key, g, placed, here, rep, vias, techs, ring });
   }
 
   /** The selection's path on this operation: the centre, its branches here, techniques, reference. */
@@ -197,6 +208,7 @@ export function mountRadial(
     const l = layout();
     const n = id ? l.g.nodes.get(id) : undefined;
     if (n?.kind === "op" && n.opId !== op) return switchOp(n.opId, n.id);
+    if (n?.kind === "branch" && n.opId !== op) return switchOp(n.opId, n.id); // "Used under" another operation
     if (id && (!n || !l.placed.has(id) || (n.kind === "ref" && !data.get().inScope(n.refId)))) {
       scene?.select(sel); // another operation's node, out of scope (audit row 10) or gone
       return;
@@ -213,11 +225,7 @@ export function mountRadial(
   stage.addEventListener("keydown", (e) => {
     const handled = canvasKeys(e, {
       move: (dir) => {
-        const l = layout();
-        const n = sel ? l.g.nodes.get(sel) : undefined;
-        // ↑ from a technique: its first parent on this operation, not its first parent overall
-        const up = n?.kind === "tech" && dir === "parent" ? n.parents.find((b) => l.here.has(b)) : undefined;
-        const next = sel === null ? (dir === "parent" ? null : `op:${op}`) : up ? `br:${up}` : move(l.g, sel, dir);
+        const next = sel === null ? (dir === "parent" ? null : `op:${op}`) : move(layout().ring, sel, dir);
         if (next) select(next);
       },
       activate: () => {}, // Enter is the scene's: it emits `activate`
