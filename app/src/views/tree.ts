@@ -94,7 +94,7 @@ export function mountTree(
       if (n.kind === "ref") {
         const ref = s.refs.get(n.refId)!;
         nodes.push({
-          id: n.id, kind: "ref", x, y, size: NODE, url: deps.api.assetUrl(ref.thumb256), aspect: ref.width / ref.height || 3 / 4,
+          id: n.id, kind: "ref", x, y, size: NODE, url: ref.thumb256, aspect: ref.width / ref.height || 3 / 4, // url is raw: the scene runs assetUrl
           ...(s.inScope(n.refId) ? {} : { dim: true }),
           outline: { region: n.via.region ?? WHOLE, color: opInk(s.tax, opOfBranch(n.via.branchId)).base, state: n.via.state },
         });
@@ -167,10 +167,6 @@ export function mountTree(
       },
       activate: () => {}, // Enter is the scene's: it emits `activate` (carry-in 1)
       clear: () => select(null),
-      digit: (k) => {
-        const op = [...g.nodes.values()].filter((n) => n.kind === "op")[k - 1];
-        if (op) select(op.id);
-      },
     });
     if (handled) e.preventDefault();
   }, { signal: life.signal });

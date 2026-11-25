@@ -1,5 +1,5 @@
 // The graph views' docked inspector (SPEC §5): the breadcrumb on top, then the selection's
-// detail. Read-only in Plan 3 (`editable` is Plan 4's, R10). Markup carries no style=; tile
+// detail. Read-only here; `editable` is for the editing task (R10). Markup carries no style=; tile
 // geometry and inks go through the CSSOM (Plan 6 CSP, R11).
 import type { Taxonomy } from "../api";
 import type { Snapshot } from "../data";

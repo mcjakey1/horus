@@ -93,7 +93,7 @@ describe("Tree view", () => {
     fake.emit("select", "tech:closure"); // one technique expanded at a time
     expect(refIds(fake.last())).toEqual(["ref:closure:c"]);
     const b = fake.last().find((n) => n.id === "ref:closure:c")!;
-    expect(b).toMatchObject({ kind: "ref", url: "asset://c", aspect: 3 / 4 });
+    expect(b).toMatchObject({ kind: "ref", url: "c", aspect: 3 / 4 }); // raw: the scene runs assetUrl
   });
 
   it("show_all_toggle", () => {
@@ -170,8 +170,9 @@ describe("Tree view", () => {
     expect(fake.lastSel()).toBe("op:group");
     key("Escape");
     expect(fake.lastSel()).toBeNull();
-    key("3");
-    expect(fake.lastSel()).toBe("op:sequence");
+    const calls = fake.selected.length;
+    key("3"); // the Tree binds no digits
+    expect(fake.selected.length).toBe(calls);
   });
 
   it("enter_is_left_to_the_scene; activate opens a reference", () => {
