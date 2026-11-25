@@ -148,6 +148,7 @@ export function mountRadial(
     const s = data.get();
     if (!exists(op)) op = busiest(s);
     const l = layout();
+    if (sel && l.rep.has(sel)) sel = l.rep.get(sel)!; // a change can make another node the drawn one
     if (sel && !l.placed.has(sel)) sel = null; // gone since the change (Review Focus 3)
     syncOps();
     renderInspector(insp, s, selectionOf(sel), {
@@ -212,7 +213,11 @@ export function mountRadial(
   stage.addEventListener("keydown", (e) => {
     const handled = canvasKeys(e, {
       move: (dir) => {
-        const next = sel === null ? (dir === "parent" ? null : `op:${op}`) : move(layout().g, sel, dir);
+        const l = layout();
+        const n = sel ? l.g.nodes.get(sel) : undefined;
+        // ↑ from a technique: its first parent on this operation, not its first parent overall
+        const up = n?.kind === "tech" && dir === "parent" ? n.parents.find((b) => l.here.has(b)) : undefined;
+        const next = sel === null ? (dir === "parent" ? null : `op:${op}`) : up ? `br:${up}` : move(l.g, sel, dir);
         if (next) select(next);
       },
       activate: () => {}, // Enter is the scene's: it emits `activate`

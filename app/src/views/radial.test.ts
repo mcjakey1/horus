@@ -232,6 +232,26 @@ describe("Radial view", () => {
     expect(fake.scene.setCamera).not.toHaveBeenCalled();
   });
 
+  it("↑ from a shared technique goes to its parent on this operation; a moved representative follows", async () => {
+    view.destroy();
+    const r = refOf("r", [tagOf(seed, { tech: "chiaroscuro", branch: "sequence.feature" })]);
+    const q = refOf("q", [tagOf(seed, { tech: "size-hierarchy" })]);
+    await mount(snap(seed, [r, q]));
+    button("Lead the eye").click();
+    fake.emit("select", "tech:chiaroscuro");
+    key("ArrowUp"); // its first parent overall is differentiate.feature, which is not on this ring
+    expect(fake.lastSel()).toBe("br:sequence.feature");
+    fake.emit("select", "tech:size-hierarchy");
+    key("ArrowDown");
+    expect(fake.lastSel()).toBe("ref:size-hierarchy:q");
+    // a new tag on chiaroscuro (earlier on the ring) makes that node the drawn one: the selection follows
+    const q2 = refOf("q", [...q.tags, tagOf(seed, { tech: "chiaroscuro", branch: "sequence.feature" }, 1)]);
+    src.set({ ...snap(seed, [r, q2]), version: 1 });
+    const drawn = fake.last().filter((n) => n.kind === "ref" && n.id.endsWith(":q")).map((n) => n.id);
+    expect(drawn).toEqual(["ref:chiaroscuro:q"]);
+    expect(fake.lastSel()).toBe("ref:chiaroscuro:q");
+  });
+
   it("the fallback keeps the switch and the inspector", async () => {
     view.destroy();
     src = fakeSource(snap(seed, refs));
