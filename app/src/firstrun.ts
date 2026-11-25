@@ -13,6 +13,7 @@ import { mountSaveDialog, wireSaveStatus } from "./save-dialog";
 import { storeSource } from "./data";
 import { createStore } from "./store";
 import { mountViews } from "./views";
+import { mountTree } from "./views/tree";
 
 /** SPEC §5a, verbatim. */
 export const FIND_SIMILAR_COPY =
@@ -61,6 +62,9 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
     hide: still,
     destroy: still,
   }));
+  // Plan 3 Task 6: the taxonomy Tree, mounted on its first select.
+  shell.register("tree", () =>
+    mountTree(root.querySelector<HTMLElement>('[data-view-host="tree"]')!, source, { api, openReference: shell.openReference }));
   const unIntake = wireIntake(win ?? null, document, {
     api,
     store,
