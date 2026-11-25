@@ -41,6 +41,7 @@ const rows: [keyof Api, string, string[], (a: Api) => Promise<unknown>][] = [
   ["imagePath", "image_path", ["refId"], (a) => a.imagePath("r")],
   ["demoExamples", "demo_examples", [], (a) => a.demoExamples()],
   ["importPaths", "import_paths", ["note", "paths", "sourceUrl"], (a) => a.importPaths(["p"])],
+  ["intakeBusy", "intake_busy", ["busy"], (a) => a.intakeBusy(true)],
   ["retrySave", "retry_save", [], (a) => a.retrySave()],
   ["exitWithoutSaving", "exit_without_saving", [], (a) => a.exitWithoutSaving()],
 ];

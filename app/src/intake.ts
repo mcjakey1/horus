@@ -60,6 +60,7 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
   // Imports run one at a time, in arrival order: a paste or drop during an import waits its turn
   // (SPEC §2's "20 screenshots in two minutes"), never dropped.
   let queue: Promise<unknown> = Promise.resolve();
+  let pending = 0; // intakes queued or running; while any, a close waits for them (R2)
 
   const render = () => last && deps.notice(intakeHTML(last.report, dupRows(last.report, store, last.meta), last.saved));
   const failed = (what: string) => (err: unknown) => deps.notice(`<p>${esc(what)}: ${esc(String(err))}</p>`);
@@ -71,7 +72,14 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
   /** Queues one intake behind any running one. */
   function run(meta: IntakeMeta, steps: (() => Promise<ImportResult>)[]): Promise<string[] | null> {
     if (!steps.length) return Promise.resolve(null);
-    const job = queue.then(() => runNow(meta, steps));
+    // ponytail: a close that lands before this IPC does can still win; a sync flag would need
+    // a Rust-side queue.
+    if (pending++ === 0) void api.intakeBusy(true).catch(() => {});
+    const job = queue
+      .then(() => runNow(meta, steps))
+      .finally(() => {
+        if (--pending === 0) void api.intakeBusy(false).catch(() => {});
+      });
     queue = job;
     return job;
   }

@@ -51,6 +51,7 @@ beforeEach(() => {
     setField: vi.fn(async () => change([])),
     pickImages: vi.fn(async () => ["C:/in/a.jpg", "C:/in/b.jpg"]),
     pickFolder: vi.fn(async () => "C:/in" as string | null),
+    intakeBusy: vi.fn(async () => {}),
   } as unknown as Api;
   store = createStore({ root: "C:\\lib", references: [R1, E], links: [], warning: null, taxonomyReadOnly: false }, tax);
   openPicker = vi.fn<(o: PickerOpts) => void>();
@@ -166,6 +167,30 @@ describe("intake", () => {
     for (let i = 0; i < 4; i++) await flush();
     expect(vi.mocked(api.importBytes).mock.calls.map((c) => c[0])).toEqual(["one.png", "two.png"]);
     expect(store.refs.has("p1") && store.refs.has("p2")).toBe(true);
+  });
+
+  it("the queue tells Rust it is busy once, and idle once it drains, with no toggle between back-to-back pastes (R2)", async () => {
+    let finish!: (r: ImportResult) => void;
+    vi.mocked(api.importBytes)
+      .mockImplementationOnce(() => new Promise<ImportResult>((r) => (finish = r)))
+      .mockResolvedValueOnce(result({ added: ["p2"] }, [ref("p2")]));
+    const png = (n: string) => new File([new Uint8Array([1])], n, { type: "image/png" });
+    paste(document.body, [{ type: "image/png", file: png("one.png") }]);
+    expect(vi.mocked(api.intakeBusy).mock.calls).toEqual([[true]]); // before the import's IPC
+    paste(document.body, [{ type: "image/png", file: png("two.png") }]);
+    for (let i = 0; i < 4; i++) await flush();
+    expect(vi.mocked(api.intakeBusy).mock.calls).toEqual([[true]]);
+    finish(result({ added: ["p1"] }, [ref("p1")]));
+    for (let i = 0; i < 6; i++) await flush();
+    expect(api.importBytes).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(api.intakeBusy).mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("a failed import still drains the queue's busy flag (R2)", async () => {
+    vi.mocked(api.importPaths).mockRejectedValueOnce("disk full");
+    dropAt(10, 10);
+    for (let i = 0; i < 4; i++) await flush();
+    expect(vi.mocked(api.intakeBusy).mock.calls).toEqual([[true], [false]]);
   });
 
   it("a drop during a running import is queued too", async () => {

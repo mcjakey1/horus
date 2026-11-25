@@ -45,6 +45,7 @@ function fakeApi(lastLibrary: string | null): Api {
     setField: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     importBytes: vi.fn(async () => ({ report: { added: [], duplicates: [], skipped: [] }, change: { references: [], removed: [], canUndo: false, canRedo: false } })),
     imagePath: vi.fn(async () => ""),
+    intakeBusy: vi.fn(async () => {}),
     retrySave: vi.fn(async () => {}),
     exitWithoutSaving: vi.fn(async () => {}),
     onSaveStatus: vi.fn(async () => () => {}),

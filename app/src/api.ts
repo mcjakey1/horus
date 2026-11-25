@@ -155,6 +155,8 @@ export interface Api {
   setField(refIds: string[], patch: FieldPatch): Promise<Change>;
   /** Absolute path of the original image, for the lightbox. */
   imagePath(refId: string): Promise<string>;
+  /** The intake queue went busy or drained: a close waits while it is busy (R2). */
+  intakeBusy(busy: boolean): Promise<void>;
   /** The save-failure dialog's "Try again"; on success Rust closes the window. */
   retrySave(): Promise<void>;
   /** The save-failure dialog's "Quit without saving". */
@@ -198,6 +200,7 @@ export const tauriApi: Api = {
   demoExamples: () => invoke("demo_examples"),
   setField: (refIds, patch) => invoke("set_field", { refIds, patch }),
   imagePath: (refId) => invoke("image_path", { refId }),
+  intakeBusy: (busy) => invoke("intake_busy", { busy }),
   retrySave: () => invoke("retry_save"),
   exitWithoutSaving: () => invoke("exit_without_saving"),
   onSaveStatus: (cb) => listen<SaveStatus>("save-status", (e) => cb(e.payload)),
