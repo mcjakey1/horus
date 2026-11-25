@@ -38,6 +38,12 @@ let proc;
     out.push({ delay, query, highlightedBeforeEnter: hi, applied: got });
     console.log(JSON.stringify(out.at(-1)));
   }
+  // Top-bar idea search (search.rs): the exact name should be the first technique hit.
+  await page.click('[data-view-tab="reference"]'); await page.fill("#q", ""); await page.fill("#q", "rim light"); await sleep(800);
+  const top = await page.evaluate(() => [...document.querySelectorAll("#q-results li[data-t]")].map((li) => li.dataset.t));
+  out.push({ topBarSearch: "rim light", firstHits: top.slice(0, 3) });
+  console.log(JSON.stringify(out.at(-1)));
+  await page.keyboard.press("Escape");
   execSync(`powershell -NoProfile -Command "(Get-Process -Id ${proc.pid}).CloseMainWindow() | Out-Null"`); await sleep(3000);
   fs.writeFileSync(path.join(path.dirname(LIB), "..", "race.json"), JSON.stringify(out, null, 1));
   finish(0);

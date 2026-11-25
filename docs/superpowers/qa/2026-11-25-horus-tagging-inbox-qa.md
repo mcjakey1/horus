@@ -128,3 +128,23 @@ AGY's findings:
    - a damaged `taxonomy.json` (read-only fallback).
 
 **Plan 2 QA: PASS WITH FIXES.** Fixes needed: F1, in both the picker and `search.rs`, and F2. QA re-verifies them on the fix SHA, then closes as PASS after AGY sign-off.
+
+## Re-verify on the fix (main @ `8a6dad5`, fix `2c842a4`)
+
+- **Target:** release `horus.exe`, rebuilt at 11:15, after the fix commit at 11:06. The controller reports Vitest 235/235 and cargo 164 + 1 doctest.
+- **Harness note:** the first re-run aborted at first-run setup (Begin stayed disabled). A probe (`scratchpad probe2.js`) showed that the dialog stub answers correctly on the new build, so it was a one-off harness timing flake. The clean re-run below is the result of record.
+- **`mara-plan2.js`, full regression on the new build: 48 / 48 PASS.** Both earlier "FAIL" lines now pass:
+  - "RF3: empty Inbox copy": after tagging all 12 and switching Reference → Inbox, the Inbox shows "Inbox is empty. Drop, paste or open a folder to add references.", and the badge reads 0 (**F2 fixed**). RF3's in-visit behaviour still holds: the last item stays on screen once tagged, and → on it stays put.
+  - "Try again saves and closes": the `1` → "rim light" → Enter tag is now `rim-light` and is on disk after Try again (**F1 fixed in the picker**).
+  - Everything else is unchanged and passes: RF1, RF4, RF5, Merge, chips, AND/OR, the M2 and M5 re-tests, the Plan 1 carries, the 2,000-item Inbox (50 s import, 30 `<img>`, 77–129 ms per tag), zero external requests and no console errors.
+- **`mara-plan2-race.js`:** 8 / 8 runs, at typing delays of 0, 20 and 60 ms. Each time, `highlightedBeforeEnter` was `rim-light` and the applied tag was `rim-light`. The top-bar idea search for "rim light" now lists `rim-light`, `chiaroscuro`, `silhouette`, with the exact name first (**F1 fixed in `search.rs`**).
+- **Not re-tested live:** a 0-count custom technique surviving `MAX_TECHNIQUES` in the top-bar search. Per the commit, the Rust tests and `match-cases.json` cover it.
+
+**AGY #3 sign-off** (conversation `9639ac0d`, 2026-11-25). **Verdict, verbatim: `PASS`.**
+1. The TS `matchTier`/`rankByQuery` tiers 0–3 match `search.rs` exactly. `search.rs` adds tier 4 (operation-only).
+2. Within a tier, the order is the same in both: TS keeps taxonomy order, and Rust sorts by `Reverse(count)` and then taxonomy order.
+3. An exact name ranks first and survives `MAX_TECHNIQUES` (`exact_name_outranks_count_and_survives_cap`, shared `match-cases.json`).
+4. The F2 `enter()` runs only on re-entry (`focus`/`focusId`), so RF3 still holds within one visit. An empty Inbox shows `EMPTY_COPY`, and `closePicker()` calls `dock?.hide()`.
+5. AGY found the live evidence sufficient and no regressions in `2c842a4`: "Signed off — Plan 2 QA closed as `PASS`."
+
+**Plan 2 QA: CLOSED — PASS.**
