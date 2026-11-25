@@ -623,3 +623,4 @@ These are checkable sign-offs, not code. A gate closes only with **evidence and 
 
 - **Import progress and Cancel.** Plan 1 QA (M3) found that a long import shows only "Importing…". Add an "N of M" count and a Cancel button to the import notice. The user chose to do this in a later plan rather than in Plan 2.
 - **macOS close dialog.** The Plan 2 final review (M2) found that Cmd+Q may bypass the save-failure dialog (`lib.rs`, `ExitRequested`). Check it on the macOS build.
+- **Save-failure copy.** Plan 2 QA (N1) found that the save-failure message shows raw OS text, for example "Access is denied. (os error 5)". Add a plain hint, for example "Check that the library folder is not read-only", in the copy pass.
