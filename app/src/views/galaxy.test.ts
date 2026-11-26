@@ -174,6 +174,23 @@ describe("Galaxy", () => {
     expect(lastEdges(t.sc).map((e) => [e.from, e.to].sort().join("-"))).toEqual(["a-c"]);
   });
 
+  it("the inspector lists no out-of-scope neighbour, and select of one does nothing (T7 M10)", async () => {
+    const row = (id: string): Scored => ({ id, score: 0.5, sharedTechniques: [], sharedBranches: [] });
+    const t = setup({ inScope: (id) => id !== "b", related: [row("b"), row("c")] });
+    await settle();
+    t.wk.finish();
+    t.sc.fire("select", "a");
+    await settle();
+    const listed = [...t.host.querySelectorAll<HTMLElement>(".gx-neighbours [data-ref]")].map((b) => b.dataset.ref);
+    expect(listed).toEqual(["c"]);
+    const calls = vi.mocked(t.api.related).mock.calls.length;
+    t.sc.fire("select", "b"); // out of scope
+    await settle();
+    expect(t.sc.calls.select[t.sc.calls.select.length - 1]).toBe("a"); // kept
+    expect(t.host.querySelector(".gx-title")!.textContent).toBe("Plate a");
+    expect(vi.mocked(t.api.related).mock.calls.length).toBe(calls);
+  });
+
   it("inspector_names_shared_techniques", async () => {
     const t = setup({ related: [{ id: "b", score: 0.8, sharedTechniques: ["chiaroscuro", "rim-light"], sharedBranches: [] }] });
     await settle();

@@ -94,8 +94,8 @@ export function mountTree(
   function render() {
     const s = data.get();
     g = buildTaxGraph(s, expandedFor(sel));
-    if (sel && !g.nodes.has(sel)) {
-      sel = null; // gone since the change (Review Focus 3)
+    if (sel && (!g.nodes.has(sel) || refused(sel))) {
+      sel = null; // gone since the change (Review Focus 3), or out of the board scope (Plan 4 T6 M2)
       g = buildTaxGraph(s, expandedFor(null));
     }
     renderInspector(insp, s, selectionOf(sel), {
@@ -188,9 +188,14 @@ export function mountTree(
     scene.select(sel);
   }
 
+  /** A reference outside the board scope: dimmed, never selected (audit row 10). */
+  function refused(id: string) {
+    const n = g.nodes.get(id);
+    return n?.kind === "ref" && !data.get().inScope(n.refId);
+  }
+
   function select(id: string | null) {
-    const n = id ? g.nodes.get(id) : undefined;
-    if (id && (!n || (n.kind === "ref" && !data.get().inScope(n.refId)))) {
+    if (id && (!g.nodes.has(id) || refused(id))) {
       scene?.select(sel); // out of scope (audit row 10) or gone: keep what was selected
       return;
     }
@@ -207,7 +212,11 @@ export function mountTree(
   stage.addEventListener("keydown", (e) => {
     const handled = canvasKeys(e, {
       move: (dir) => {
-        const next = move(g, sel, dir);
+        // Out-of-scope references are stepped over in the same direction (Plan 4 T6 M3); a refused
+        // first child walks on to its next sibling. Parents are never references, so never refused.
+        const step = dir === "child" ? "next" : dir;
+        let next = move(g, sel, dir);
+        for (let n = g.nodes.size; next && refused(next) && n > 0; n--) next = move(g, next, step);
         if (next) select(next);
       },
       // With a selection, Enter is the scene's: it emits `activate` (carry-in 1). With none, Enter

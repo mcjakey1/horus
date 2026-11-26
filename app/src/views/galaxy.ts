@@ -109,7 +109,8 @@ export function mountGalaxy(
       return;
     }
     const techName = (id: string) => s.tax.techniques.find((t) => t.id === id)?.name ?? id;
-    const rows = related?.id === sel.id ? related.rows : [];
+    // Only neighbours inside the board scope are listed (Plan 4 T7 M10).
+    const rows = (related?.id === sel.id ? related.rows : []).filter((r) => s.inScope(r.id));
     insp.innerHTML = `<h2 class="gx-title">${esc(sel.title)}</h2>
       <button class="gx-open" data-open-ref>Open in Reference view</button>
       ${rows.length ? `<ol class="gx-neighbours">${rows.map((r) => `<li><button data-ref="${esc(r.id)}">
@@ -120,6 +121,7 @@ export function mountGalaxy(
   }
 
   async function select(id: string | null) {
+    if (id && !data.get().inScope(id)) return void scene?.select(selected); // out of the board scope: keep what was selected
     selected = id;
     related = null;
     scene?.select(id);
