@@ -139,9 +139,9 @@ describe("Tree view", () => {
     expect(color("op:differentiate")).toBe("var(--diff)");
     expect(color("br:differentiate.feature")).toBe("var(--diff)");
     expect(color("tech:chiaroscuro")).toBe("var(--diff)");
-    expect(color("op:group")).toBe("var(--line-2)");
-    expect(color("br:sequence.feature")).toBe("var(--line-2)");
-    expect(color("tech:silhouette")).toBe("var(--line-2)");
+    expect(color("op:group")).toBe("var(--group)"); // an operation square always takes its ink (I7)
+    expect(color("br:sequence.feature")).toBe("var(--ink-3)");
+    expect(color("tech:silhouette")).toBe("var(--ink-3)");
     const es = fake.edges[fake.edges.length - 1];
     const inked = es.filter((e) => e.color === "var(--diff)");
     expect(inked.length).toBeGreaterThan(0);
@@ -187,6 +187,15 @@ describe("Tree view", () => {
     host.querySelector<HTMLButtonElement>(".tree-all")!.click();
     expect(toRef(fake.edges[fake.edges.length - 1]).length).toBe(4);
     host.querySelector<HTMLButtonElement>(".tree-all")!.click(); // the toggle is remembered for the session
+  });
+
+  it("at rest, operation squares take their ink and other outlines --ink-3 (final review I7)", () => {
+    const ns = new Map(fake.last().map((n) => [n.id, n]));
+    const color = (id: string) => (ns.get(id) as { color: string }).color;
+    expect(["differentiate", "group", "sequence", "infer"].map((o) => color(`op:${o}`))).toEqual(["var(--diff)", "var(--group)", "var(--seq)", "var(--infer)"]);
+    expect(color("br:differentiate.feature")).toBe("var(--ink-3)");
+    expect(color("tech:chiaroscuro")).toBe("var(--ink-3)");
+    for (const e of fake.edges[fake.edges.length - 1]) expect(e.color).toBe("var(--line-2)"); // connectors stay hairlines
   });
 
   it("arrow_up_goes_to_parent", () => {

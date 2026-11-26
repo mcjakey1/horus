@@ -217,6 +217,14 @@ describe("Radial view", () => {
     expect(host.querySelector('.insp-crumb .cell[data-level="op"] .v')!.textContent).toBe("Infer");
   });
 
+  it("at rest, the centre takes its ink and other outlines --ink-3 (final review I7)", () => {
+    const ns = new Map(fake.last().map((n) => [n.id, n]));
+    expect(ns.get("op:infer")).toMatchObject({ color: "var(--infer)" });
+    const others = fake.last().filter((n) => n.kind === "branch" || n.kind === "tech");
+    expect(others.length).toBeGreaterThan(0);
+    for (const n of others) expect(n).toMatchObject({ color: "var(--ink-3)" });
+  });
+
   it("remembers the operation for the session; a reset clears and fits", async () => {
     button("Lead the eye").click();
     fake.emit("select", "op:sequence");

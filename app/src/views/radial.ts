@@ -20,7 +20,9 @@ import { renderInspector, selectionOf } from "./inspector";
 let opSession: string | null = null;
 
 const SIZE = { op: 32, branch: 20, tech: 20 } as const;
-const HAIR = "var(--line-2)";
+const HAIR = "var(--line-2)"; // connectors (DESIGN's structural rule)
+/** Off-path branch and technique outlines (final review I7); the centre always takes its ink. */
+const OFF = "var(--ink-3)";
 const WHOLE: Region = { x: 0, y: 0, w: 1, h: 1 };
 
 type Layout = {
@@ -188,7 +190,7 @@ export function mountRadial(
         const label = n.kind === "op" ? opLabel(s.tax, n.opId).name
           : n.kind === "branch" ? (s.tax.domains.find((d) => d.id === n.domainId)?.name ?? n.domainId)
           : (s.tax.techniques.find((t) => t.id === n.techId)?.name ?? n.techId);
-        nodes.push({ id, kind: n.kind, x, y, size: SIZE[n.kind], color: path.has(id) ? ink : HAIR, label: clipLabel(label) });
+        nodes.push({ id, kind: n.kind, x, y, size: SIZE[n.kind], color: n.kind === "op" || path.has(id) ? ink : OFF, label: clipLabel(label) });
       }
     }
     scene.setNodes(nodes);

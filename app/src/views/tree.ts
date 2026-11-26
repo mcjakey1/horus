@@ -18,7 +18,10 @@ import { renderInspector, sayError, selectionOf } from "./inspector";
 let showAllSession = false;
 
 const SIZE = { op: 28, branch: 20, tech: 20 } as const;
-const HAIR = "var(--line-2)";
+const HAIR = "var(--line-2)"; // connectors (DESIGN's structural rule)
+/** Off-path branch and technique outlines: 4.6:1 (light) and 6.5:1 (dark) on the canvas, where
+ * --line-2 was 1.57:1 (final review I7). Operation squares always take their own ink. */
+const OFF = "var(--ink-3)";
 const WHOLE: Region = { x: 0, y: 0, w: 1, h: 1 };
 
 /** The selection's path: its operation, branch, technique and reference node ids. */
@@ -110,7 +113,7 @@ export function mountTree(
     const rows = labelRows(g, placed); // branch and technique labels on 3 staggered rows (I1)
     const path = pathOf(g, sel);
     const ink = path.op ? opInk(s.tax, path.op).base : HAIR;
-    const colorOf = (id: string) => (path.ids.has(id) ? ink : HAIR);
+    const colorOf = (id: string) => (path.ids.has(id) ? ink : OFF);
     const opOfBranch = (b: string) => s.tax.branches.find((x) => x.id === b)?.operationId ?? "";
     const nodes: SceneNode[] = [];
     for (const n of g.nodes.values()) {
@@ -127,7 +130,7 @@ export function mountTree(
           : n.kind === "branch" ? (s.tax.domains.find((d) => d.id === n.domainId)?.name ?? n.domainId)
           : (s.tax.techniques.find((t) => t.id === n.techId)?.name ?? n.techId);
         nodes.push({
-          id: n.id, kind: n.kind, x, y, size: SIZE[n.kind], color: colorOf(n.id), label: clipLabel(label),
+          id: n.id, kind: n.kind, x, y, size: SIZE[n.kind], color: n.kind === "op" ? opInk(s.tax, n.opId).base : colorOf(n.id), label: clipLabel(label),
           ...(n.kind === "op" ? {} : { labelDy: rows.get(n.id)! * LABEL_ROW }),
         });
       }
