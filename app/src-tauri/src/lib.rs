@@ -30,7 +30,9 @@ pub fn run() {
                 .resolve("resources/demo", BaseDirectory::Resource)?;
             // Task 11's speed check: a perf build seeds from a synthetic demo folder instead.
             #[cfg(feature = "perf")]
-            let demo = std::env::var_os("HORUS_DEMO_DIR").map_or(demo, std::path::PathBuf::from);
+            let demo = std::env::var_os("HORUS_DEMO_DIR")
+                .filter(|s| !s.is_empty())
+                .map_or(demo, std::path::PathBuf::from);
             // The picker's demo-set examples (SPEC §6.2). The asset protocol only reads.
             app.asset_protocol_scope()
                 .allow_directory(demo.join("images"), false)?;

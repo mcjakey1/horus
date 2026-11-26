@@ -599,7 +599,6 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
 function perfOverlay(app: PixiNS.Application, host: HTMLElement, texSize: () => number): () => void {
   const el = document.createElement("div");
   el.className = "perf-overlay";
-  el.style.cssText = "position:absolute;left:8px;bottom:8px;z-index:5;padding:2px 6px;font:11px/1.4 monospace;background:#000a;color:#fff;cursor:pointer;white-space:pre";
   host.append(el);
   const stats = { fps: 0, minFps: Infinity, tex: 0, maxTex: 0, reset() { stats.minFps = Infinity; stats.maxTex = 0; } };
   const key = host.closest<HTMLElement>("[data-view-host]")?.dataset.viewHost ?? "scene";

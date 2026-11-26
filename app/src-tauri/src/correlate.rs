@@ -571,8 +571,13 @@ mod tests {
         lib(refs)
     }
 
-    /// Release only: `cargo test --release -- --ignored graph_edges_2500 --nocapture`.
+    /// Release only, one test at a time for a clean number:
+    /// `cargo test --release -- --ignored graph_edges_2500 --nocapture --test-threads=1`.
+    /// Both tests in parallel measured ~1.37 s head-heavy (one sample) against ~1.1 s alone.
     fn under_budget(d: &LibraryData, label: &str) {
+        if cfg!(debug_assertions) {
+            panic!("run with --release");
+        }
         let t0 = std::time::Instant::now();
         let idx = Index::build(d);
         let built = t0.elapsed();

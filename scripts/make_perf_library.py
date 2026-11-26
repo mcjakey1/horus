@@ -7,6 +7,9 @@ no rights questions); OUT_DIR/manifest.json is an array in demo.rs's format. Eac
 distinct (operation, domain, technique) display-name triples, drawn Zipf (weight 1/rank) over the
 seed's branchTechniques links in file order, so the first links are common. Start the perf build
 with HORUS_DEMO_DIR=OUT_DIR and pick "Start with the demo set".
+
+Needs Pillow >= 10.1 (ImageFont.load_default(size=...)) in the interpreter's own site-packages:
+-I ignores the user site.
 """
 
 import argparse
