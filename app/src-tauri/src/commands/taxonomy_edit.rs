@@ -10,7 +10,7 @@ use super::*;
 /// the state at its step. Additions and tag moves apply as they are pushed. Removals wait for
 /// `finish`, which emits them by collection (links, techniques, branches, domains,
 /// operations), each in descending index order, so the reversed inverse re-inserts ascending.
-struct Plan {
+struct TaxPlan {
     data: LibraryData,
     tax: Taxonomy,
     parts: Vec<Edit>,
@@ -24,9 +24,9 @@ struct Plan {
     made_partial: usize,
 }
 
-impl Plan {
-    fn new(data: &LibraryData, tax: &Taxonomy) -> Plan {
-        Plan {
+impl TaxPlan {
+    fn new(data: &LibraryData, tax: &Taxonomy) -> TaxPlan {
+        TaxPlan {
             data: data.clone(),
             tax: tax.clone(),
             parts: vec![],
@@ -112,7 +112,7 @@ fn descending<T>(list: &[T], hit: impl Fn(&T) -> bool) -> Vec<usize> {
 /// A tag that would not be valid on `to` (a dangling technique or branch, R16) becomes a
 /// partial tag under `to_op` instead, so stale data never refuses the move (I1); its region
 /// goes too if it is out of bounds. Undo restores each tag's `before`.
-fn rekey_branch(p: &mut Plan, from: &str, to_op: &str, to_domain: &str) -> Result<(), String> {
+fn rekey_branch(p: &mut TaxPlan, from: &str, to_op: &str, to_domain: &str) -> Result<(), String> {
     let pair = |b: &&Branch| b.operation_id == to_op && b.domain_id == to_domain;
     let to = match p.tax.branches.iter().find(pair) {
         Some(b) => b.id.clone(),
@@ -165,7 +165,7 @@ fn rekey_branch(p: &mut Plan, from: &str, to_op: &str, to_domain: &str) -> Resul
 
 /// Queues `branches` for removal: a link whose technique is linked elsewhere is unlinked, and a
 /// technique linked only here is removed (its `RemoveTechnique` takes the links, C15).
-fn drop_branches(p: &mut Plan, branches: &[String]) {
+fn drop_branches(p: &mut TaxPlan, branches: &[String]) {
     for l in &p.tax.branch_techniques {
         if !branches.contains(&l.branch_id) {
             continue;
@@ -194,7 +194,7 @@ fn needs_move<M>(used: bool, move_to: Option<M>) -> Result<Option<M>, String> {
 /// Re-points `affected` for `to` (C9). A technique target must be a linked pair that `gone`
 /// does not reject; the tag takes that branch's operation and is confirmed.
 fn move_tags(
-    p: &mut Plan,
+    p: &mut TaxPlan,
     affected: Vec<(String, Tag)>,
     to: &TagMove,
     gone: impl Fn(&str, &str) -> bool,
@@ -396,7 +396,7 @@ pub fn delete_domain<R: Runtime>(
         if !o.tax.domains.iter().any(|d| d.id == id) {
             return Err(unknown("domain", &id));
         }
-        let mut p = Plan::new(&o.lib.data, &o.tax);
+        let mut p = TaxPlan::new(&o.lib.data, &o.tax);
         let branches = o.tax.branches.iter();
         let branches: Vec<Branch> = branches.filter(|b| b.domain_id == id).cloned().collect();
         match needs_move(!branches.is_empty(), move_to)? {
@@ -512,7 +512,7 @@ pub fn delete_operation<R: Runtime>(
         if o.tax.operations.len() == 1 {
             return Err("LastOperation".into());
         }
-        let mut p = Plan::new(&o.lib.data, &o.tax);
+        let mut p = TaxPlan::new(&o.lib.data, &o.tax);
         let branches = o.tax.branches.iter();
         let branches: Vec<Branch> = branches.filter(|b| b.operation_id == id).cloned().collect();
         let used = !branches.is_empty() || !p.tags(|t| t.operation_id == id).is_empty();
@@ -595,7 +595,7 @@ pub fn unlink_technique<R: Runtime>(
         {
             return Err("LastLink".into());
         }
-        let mut p = Plan::new(&o.lib.data, &o.tax);
+        let mut p = TaxPlan::new(&o.lib.data, &o.tax);
         let affected = p.tags(|t| {
             t.technique_id.as_deref() == Some(&technique_id)
                 && t.branch_id.as_deref() == Some(&branch_id)
@@ -619,7 +619,7 @@ pub fn delete_technique<R: Runtime>(
         if !o.tax.techniques.iter().any(|t| t.id == id) {
             return Err(unknown("technique", &id));
         }
-        let mut p = Plan::new(&o.lib.data, &o.tax);
+        let mut p = TaxPlan::new(&o.lib.data, &o.tax);
         let affected = p.tags(|t| t.technique_id.as_deref() == Some(&id));
         if let Some(to) = needs_move(!affected.is_empty(), move_to)? {
             move_tags(&mut p, affected, &to, |t, _| t == id)?;
@@ -1043,7 +1043,7 @@ mod tests {
     fn unlink_many_descending() {
         let e = lib3();
         let (data, tax) = with_open(&e, |o| (o.lib.data.clone(), o.tax.clone()));
-        let mut p = Plan::new(&data, &tax);
+        let mut p = TaxPlan::new(&data, &tax);
         // Queued ascending; emitted descending.
         p.links
             .push(("differentiate.social".into(), "face-schema".into()));
