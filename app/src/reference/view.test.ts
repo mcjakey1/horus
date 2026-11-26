@@ -519,7 +519,8 @@ describe("Reference view", () => {
   });
 
   // ---------- Task 11: the AND/OR technique filter (SPEC §5a) ----------
-  const rows = () => [...document.querySelectorAll<HTMLElement>("#pane-ranked .row")].map((r) => r.dataset.go);
+  // The scored rows only: "Linked by you" stays above them under a filter (Plan 4 Task 4, R13).
+  const rows = () => [...document.querySelectorAll<HTMLElement>("#pane-ranked .row:not(.linked)")].map((r) => r.dataset.go);
   const chips = () => [...document.querySelectorAll<HTMLElement>("#pane-ranked .chip")].map((c) => c.textContent?.replace("×", "").trim());
   const pressed = () => document.querySelector("#pane-ranked [data-mode][aria-pressed='true']")?.textContent;
   const byCallout = (tech: string) => $<HTMLButtonElement>(`#pane-callouts [data-filter="${tech}"]`).click();
@@ -801,5 +802,190 @@ describe("notices", () => {
     expect(el.textContent).toContain("p3 <red>.png");
     expect(el.textContent).toContain("ICC profile could not be parsed; colours left unconverted");
     expect(el.querySelector("red")).toBeNull();
+  });
+});
+
+// ---------- Plan 4 Task 4: links you draw yourself ----------
+describe("links you draw", () => {
+  let api: Api;
+  let store: Store;
+  let view: ReturnType<typeof mountReference>;
+  const none = { references: [], removed: [], canUndo: true, canRedo: false };
+  const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s)!;
+  async function mount(related: Record<string, Scored[]> = scored) {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+    api = fakeApi();
+    api.related = vi.fn(async (id: string) => related[id] ?? []);
+    store = createStore(library, taxonomy);
+    view = mountReference(document.body, api, store);
+    await view.ready;
+    view.show("a");
+    await settle();
+  }
+  afterEach(() => view.destroy());
+
+  it("lists 'Linked by you' first in Ranked, with no score for an unrelated link", async () => {
+    await mount();
+    const pane = $("#pane-ranked");
+    const heading = pane.querySelector(".group-head")!;
+    expect(heading.textContent).toBe("Linked by you");
+    const scoredRow = pane.querySelector(".row:not(.linked)")!;
+    expect(heading.compareDocumentPosition(scoredRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const linked = pane.querySelector<HTMLElement>(".row.linked")!;
+    expect(linked.dataset.go).toBe("c");
+    expect(linked.textContent).toContain("same mood");
+    expect(linked.textContent).toContain("not related by technique");
+  });
+
+  it("a linked reference that also scores appears once, with its score", async () => {
+    await mount({ ...scored, a: [...scored.a, { id: "c", score: 0.5, sharedTechniques: [], sharedBranches: ["differentiate-feature"] }] });
+    const ids = [...document.querySelectorAll<HTMLElement>("#pane-ranked .row")].map((r) => r.dataset.go);
+    expect(ids).toEqual(["c", "b"]);
+    expect($("#pane-ranked .row.linked").textContent).toContain("0.50");
+  });
+
+  it("keeps 'Linked by you' under a technique filter", async () => {
+    await mount();
+    $<HTMLButtonElement>('#pane-callouts [data-filter="silhouette"]').click();
+    expect($("#pane-ranked .filter")).not.toBeNull();
+    expect($("#pane-ranked .row.linked").dataset.go).toBe("c");
+  });
+
+  it("re-renders the Links tab on a links-only Change", async () => {
+    await mount();
+    store.apply({ ...none, links: [...store.links, { id: "l2", fromRef: "b", toRef: "a", why: "both dark" }] });
+    await settle();
+    expect($("#links-count").textContent).toBe("2");
+    expect($("#pane-links").textContent).toContain("both dark");
+    expect($("#pane-links .link").dataset.link).toBe("l2"); // newest first
+  });
+
+  it("Delete on a link row calls removeLink and applies the Change", async () => {
+    await mount();
+    api.removeLink = vi.fn(async () => ({ ...none, links: [] }));
+    $<HTMLButtonElement>('#pane-links [data-link-del="l1"]').click();
+    await settle();
+    expect(api.removeLink).toHaveBeenCalledWith("l1");
+    expect($("#pane-links").textContent).toContain("No links drawn from this reference yet.");
+  });
+
+  it("keeps keyboard focus in the Links tab after a Delete", async () => {
+    await mount();
+    api.removeLink = vi.fn(async () => ({ ...none, links: [] }));
+    $<HTMLButtonElement>('.m-tab[data-pane="links"]').click();
+    const del = $<HTMLButtonElement>('#pane-links [data-link-del="l1"]');
+    del.focus();
+    expect(document.activeElement).toBe(del);
+    del.click();
+    await settle();
+    expect(document.activeElement).toBe($("#pane-links [data-link-new]"));
+  });
+
+  it("a board scope change refreshes the focus", async () => {
+    await mount();
+    const calls = vi.mocked(api.related).mock.calls.length;
+    store.setScope(null);
+    await settle();
+    expect(vi.mocked(api.related).mock.calls.length).toBe(calls + 1);
+  });
+
+  it("Edit on a link row opens the editor on that link", async () => {
+    await mount();
+    $<HTMLButtonElement>('#pane-links [data-link-edit="l1"]').click();
+    expect($(".link-editor").dataset.linkId).toBe("l1");
+  });
+
+  it("'+ Link to…' and the k key open the editor with the combobox", async () => {
+    await mount();
+    $<HTMLButtonElement>("#pane-links [data-link-new]").click();
+    expect($(".link-editor .le-q")).not.toBeNull();
+    $(".link-editor .le-cancel").click();
+    expect(document.querySelector(".link-editor")).toBeNull();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "k" }));
+    expect($(".link-editor .le-q")).not.toBeNull();
+  });
+
+  it("drop targets carry data-ref-id: Ranked and Links rows, callout thumbnails", async () => {
+    await mount();
+    expect(document.querySelector('#pane-ranked .row[data-ref-id="b"]')).not.toBeNull();
+    expect(document.querySelector('#pane-links .row[data-ref-id="c"]')).not.toBeNull();
+    expect(document.querySelector('#pane-callouts .thumb[data-ref-id="b"]')).not.toBeNull();
+  });
+
+  describe("link_handle_pointer_drag", () => {
+    const fire = (el: Element, type: string, x: number, y: number) =>
+      el.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 }));
+
+    it("dropping on a [data-ref-id] tile opens the editor with toRef set", async () => {
+      await mount();
+      const handle = $("#lab .link-handle");
+      const target = $('#pane-ranked .row[data-ref-id="b"]');
+      document.elementFromPoint = vi.fn(() => target);
+      fire(handle, "pointerdown", 10, 10);
+      fire(handle, "pointermove", 200, 120);
+      expect(document.querySelector(".link-leader")).not.toBeNull();
+      fire(handle, "pointerup", 400, 300);
+      expect(document.elementFromPoint).toHaveBeenCalledWith(400, 300);
+      expect(document.querySelector(".link-leader")).toBeNull();
+      expect($(".link-editor .le-to").textContent).toContain("Plate B");
+      // The click that follows a drag doesn't open a second, empty editor.
+      handle.click();
+      expect(document.querySelectorAll(".link-editor")).toHaveLength(1);
+    });
+
+    it("dropping on empty space, or cancelling, opens nothing", async () => {
+      await mount();
+      const handle = $("#lab .link-handle");
+      document.elementFromPoint = vi.fn(() => document.body);
+      fire(handle, "pointerdown", 10, 10);
+      fire(handle, "pointermove", 200, 120);
+      fire(handle, "pointerup", 200, 120);
+      expect(document.querySelector(".link-editor")).toBeNull();
+      fire(handle, "pointerdown", 10, 10);
+      fire(handle, "pointermove", 200, 120);
+      fire(handle, "pointercancel", 200, 120);
+      expect(document.querySelector(".link-leader")).toBeNull();
+      expect(document.querySelector(".link-editor")).toBeNull();
+    });
+
+    it("Esc mid-drag aborts: the pointerup and the click after it open nothing", async () => {
+      await mount();
+      const handle = $("#lab .link-handle");
+      document.elementFromPoint = vi.fn(() => $('#pane-ranked .row[data-ref-id="b"]'));
+      fire(handle, "pointerdown", 10, 10);
+      fire(handle, "pointermove", 200, 120);
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      expect(document.querySelector(".link-leader")).toBeNull();
+      fire(handle, "pointermove", 260, 160); // ignored once aborted
+      expect(document.querySelector(".link-leader")).toBeNull();
+      fire(handle, "pointerup", 400, 300);
+      handle.click();
+      expect(document.querySelector(".link-editor")).toBeNull();
+      // The next plain click works again.
+      await new Promise((r) => setTimeout(r, 0));
+      handle.click();
+      expect(document.querySelector(".link-editor")).not.toBeNull();
+    });
+
+    it("dropping on the focus itself opens nothing", async () => {
+      await mount();
+      const handle = $("#lab .link-handle");
+      const self = document.createElement("div");
+      self.dataset.refId = "a";
+      document.body.append(self);
+      document.elementFromPoint = vi.fn(() => self);
+      fire(handle, "pointerdown", 10, 10);
+      fire(handle, "pointermove", 200, 120);
+      fire(handle, "pointerup", 200, 120);
+      expect(document.querySelector(".link-editor")).toBeNull();
+    });
+
+    it("registers no dragstart listener anywhere", async () => {
+      const spy = vi.spyOn(EventTarget.prototype, "addEventListener");
+      await mount();
+      expect(spy.mock.calls.some(([type]) => type === "pointerdown")).toBe(true); // the spy sees the view's listeners
+      expect(spy.mock.calls.some(([type]) => type === "dragstart")).toBe(false);
+      spy.mockRestore();
+    });
   });
 });

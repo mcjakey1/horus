@@ -6,6 +6,7 @@ import { esc } from "../esc";
 import { mountImport, warningHTML } from "../importer";
 import { digitOf } from "../keys";
 import { openLightbox } from "../lightbox/view";
+import { linkedFirst, linkErrorCopy, mountLinkEditor } from "../links/editor";
 import { opInk, opLabel } from "../ops";
 import { mountSearch } from "../search";
 import type { Store, StoreEvent } from "../store";
@@ -85,6 +86,7 @@ export function mountReference(
     if (!ref) return;
     if (picker && picker.el.dataset.ref !== id) closePicker();
     if (id !== S.focus) lightbox?.close(); // it shows the focus; never another reference behind it
+    if (id !== S.focus) linkEditor?.close(); // it links from the focus
     if (push && S.focus && S.focus !== id) S.trail.push(S.focus);
     const spec = $("#specimen")!;
     const first = !S.focus;
@@ -157,6 +159,7 @@ export function mountReference(
   }
 
   function renderEmpty() {
+    linkEditor?.close(); // nothing left to link from
     S.focus = S.pinned = S.hot = S.arrival = null;
     S.filter = noFilter();
     S.related = [];
@@ -249,7 +252,7 @@ export function mountReference(
                     .map((x) => {
                       const r = store.refs.get(x.id)!;
                       const region = r.tags.find((u) => u.techniqueId === t.techniqueId && u.region)?.region;
-                      return `<button class="thumb" data-go="${esc(r.id)}" data-via="${esc(t.techniqueId)}" title="${esc(r.title)}" aria-label="Open ${esc(r.title)}, score ${fmt(x.score)}"><span class="t">${tileHTML(img(r), aspect(r), opColor(op), region)}</span><span class="sc">${fmt(x.score)}</span></button>`;
+                      return `<button class="thumb" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}" data-via="${esc(t.techniqueId)}" title="${esc(r.title)}" aria-label="Open ${esc(r.title)}, score ${fmt(x.score)}"><span class="t">${tileHTML(img(r), aspect(r), opColor(op), region)}</span><span class="sc">${fmt(x.score)}</span></button>`;
                     })
                     .join("")}</div>`
                 : `<p class="none">No other reference uses this yet.</p>`
@@ -282,14 +285,22 @@ export function mountReference(
           .join("")}</ul>
         <p class="pane-note">${list.length} references · <button class="settings" id="clear-filter">Clear</button></p></div>`
       : `<p class="pane-note">${list.length} related · strongest first</p>`;
-    // SPEC §4: links the artist drew are always shown, listed first, never mixed into the score.
-    const mine = filtering
-      ? []
-      : linksOf(ref).map(
-          ({ other }) =>
-            `<button class="row" data-go="${esc(other.id)}"><span class="t">${img(other)}</span><span><b>${esc(other.title)}</b><small>your link</small></span><span class="sc">link</span></button>`,
-        );
-    const rows = list
+    // SPEC §4: links the artist drew are always shown (a filter or a board scope never hides
+    // them), listed first, never mixed into the score; a linked reference appears once.
+    const { linked, rest } = linkedFirst(S.related, linksOf(ref), ref.id);
+    const linkedIds = new Set(linked.map((x) => x.other));
+    const scoredRows = filtering ? list.filter((x) => !linkedIds.has(x.id)) : rest;
+    const mine = linked.length
+      ? `<h4 class="group-head">Linked by you</h4>` +
+        linked
+          .map(({ link, other, score }) => {
+            const r = store.refs.get(other)!;
+            const sc = score === undefined ? `<small>not related by technique</small>` : fmt(score);
+            return `<button class="row linked" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>“${esc(link.why)}”</small></span><span class="sc">${sc}</span></button>`;
+          })
+          .join("")
+      : "";
+    const rows = scoredRows
       .map((x) => {
         const r = store.refs.get(x.id);
         if (!r) return "";
@@ -298,34 +309,38 @@ export function mountReference(
           : x.sharedBranches.length
             ? `same ${branchLabel(x.sharedBranches[0])}`
             : "";
-        return `<button class="row${prev.size && !prev.has(r.id) ? " is-new" : ""}" data-go="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>${esc(why)}</small></span><span class="sc">${r.id === ref.id ? "this" : fmt(x.score)}</span></button>`;
+        return `<button class="row${prev.size && !prev.has(r.id) ? " is-new" : ""}" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>${esc(why)}</small></span><span class="sc">${r.id === ref.id ? "this" : fmt(x.score)}</span></button>`;
       })
       .join("");
     const empty = filtering
       ? `No reference has ${f.mode === "and" ? "all" : "any"} of these yet.`
       : "Nothing shares a technique with this reference yet.";
-    pane.innerHTML = head + mine.join("") + (list.length ? rows : `<p class="none">${empty}</p>`);
+    pane.innerHTML = head + mine + (list.length ? rows : `<p class="none">${empty}</p>`);
     pane.querySelectorAll<HTMLElement>(".chip").forEach((c) => c.style.setProperty("--c", opColor(techOp(c.dataset.t!))));
     setTimeout(() => pane.querySelectorAll(".is-new").forEach((el) => el.classList.remove("is-new")), 2400);
   }
 
+  /** The focus's links, newest first, without any whose other end isn't in the store. */
   const linksOf = (ref: Reference) =>
-    store.links
-      .filter((l) => l.fromRef === ref.id || l.toRef === ref.id)
-      .map((l) => ({ ...l, other: store.refs.get(l.fromRef === ref.id ? l.toRef : l.fromRef)! }))
-      .filter((l) => l.other);
+    store.linksFor(ref.id).filter((l) => store.refs.has(l.fromRef === ref.id ? l.toRef : l.fromRef));
 
   function renderLinks(ref: Reference) {
     const ls = linksOf(ref);
     $("#links-count")!.textContent = ls.length ? String(ls.length) : "";
-    $("#pane-links")!.innerHTML = ls.length
-      ? ls
-          .map(
-            ({ other, why }) =>
-              `<div class="link"><button class="row" data-go="${esc(other.id)}"><span class="t">${img(other)}</span><span><b>${esc(other.title)}</b><small>your link</small></span><span></span></button><p class="why">“${esc(why)}”</p></div>`,
-          )
-          .join("")
-      : `<p class="none">No links drawn from this reference yet.</p>`;
+    const rows = ls
+      .map((l) => {
+        const other = store.refs.get(l.fromRef === ref.id ? l.toRef : l.fromRef)!;
+        const t = esc(other.title);
+        return `<div class="link" data-link="${esc(l.id)}"><button class="row" data-go="${esc(other.id)}" data-ref-id="${esc(other.id)}"><span class="t">${img(other)}</span><span><b>${t}</b><small>your link</small></span><span></span></button><p class="why">“${esc(l.why)}”</p>
+          <div class="link-actions"><button type="button" class="text-btn" data-link-edit="${esc(l.id)}" aria-label="Edit the note on the link to ${t}">Edit</button><button type="button" class="text-btn" data-link-del="${esc(l.id)}" aria-label="Delete the link to ${t}">Delete</button></div></div>`;
+      })
+      .join("");
+    const pane = $("#pane-links")!;
+    const hadFocus = pane.contains(document.activeElement); // innerHTML drops it (a Delete, a save)
+    pane.innerHTML =
+      `<button type="button" class="text-btn link-new" data-link-new aria-keyshortcuts="k">+ Link to…</button><p class="links-msg" role="status"></p>` +
+      (ls.length ? rows : `<p class="none">No links drawn from this reference yet.</p>`);
+    if (hadFocus) pane.querySelector<HTMLElement>("[data-link-new]")!.focus();
   }
 
   function renderRecord(ref: Reference, tag: Tag | null) {
@@ -417,6 +432,20 @@ export function mountReference(
     const target = e.target as Element;
     const go = target.closest<HTMLElement>("[data-go]");
     if (go) return show(go.dataset.go!, { via: go.dataset.via ?? null });
+    if (target.closest("[data-link-new]")) return openLinkEditor();
+    const edit = target.closest<HTMLElement>("[data-link-edit]");
+    if (edit) return openLinkEditor({ linkId: edit.dataset.linkEdit! });
+    const del = target.closest<HTMLElement>("[data-link-del]");
+    if (del) {
+      api.removeLink(del.dataset.linkDel!).then(
+        (c) => store.apply(c),
+        (err) => {
+          const m = $("#pane-links .links-msg");
+          if (m) m.textContent = linkErrorCopy(err);
+        },
+      );
+      return;
+    }
     const pin = target.closest(".pin");
     if (pin) {
       const i = +pin.closest<HTMLElement>(".call")!.dataset.i!;
@@ -486,12 +515,13 @@ export function mountReference(
   }, { signal });
   document.addEventListener("keydown", (e) => {
     if (e.isComposing) return;
+    if (drag && e.key === "Escape") return cancelDrag(); // a link drag aborts
     // Ctrl/⌘ combos (paste, copy…) belong to the browser; Alt only for Alt+← (Back).
     if (e.ctrlKey || e.metaKey || (e.altKey && e.key !== "ArrowLeft")) return;
     if ((document.body.dataset.view ?? "reference") !== "reference") return; // another view is showing
     if (lightbox) return; // the lightbox is modal: a key in a notice or dialog over it never acts behind it
     // The picker, the lightbox and text fields own their keys (Plan 2 Global Constraints).
-    if ((e.target as Element).closest?.(".picker, .lightbox, input, textarea, [contenteditable]")) return;
+    if ((e.target as Element).closest?.(".picker, .lightbox, .link-editor, input, textarea, [contenteditable]")) return;
     if (e.key === "/") {
       e.preventDefault();
       $<HTMLInputElement>("#q")!.focus();
@@ -506,6 +536,7 @@ export function mountReference(
     } else if (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) $<HTMLButtonElement>("#back")!.click();
     else if (e.key === "t") openPicker();
     else if (e.key === "l" || e.key === "L") openLb();
+    else if (e.key === "k") openLinkEditor();
     else if (digitOf(e)) {
       if (pickerOpen()) return; // the picker's digits pick operations, never callouts
       const i = digitOf(e)! - 1;
@@ -551,6 +582,7 @@ export function mountReference(
       return;
     }
     closePicker();
+    linkEditor?.close();
     // Docked in the margin, for the whole image: an already-tagged reference can gain a tag too.
     const mine = mountPicker($(".margin")!, api, store, {
       refId: ref.id,
@@ -565,6 +597,75 @@ export function mountReference(
   signal.addEventListener("abort", () => {
     closePicker();
     tagOpen.remove();
+  });
+
+  // ---------- links you draw (Plan 4 Task 4): the editor, and a handle dragged with pointer events ----------
+  let linkEditor: ReturnType<typeof mountLinkEditor> | null = null;
+  function openLinkEditor(o: { toRef?: string; linkId?: string } = {}) {
+    const ref = focusRef();
+    if (!ref) return;
+    linkEditor?.close();
+    closePicker(); // one docked panel in the margin at a time
+    const mine = mountLinkEditor($(".margin")!, api, store, { fromRef: ref.id, ...o });
+    linkEditor = mine;
+  }
+  // On #lab, like .tag-open: #plate re-renders. Never `draggable` (audit #2: native drops are intake's).
+  $("#lab")!.insertAdjacentHTML(
+    "beforeend",
+    `<button type="button" class="link-handle" aria-keyshortcuts="k" title="Drag onto a reference to link it, or click to choose one">Link…</button>`,
+  );
+  const handle = $<HTMLButtonElement>("#lab .link-handle")!;
+  let drag: { x: number; y: number; moved: boolean; cancelled: boolean; leader: HTMLElement } | null = null;
+  let justDragged = false; // the click that follows a drag's pointerup must not open a second editor
+  function endDrag() {
+    drag?.leader.remove();
+    drag = null;
+  }
+  /** Esc mid-drag: the button is still down, so keep `drag` until its pointerup, which then opens
+   * nothing and swallows the click that follows. */
+  function cancelDrag() {
+    if (!drag || drag.cancelled) return;
+    drag.leader.remove();
+    drag.cancelled = true;
+  }
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || !focusRef()) return;
+    handle.setPointerCapture?.(e.pointerId);
+    const leader = document.createElement("div");
+    leader.className = "link-leader";
+    leader.setAttribute("aria-hidden", "true");
+    leader.style.setProperty("--x", `${e.clientX}px`);
+    leader.style.setProperty("--y", `${e.clientY}px`);
+    document.body.append(leader);
+    drag = { x: e.clientX, y: e.clientY, moved: false, cancelled: false, leader };
+  }, { signal });
+  handle.addEventListener("pointermove", (e) => {
+    if (!drag || drag.cancelled) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.hypot(dx, dy) > 4) drag.moved = true;
+    drag.leader.style.setProperty("--len", `${Math.hypot(dx, dy)}px`);
+    drag.leader.style.setProperty("--angle", `${Math.atan2(dy, dx)}rad`);
+  }, { signal });
+  handle.addEventListener("pointerup", (e) => {
+    if (!drag) return;
+    const { moved, cancelled } = drag;
+    endDrag();
+    if (!moved && !cancelled) return; // a plain click: the click handler opens the editor
+    justDragged = true;
+    setTimeout(() => (justDragged = false), 0);
+    if (cancelled) return;
+    const id = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-ref-id]")?.dataset.refId;
+    if (id && id !== S.focus && store.refs.has(id)) openLinkEditor({ toRef: id });
+  }, { signal });
+  handle.addEventListener("pointercancel", endDrag, { signal });
+  handle.addEventListener("click", () => {
+    if (justDragged) justDragged = false;
+    else openLinkEditor();
+  }, { signal });
+  signal.addEventListener("abort", () => {
+    endDrag();
+    linkEditor?.close();
+    handle.remove();
   });
 
   // ---------- the minimal lightbox (Plan 2 Task 10): "Open lightbox" on the plate, or the L key ----------
@@ -610,7 +711,7 @@ export function mountReference(
    * reference sharing a technique or branch with the focus may have just become related. */
   const touchesFocus = (c: StoreEvent) => {
     const f = focusRef();
-    if (c.reset || c.taxonomy || c.links || c.removed.length || !f) return true;
+    if (c.reset || c.taxonomy || c.links || c.scope || c.removed.length || !f) return true;
     // With a filter on, a ranked or newly matching reference changes the Ranked list too.
     const filtered = new Set(S.filter.techniques);
     if (
