@@ -56,22 +56,22 @@ Horus is for illustrators, concept artists, photographers, and designers who kee
   </tr>
   <tr>
     <td width="50%">
-      <img src="docs/images/tree-view.png" alt="The Tree view with operations, domains, techniques, and references in bands, and the inspector on the right">
-      <br><sub><strong>Tree view.</strong> The taxonomy in four bands, from operations at the top to references at the bottom.</sub>
+      <img src="docs/images/tree-view.png" alt="The Tree view with the path Differentiate, Feature, Rim light selected, its four references below it, and the inspector on the right">
+      <br><sub><strong>Tree view.</strong> Select a technique to show its path. The inspector shows its definition, synonyms, branches, and references.</sub>
     </td>
     <td width="50%">
-      <img src="docs/images/tree-edit.png" alt="The Tree inspector with fields to edit the name, definition, and synonyms of a technique">
-      <br><sub><strong>Taxonomy editing.</strong> Change names, definitions, and synonyms in the inspector.</sub>
+      <img src="docs/images/tree-edit.png" alt="The dialog 4 references use Rim light, with a list of other techniques and the option to keep them as partial tags">
+      <br><sub><strong>Safe delete.</strong> Before Horus deletes a technique, you move its tags to a different technique or keep them as partial tags.</sub>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src="docs/images/galaxy-view.png" alt="The Galaxy with references as points and edges from the selected reference to its neighbors">
-      <br><sub><strong>Galaxy.</strong> Related references stay near each other. Edges show for the selected reference.</sub>
+      <img src="docs/images/galaxy-view.png" alt="The Galaxy with Toward Los Angeles, Calif selected, edges to its neighbors, and a list of related references with scores">
+      <br><sub><strong>Galaxy.</strong> Edges show for the selected reference. The inspector lists related references with a score and a shared technique.</sub>
     </td>
     <td width="50%">
-      <img src="docs/images/radial-view.png" alt="The Radial view with one operation at the center and rings of domains, techniques, and references">
-      <br><sub><strong>Radial.</strong> One operation at the center, with its domains, techniques, and references on rings.</sub>
+      <img src="docs/images/radial-view.png" alt="The Radial view with Differentiate at the center, its domains and techniques on rings, operation tabs at the top, and the operation list on the right">
+      <br><sub><strong>Radial.</strong> Differentiate ("Stand out") at the center, with its domains and techniques on rings. Use the tabs to change the operation.</sub>
     </td>
   </tr>
 </table>
