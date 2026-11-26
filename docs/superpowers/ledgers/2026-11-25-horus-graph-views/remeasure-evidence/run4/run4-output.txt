@@ -1,0 +1,23 @@
+busiest :: {"op":["Differentiate",2190],"tech":["Complementary pairing",1158],"branch":"differentiate.feature"}
+first run picked :: true
+first run controls :: ["fr-btn:Create a new library…","fr-btn:Open an existing library…","fr-demo:true","fr-btn:Turn on now","fr-btn:Not now","fr-go:Begin"]
+seed 2,500 (Start with the demo set) s :: 91.9
+library count :: 2500 references
+window :: {"w":1280,"h":800,"dpr":1}
+Galaxy first layout :: {"firstTickMs":1169,"settledMs":6754,"ticks":20,"longTasks":2,"longestMs":176,"maxFrameGapMs":176}
+galaxy canvas :: {"x":0,"y":52,"width":940,"height":712}
+Galaxy fitted (min fps since the tab click) :: {"fps":131.8,"minFps":30.8,"tex":600,"maxTex":600}
+Galaxy pan fitted :: {"fps":130.4,"minFps":129.5,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":15}
+Galaxy pan at notch 6 :: {"fps":131.5,"minFps":62.5,"tex":600,"maxTex":600,"longTasks":1,"longestMs":54,"maxFrameGapMs":84}
+Galaxy pan zoomed in :: {"fps":124.7,"minFps":124.7,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":22}
+Galaxy far zoom :: {"fps":130.6,"minFps":97.4,"tex":600,"maxTex":600}
+Tree crumb :: 01 OPERATION Differentiate 02 DOMAIN Feature 03 TECHNIQUE Complementary pairing 04 REFERENCE
+Tree busiest technique pan fitted :: {"fps":132.3,"minFps":130,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Tree busiest technique pan zoomed :: {"fps":130.3,"minFps":130.3,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Tree busiest technique far zoom :: {"fps":131.4,"minFps":105.1,"tex":600,"maxTex":600}
+Show all pressed :: true
+Tree show all pan fitted :: {"fps":133.1,"minFps":127,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":15}
+Tree show all pan zoomed :: {"fps":130.6,"minFps":130.6,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Tree far zoom :: {"fps":131.4,"minFps":97.7,"tex":600,"maxTex":600}
+Radial busiest operation pan fitted :: {"fps":130.8,"minFps":129.9,"tex":0,"maxTex":0,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Radial busiest operation pan zoomed :: {"fps":132.2,"minFps":129.4,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}

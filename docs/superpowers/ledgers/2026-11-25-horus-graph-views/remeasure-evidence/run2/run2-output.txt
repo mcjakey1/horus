@@ -1,0 +1,6 @@
+busiest :: {"op":["Differentiate",2190],"tech":["Complementary pairing",1158],"branch":"differentiate.feature"}
+ERROR :: page.waitForSelector: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('.firstrun') to be visible[22m
+
+    at D:\Design Second Brain\taxonomy-of-visuals\.worktrees\p3-remeasure\docs\superpowers\qa\plan3-perf.js:122:16
