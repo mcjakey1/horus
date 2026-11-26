@@ -510,6 +510,42 @@ describe("inspector editing", () => {
     expect(api.updateTechnique).toHaveBeenCalledTimes(2);
   });
 
+  it("a rename of another technique queued behind a pending one is not dropped (final review M6)", async () => {
+    const finishA = pending(api.updateTechnique);
+    render(tech("rim-light"));
+    let f = nameField();
+    type(f, "Rim glow");
+    key(f, "Enter"); // A's save: pending
+    render(tech("chiaroscuro")); // select B
+    f = nameField();
+    type(f, "Chiaroscuro two");
+    key(f, "Enter"); // the same field on another target: queued, not dropped
+    await flush();
+    expect(api.updateTechnique).toHaveBeenCalledTimes(1); // serial: B waits for A
+    finishA();
+    await flush();
+    expect(api.updateTechnique.mock.calls).toEqual([["rim-light", { name: "Rim glow" }], ["chiaroscuro", { name: "Chiaroscuro two" }]]);
+  });
+
+  it("an identical save already queued is dropped, and the field stays usable (final review M6)", async () => {
+    const finish = pending(api.updateTechnique);
+    render(tech("rim-light"));
+    let f = nameField();
+    type(f, "Rim glow");
+    key(f, "Enter");
+    render(tech("rim-light"), { ...s, version: 21 }); // a store event; the saving field is not reopened
+    f = nameField();
+    type(f, "Rim glow");
+    key(f, "Enter"); // the same command, still pending: dropped
+    await flush();
+    expect(f.hasAttribute("data-saving")).toBe(false); // not frozen
+    key(f, "Escape"); // keys work again: Esc cancels
+    expect(el.querySelector('input[data-field="name"]')).toBeNull();
+    finish();
+    await flush();
+    expect(api.updateTechnique).toHaveBeenCalledTimes(1);
+  });
+
   it("read_only_error_toast", async () => {
     api.updateTechnique.mockRejectedValueOnce("TaxonomyReadOnly");
     render(tech("rim-light"));
