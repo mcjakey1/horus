@@ -76,7 +76,7 @@ const EDGES: Edge[] = [
   { a: "b", b: "c", score: 0.5 },
 ];
 
-function setup(opts: { ids?: string[]; edges?: Edge[]; inScope?: (id: string) => boolean; related?: Scored[] } = {}) {
+function setup(opts: { ids?: string[]; edges?: Edge[]; inScope?: (id: string) => boolean; related?: Scored[]; failEdgesOnce?: boolean } = {}) {
   const ids = opts.ids ?? ["a", "b", "c"];
   const { source, change } = fakeSource(snapOf(ids, 1, opts.inScope));
   const sc = fakeScene();
@@ -86,6 +86,7 @@ function setup(opts: { ids?: string[]; edges?: Edge[]; inScope?: (id: string) =>
     related: vi.fn(async () => opts.related ?? []),
     assetUrl: (p: string) => p,
   } as unknown as Api;
+  if (opts.failEdgesOnce) vi.mocked(api.graphEdges).mockRejectedValueOnce(new Error("IPC down"));
   const openReference = vi.fn();
   const openCompare = vi.fn();
   const host = document.createElement("section");
@@ -215,6 +216,33 @@ describe("Galaxy", () => {
     t.wk.finish();
     expect(lastEdges(t.sc)).toEqual([]);
     expect(t.host.querySelector(".gx-neighbours")).toBeNull();
+  });
+
+  it("a failed graph_edges is not cached as no edges (final review M4)", async () => {
+    const t = setup({ failEdgesOnce: true });
+    await settle();
+    t.wk.finish();
+    expect(t.api.graphEdges).toHaveBeenCalledTimes(1);
+    expect(t.host.textContent).not.toContain("Tag references to see them cluster.");
+    t.change(snapOf(["a", "b", "c"], 1)); // same version: only a failed fetch asks again
+    await settle();
+    expect(t.api.graphEdges).toHaveBeenCalledTimes(2);
+    t.wk.finish();
+    t.sc.fire("hover", "a");
+    expect(lastEdges(t.sc).length).toBeGreaterThan(0); // the retry's edges are in use
+  });
+
+  it("an emptied library fits again when it refills (final review M5)", async () => {
+    const t = setup();
+    await settle();
+    t.wk.finish();
+    expect(t.sc.calls.fit).toBe(1);
+    t.change(snapOf([], 2));
+    await settle();
+    t.change(snapOf(["a", "b", "c"], 3));
+    await settle();
+    t.wk.finish();
+    expect(t.sc.calls.fit).toBe(2);
   });
 
   it("reset_cold_starts", async () => {
