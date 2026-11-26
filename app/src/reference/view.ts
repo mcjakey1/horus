@@ -515,7 +515,7 @@ export function mountReference(
   }, { signal });
   document.addEventListener("keydown", (e) => {
     if (e.isComposing) return;
-    if (drag && e.key === "Escape") return endDrag(); // a link drag aborts
+    if (drag && e.key === "Escape") return cancelDrag(); // a link drag aborts
     // Ctrl/⌘ combos (paste, copy…) belong to the browser; Alt only for Alt+← (Back).
     if (e.ctrlKey || e.metaKey || (e.altKey && e.key !== "ArrowLeft")) return;
     if ((document.body.dataset.view ?? "reference") !== "reference") return; // another view is showing
@@ -615,11 +615,18 @@ export function mountReference(
     `<button type="button" class="link-handle" aria-keyshortcuts="k" title="Drag onto a reference to link it, or click to choose one">Link…</button>`,
   );
   const handle = $<HTMLButtonElement>("#lab .link-handle")!;
-  let drag: { x: number; y: number; moved: boolean; leader: HTMLElement } | null = null;
+  let drag: { x: number; y: number; moved: boolean; cancelled: boolean; leader: HTMLElement } | null = null;
   let justDragged = false; // the click that follows a drag's pointerup must not open a second editor
   function endDrag() {
     drag?.leader.remove();
     drag = null;
+  }
+  /** Esc mid-drag: the button is still down, so keep `drag` until its pointerup, which then opens
+   * nothing and swallows the click that follows. */
+  function cancelDrag() {
+    if (!drag || drag.cancelled) return;
+    drag.leader.remove();
+    drag.cancelled = true;
   }
   handle.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || !focusRef()) return;
@@ -630,10 +637,10 @@ export function mountReference(
     leader.style.setProperty("--x", `${e.clientX}px`);
     leader.style.setProperty("--y", `${e.clientY}px`);
     document.body.append(leader);
-    drag = { x: e.clientX, y: e.clientY, moved: false, leader };
+    drag = { x: e.clientX, y: e.clientY, moved: false, cancelled: false, leader };
   }, { signal });
   handle.addEventListener("pointermove", (e) => {
-    if (!drag) return;
+    if (!drag || drag.cancelled) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     if (Math.hypot(dx, dy) > 4) drag.moved = true;
     drag.leader.style.setProperty("--len", `${Math.hypot(dx, dy)}px`);
@@ -641,11 +648,12 @@ export function mountReference(
   }, { signal });
   handle.addEventListener("pointerup", (e) => {
     if (!drag) return;
-    const moved = drag.moved;
+    const { moved, cancelled } = drag;
     endDrag();
-    if (!moved) return; // a plain click: the click handler opens the editor
+    if (!moved && !cancelled) return; // a plain click: the click handler opens the editor
     justDragged = true;
     setTimeout(() => (justDragged = false), 0);
+    if (cancelled) return;
     const id = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-ref-id]")?.dataset.refId;
     if (id && id !== S.focus && store.refs.has(id)) openLinkEditor({ toRef: id });
   }, { signal });

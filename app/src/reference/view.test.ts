@@ -948,6 +948,25 @@ describe("links you draw", () => {
       expect(document.querySelector(".link-editor")).toBeNull();
     });
 
+    it("Esc mid-drag aborts: the pointerup and the click after it open nothing", async () => {
+      await mount();
+      const handle = $("#lab .link-handle");
+      document.elementFromPoint = vi.fn(() => $('#pane-ranked .row[data-ref-id="b"]'));
+      fire(handle, "pointerdown", 10, 10);
+      fire(handle, "pointermove", 200, 120);
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      expect(document.querySelector(".link-leader")).toBeNull();
+      fire(handle, "pointermove", 260, 160); // ignored once aborted
+      expect(document.querySelector(".link-leader")).toBeNull();
+      fire(handle, "pointerup", 400, 300);
+      handle.click();
+      expect(document.querySelector(".link-editor")).toBeNull();
+      // The next plain click works again.
+      await new Promise((r) => setTimeout(r, 0));
+      handle.click();
+      expect(document.querySelector(".link-editor")).not.toBeNull();
+    });
+
     it("dropping on the focus itself opens nothing", async () => {
       await mount();
       const handle = $("#lab .link-handle");
