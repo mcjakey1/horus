@@ -1046,6 +1046,31 @@ describe("board scope in the Reference view", () => {
     expect($("#lab .off-board").hidden).toBe(true);
   });
 
+  // ---------- fix round 1 (C1, S1): board Changes reach the Reference view ----------
+  it("C1: deleting the scoped board through a Change restores Ranked and drops the chip", async () => {
+    await scope(["b"]);
+    expect($("#lab .off-board").hidden).toBe(false);
+    store.apply({ ...none, boards: [] }); // a delete (or an undo of the creation): the store clears the scope
+    await settle();
+    expect(store.scope).toBeNull();
+    expect($("#lab .off-board").hidden).toBe(true);
+    expect(document.querySelector('#pane-ranked .row:not(.linked)[data-go="b"]')).not.toBeNull();
+  });
+
+  it("C1: putting the focus on the scoped board through a Change drops the chip", async () => {
+    await scope(["b"]);
+    store.apply({ ...none, boards: [{ id: "h", name: "Harbour", referenceIds: ["b", "a"] }] });
+    await settle();
+    expect($("#lab .off-board").hidden).toBe(true);
+  });
+
+  it("S1: shows which boards the focus is on, and On no board", async () => {
+    expect($(".ref-boards").textContent).toBe("Boards: On no board");
+    store.apply({ ...none, boards: [{ id: "h", name: "Harbour", referenceIds: ["a"] }, { id: "s", name: "Ships", referenceIds: ["a", "b"] }, { id: "x", name: "Other", referenceIds: ["b"] }] });
+    await settle();
+    expect($(".ref-boards").textContent).toBe("Boards: Harbour · Ships");
+  });
+
   it("b and the Boards… button open the board menu for the focus", async () => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "b" }));
     expect($(".margin .board-menu")).not.toBeNull();

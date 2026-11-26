@@ -226,6 +226,50 @@ describe("mountBoards", () => {
     });
   });
 
+  // ---------- fix round 1 (I1, I2, I3) ----------
+  it("I1: tile images can't start a native drag", () => {
+    mount();
+    expect($(".bd-tile img").getAttribute("draggable")).toBe("false");
+  });
+
+  it("I2: Show only this board from the keyboard keeps focus on it", () => {
+    mount();
+    const btn = $<HTMLButtonElement>('[data-act="scope"]');
+    btn.focus();
+    btn.click();
+    expect(document.activeElement).toBe($('[data-act="scope"]'));
+    expect(document.activeElement?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("I2: Rename focuses the field; Esc and a save return focus to Rename", async () => {
+    mount(undefined, undefined, { renameBoard: vi.fn(async () => change({ boards: [{ ...harbour, name: "Docks" }] })) });
+    $<HTMLButtonElement>('[data-act="rename"]').click();
+    expect(document.activeElement).toBe($(".bd-rename"));
+    $(".bd-rename").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.activeElement).toBe($('[data-act="rename"]'));
+    $<HTMLButtonElement>('[data-act="rename"]').click();
+    $<HTMLInputElement>(".bd-rename").value = "Docks";
+    $(".bd-rename").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flush();
+    expect($(".bd-name").textContent).toBe("Docks");
+    expect(document.activeElement).toBe($('[data-act="rename"]'));
+  });
+
+  it("I3: a delete prompt never deletes another board after the selection changes", async () => {
+    mount();
+    $<HTMLButtonElement>('[data-act="delete"]').click();
+    const yes = $<HTMLButtonElement>('[data-act="delete-yes"]');
+    expect(yes.dataset.board).toBe("h");
+    store.apply(change({ boards: [{ id: "s", name: "Ships", referenceIds: ["r2"] }] })); // an undo removes Harbour
+    expect($(".bd-name").textContent).toBe("Ships");
+    expect(document.querySelector('[data-act="delete-yes"]')).toBeNull(); // the prompt went with the selection
+    // A stale confirm bound to Harbour, put back by hand, still deletes nothing else.
+    $(".bd-msg").append(yes);
+    yes.click();
+    await flush();
+    expect(api.deleteBoard).not.toHaveBeenCalled();
+  });
+
   it("says what to do when there are no boards", () => {
     mount([]);
     expect($(".bd-list").textContent).toContain("No boards yet.");

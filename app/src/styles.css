@@ -548,3 +548,8 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .off-board[hidden] { display: none; }
 .off-board-note { color: var(--ink-2); font-style: italic; }
 .board-scope b { font-weight: 600; }
+/* Plan 4 Task 5, fix round 1: no native image drag on board tiles (I1); the focus's boards (S1). */
+.bd-tile img { -webkit-user-drag: none; }
+.ref-boards { margin: 0; padding: 10px 16px 0; font-size: 13px; color: var(--ink); }
+.ref-boards .k { font: 500 12px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
+.ref-boards[hidden] { display: none; }

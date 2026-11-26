@@ -134,6 +134,7 @@ export function mountReference(
     renderLinks(ref);
     renderRecord(ref, S.arrival);
     readout();
+    renderBoardsLine(ref);
     // Review Focus 5: a focused reference outside the scoped board stays focused, marked.
     offBoard.hidden = store.inScope(ref.id);
     spec.classList.remove("is-leaving");
@@ -165,6 +166,7 @@ export function mountReference(
   function renderEmpty() {
     linkEditor?.close(); // nothing left to link from
     boardMenu?.close();
+    boardsLine.hidden = true;
     S.focus = S.pinned = S.hot = S.arrival = null;
     S.filter = noFilter();
     S.related = [];
@@ -692,6 +694,14 @@ export function mountReference(
     "beforeend",
     `<button type="button" class="boards-open" aria-keyshortcuts="b">Boards…</button><span class="off-board" hidden>Not on this board</span>`,
   );
+  // The boards the focus is on, at the top of the margin; "Boards…" (or b) edits them (S1).
+  $(".margin")!.insertAdjacentHTML("afterbegin", `<p class="ref-boards" hidden><span class="k">Boards:</span> <span data-v></span></p>`);
+  const boardsLine = $<HTMLElement>(".margin .ref-boards")!;
+  function renderBoardsLine(ref: Reference) {
+    const names = store.boards.filter((b) => b.referenceIds.includes(ref.id)).map((b) => b.name);
+    boardsLine.querySelector("[data-v]")!.textContent = names.length ? names.join(" · ") : "On no board";
+    boardsLine.hidden = false;
+  }
   const boardsOpen = $<HTMLButtonElement>("#lab .boards-open")!;
   const offBoard = $<HTMLElement>("#lab .off-board")!;
   boardsOpen.addEventListener("click", openBoardMenu, { signal });
@@ -699,6 +709,7 @@ export function mountReference(
     boardMenu?.close();
     boardsOpen.remove();
     offBoard.remove();
+    boardsLine.remove();
   });
 
   // ---------- the minimal lightbox (Plan 2 Task 10): "Open lightbox" on the plate, or the L key ----------
@@ -745,6 +756,8 @@ export function mountReference(
   const touchesFocus = (c: StoreEvent) => {
     const f = focusRef();
     if (c.reset || c.taxonomy || c.links || c.scope || c.removed.length || !f) return true;
+    // A board Change under a scope can change who is in it; one that removed the board clears it.
+    if (c.scopeCleared || (c.boards && store.scope !== null)) return true;
     // With a filter on, a ranked or newly matching reference changes the Ranked list too.
     const filtered = new Set(S.filter.techniques);
     if (
@@ -770,6 +783,7 @@ export function mountReference(
     }
     if (S.focus && store.refs.has(S.focus)) {
       if (touchesFocus(c)) refresh();
+      else if (c.boards) renderBoardsLine(focusRef()!); // membership only: no refetch
     }
     else {
       // The focus was removed: back along the trail, then the first reference, then empty.

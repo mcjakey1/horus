@@ -32,7 +32,7 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
   const life = new AbortController();
   const signal = life.signal;
   const say = noticeIn(document);
-  const S = { board: null as string | null, renaming: false, focusAfter: null as number | null, lastDest: "" };
+  const S = { board: null as string | null, renaming: false, focusAfter: null as number | null, focusAct: null as string | null, lastDest: "" };
   root.innerHTML = `
     <div class="bd">
       <nav class="bd-list" aria-label="Boards"></nav>
@@ -55,7 +55,7 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
     el.tabIndex = 0;
     el.dataset.id = r.id;
     el.setAttribute("aria-keyshortcuts", "Alt+ArrowLeft Alt+ArrowRight");
-    el.innerHTML = `<span class="bd-plate"><img src="${esc(api.assetUrl(r.thumb256))}" alt="" loading="lazy" decoding="async"></span>
+    el.innerHTML = `<span class="bd-plate"><img src="${esc(api.assetUrl(r.thumb256))}" alt="" loading="lazy" decoding="async" draggable="false"></span>
       <span class="bd-title">${esc(r.title)}</span>
       <span class="bd-tools"><button type="button" class="text-btn" data-act="open">Open</button><button type="button" class="text-btn" data-act="remove" aria-label="Remove ${esc(r.title)} from this board">Remove from board</button></span>`;
     return el;
@@ -71,9 +71,14 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
       : `<p class="none">No boards yet. Press b on a reference to put it on a board.</p>`;
   }
 
+  /** Rewrites the header; keyboard focus stays on the control it was on (by its data-act), or
+   * moves to `S.focusAct` when one is pending (Rename after Esc or a save). */
   function renderHead() {
     const b = board();
     const head = $(".bd-head");
+    const active = document.activeElement;
+    const want = S.focusAct ?? (head.contains(active) ? (active as HTMLElement).dataset.act : undefined);
+    S.focusAct = null;
     if (!b) {
       head.innerHTML = "";
       return;
@@ -86,11 +91,17 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
         <button type="button" class="text-btn" data-act="export">Export board to folder…</button>
         <button type="button" class="text-btn" data-act="delete">Delete</button>
       </div>`;
-    if (S.renaming) $<HTMLInputElement>(".bd-rename").select();
+    if (S.renaming) {
+      const input = $<HTMLInputElement>(".bd-rename");
+      input.focus();
+      input.select();
+    } else if (want) head.querySelector<HTMLElement>(`[data-act="${want}"]`)?.focus();
   }
 
   function render() {
+    const before = S.board;
     if (!board()) S.board = store.boards[0]?.id ?? null;
+    if (S.board !== before) msg(""); // a delete prompt (or an error) belongs to the board it was for
     renderList();
     renderHead();
     grid.update(members(board()));
@@ -153,6 +164,7 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
     api.renameBoard(b.id, name).then(
       (c) => {
         S.renaming = false;
+        S.focusAct = "rename";
         store.apply(c);
       },
       (err) => msg(boardErrorCopy(err, store, name)),
@@ -180,10 +192,11 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
       renderHead();
     } else if (act === "export") void exportBoard();
     else if (act === "delete")
-      msg(`Delete ${esc(b.name)}? You can undo this. <button type="button" class="text-btn" data-act="delete-yes">Delete</button> <button type="button" class="text-btn" data-act="delete-no">Cancel</button>`, true);
+      msg(`Delete ${esc(b.name)}? You can undo this. <button type="button" class="text-btn" data-act="delete-yes" data-board="${esc(b.id)}">Delete</button> <button type="button" class="text-btn" data-act="delete-no">Cancel</button>`, true);
     else if (act === "delete-no") msg("");
     else if (act === "delete-yes") {
       msg("");
+      if (t.closest<HTMLElement>("[data-board]")?.dataset.board !== b.id) return; // a stale prompt
       api.deleteBoard(b.id).then((c) => store.apply(c), (err) => msg(boardErrorCopy(err, store, b.name)));
     }
   }, { signal });
@@ -194,6 +207,7 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
       if (e.key === "Enter" && !e.isComposing) rename((t as HTMLInputElement).value);
       else if (e.key === "Escape") {
         S.renaming = false;
+        S.focusAct = "rename";
         renderHead();
       }
       return;
