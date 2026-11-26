@@ -36,6 +36,7 @@ function fakeApi(lastLibrary: string | null): Api {
     systemRamGb: vi.fn(async () => 16),
     pickFolder: vi.fn(async () => "C:\\Références"),
     pickImages: vi.fn(async () => []),
+    revealFolder: vi.fn(async () => {}),
     assetUrl: (p: string) => p,
     undo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
     redo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),

@@ -7,6 +7,7 @@ import { mountImport, warningHTML } from "../importer";
 import { digitOf } from "../keys";
 import { openLightbox } from "../lightbox/view";
 import { linkedFirst, linkErrorCopy, mountLinkEditor } from "../links/editor";
+import { mountBoardMenu } from "../boards/menu";
 import { opInk, opLabel } from "../ops";
 import { mountSearch } from "../search";
 import type { Store, StoreEvent } from "../store";
@@ -87,6 +88,7 @@ export function mountReference(
     if (picker && picker.el.dataset.ref !== id) closePicker();
     if (id !== S.focus) lightbox?.close(); // it shows the focus; never another reference behind it
     if (id !== S.focus) linkEditor?.close(); // it links from the focus
+    if (id !== S.focus) boardMenu?.close(); // it is for the focus
     if (push && S.focus && S.focus !== id) S.trail.push(S.focus);
     const spec = $("#specimen")!;
     const first = !S.focus;
@@ -132,6 +134,8 @@ export function mountReference(
     renderLinks(ref);
     renderRecord(ref, S.arrival);
     readout();
+    // Review Focus 5: a focused reference outside the scoped board stays focused, marked.
+    offBoard.hidden = store.inScope(ref.id);
     spec.classList.remove("is-leaving");
     redraw();
   }
@@ -160,6 +164,7 @@ export function mountReference(
 
   function renderEmpty() {
     linkEditor?.close(); // nothing left to link from
+    boardMenu?.close();
     S.focus = S.pinned = S.hot = S.arrival = null;
     S.filter = noFilter();
     S.related = [];
@@ -269,12 +274,13 @@ export function mountReference(
     const blank = (id: string): Scored => ({ id, score: 0, sharedTechniques: [], sharedBranches: [] });
     const f = S.filter;
     const filtering = f.techniques.length > 0;
-    const list = filtering
+    const list = (filtering
       ? allRefs()
           .filter((r) => matchesFilter(r, f))
           .map((r) => byScore.get(r.id) ?? blank(r.id))
           .sort((a, b) => b.score - a.score)
-      : S.related;
+      : S.related
+    ).filter((x) => store.inScope(x.id)); // "Show only this board" (Plan 4 Task 5)
     S.ranked = list.map((x) => x.id);
     const mode = (m: Filter["mode"], label: string) =>
       `<button class="text-btn" data-mode="${m}" aria-pressed="${f.mode === m}">${label}</button>`;
@@ -296,7 +302,7 @@ export function mountReference(
           .map(({ link, other, score }) => {
             const r = store.refs.get(other)!;
             const sc = score === undefined ? `<small>not related by technique</small>` : fmt(score);
-            return `<button class="row linked" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>“${esc(link.why)}”</small></span><span class="sc">${sc}</span></button>`;
+            return `<button class="row linked" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>“${esc(link.why)}”</small>${store.inScope(r.id) ? "" : `<small class="off-board-note">Not on this board</small>`}</span><span class="sc">${sc}</span></button>`;
           })
           .join("")
       : "";
@@ -521,7 +527,7 @@ export function mountReference(
     if ((document.body.dataset.view ?? "reference") !== "reference") return; // another view is showing
     if (lightbox) return; // the lightbox is modal: a key in a notice or dialog over it never acts behind it
     // The picker, the lightbox and text fields own their keys (Plan 2 Global Constraints).
-    if ((e.target as Element).closest?.(".picker, .lightbox, .link-editor, input, textarea, [contenteditable]")) return;
+    if ((e.target as Element).closest?.(".picker, .lightbox, .link-editor, .board-menu, input, textarea, [contenteditable]")) return;
     if (e.key === "/") {
       e.preventDefault();
       $<HTMLInputElement>("#q")!.focus();
@@ -537,6 +543,7 @@ export function mountReference(
     else if (e.key === "t") openPicker();
     else if (e.key === "l" || e.key === "L") openLb();
     else if (e.key === "k") openLinkEditor();
+    else if (e.key === "b") openBoardMenu();
     else if (digitOf(e)) {
       if (pickerOpen()) return; // the picker's digits pick operations, never callouts
       const i = digitOf(e)! - 1;
@@ -555,7 +562,8 @@ export function mountReference(
   mountSearch(root, api, {
     techniqueName: techName,
     operationLabel: (id) => ({ ...opLabel(store.tax, id), color: opColor(id) }),
-    referenceTitle: (id) => store.refs.get(id)?.title,
+    // Under a board scope, an out-of-board reference hit is dropped (search.ts drops undefined).
+    referenceTitle: (id) => (store.inScope(id) ? store.refs.get(id)?.title : undefined),
     // R5: search works from any view; onNavigate (the shell's select("reference")) runs first.
     onTechnique: (id) => (opts.onNavigate?.(), applyFilter(id)),
     onReference: (id) => (opts.onNavigate?.(), show(id)),
@@ -583,6 +591,7 @@ export function mountReference(
     }
     closePicker();
     linkEditor?.close();
+    boardMenu?.close();
     // Docked in the margin, for the whole image: an already-tagged reference can gain a tag too.
     const mine = mountPicker($(".margin")!, api, store, {
       refId: ref.id,
@@ -605,6 +614,7 @@ export function mountReference(
     const ref = focusRef();
     if (!ref) return;
     linkEditor?.close();
+    boardMenu?.close();
     closePicker(); // one docked panel in the margin at a time
     const mine = mountLinkEditor($(".margin")!, api, store, { fromRef: ref.id, ...o });
     linkEditor = mine;
@@ -666,6 +676,29 @@ export function mountReference(
     endDrag();
     linkEditor?.close();
     handle.remove();
+  });
+
+  // ---------- boards (Plan 4 Task 5): "Boards…" on the plate, or the b key ----------
+  let boardMenu: ReturnType<typeof mountBoardMenu> | null = null;
+  function openBoardMenu() {
+    const ref = focusRef();
+    if (!ref) return;
+    boardMenu?.close();
+    linkEditor?.close();
+    closePicker(); // one docked panel in the margin at a time
+    boardMenu = mountBoardMenu($(".margin")!, api, store, ref.id);
+  }
+  $("#lab")!.insertAdjacentHTML(
+    "beforeend",
+    `<button type="button" class="boards-open" aria-keyshortcuts="b">Boards…</button><span class="off-board" hidden>Not on this board</span>`,
+  );
+  const boardsOpen = $<HTMLButtonElement>("#lab .boards-open")!;
+  const offBoard = $<HTMLElement>("#lab .off-board")!;
+  boardsOpen.addEventListener("click", openBoardMenu, { signal });
+  signal.addEventListener("abort", () => {
+    boardMenu?.close();
+    boardsOpen.remove();
+    offBoard.remove();
   });
 
   // ---------- the minimal lightbox (Plan 2 Task 10): "Open lightbox" on the plate, or the L key ----------

@@ -2,6 +2,7 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 export type Region = { x: number; y: number; w: number; h: number };
 
@@ -167,6 +168,8 @@ export interface Api {
   pickFolder(title: string): Promise<string | null>;
   /** Native multi-file picker filtered to images; [] when cancelled. */
   pickImages(): Promise<string[]>;
+  /** Plan 4 Task 5: shows `path` in the file manager (opener: reveal-item-in-dir only). */
+  revealFolder(path: string): Promise<void>;
   /** URL for an absolute file path from Rust (asset protocol). */
   assetUrl(path: string): string;
   undo(): Promise<Change>;
@@ -256,6 +259,7 @@ export const tauriApi: Api = {
   },
   pickImages: async () =>
     (await open({ multiple: true, title: "Import images", filters: [{ name: "Images", extensions: IMAGE_EXTS }] })) ?? [],
+  revealFolder: (path) => revealItemInDir(path),
   assetUrl: (path) => convertFileSrc(path),
   undo: () => invoke("undo"),
   redo: () => invoke("redo"),

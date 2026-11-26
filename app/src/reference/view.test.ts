@@ -80,6 +80,7 @@ function fakeApi(): Api {
     systemRamGb: vi.fn(async () => 16),
     pickFolder: vi.fn(async () => null),
     pickImages: vi.fn(async () => []),
+    revealFolder: vi.fn(async () => {}),
     assetUrl: (path: string) => `asset://${encodeURIComponent(path)}`,
     undo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
     redo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
@@ -987,5 +988,70 @@ describe("links you draw", () => {
       expect(spy.mock.calls.some(([type]) => type === "dragstart")).toBe(false);
       spy.mockRestore();
     });
+  });
+});
+
+// ---------- Plan 4 Task 5: boards in the Reference view ----------
+describe("board scope in the Reference view", () => {
+  let api: Api;
+  let store: Store;
+  let view: ReturnType<typeof mountReference>;
+  const none = { references: [], removed: [], canUndo: true, canRedo: false };
+  const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s)!;
+  beforeEach(async () => {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+    api = fakeApi();
+    store = createStore(library, taxonomy);
+    view = mountReference(document.body, api, store);
+    await view.ready;
+    view.show("a");
+    await settle();
+  });
+  afterEach(() => view.destroy());
+  const scope = async (members: string[]) => {
+    store.apply({ ...none, boards: [{ id: "h", name: "Harbour", referenceIds: members }] });
+    store.setScope("h");
+    await settle();
+  };
+
+  it("Ranked keeps only members; a linked non-member stays, marked Not on this board", async () => {
+    await scope(["a"]);
+    expect(document.querySelector('#pane-ranked .row:not(.linked)[data-go="b"]')).toBeNull();
+    const linked = $('#pane-ranked .row.linked[data-go="c"]');
+    expect(linked.textContent).toContain("Not on this board");
+    expect($("#pane-ranked .pane-note").textContent).toContain("0 related");
+    await scope(["a", "b", "c"]);
+    expect(document.querySelector('#pane-ranked .row:not(.linked)[data-go="b"]')).not.toBeNull();
+    expect($('#pane-ranked .row.linked[data-go="c"]').textContent).not.toContain("Not on this board");
+  });
+
+  it("search reference hits keep only members", async () => {
+    await scope(["a"]);
+    vi.mocked(api.search).mockResolvedValueOnce([{ kind: "reference", id: "b" }, { kind: "reference", id: "a" }]);
+    const q = $<HTMLInputElement>("#q");
+    q.value = "plate";
+    q.dispatchEvent(new Event("input"));
+    await settle();
+    const hits = [...document.querySelectorAll<HTMLElement>("#q-results [data-r]")].map((li) => li.dataset.r);
+    expect(hits).toEqual(["a"]);
+  });
+
+  it("a focused non-member stays focused and shows the Not on this board chip", async () => {
+    expect($("#lab .off-board").hidden).toBe(true);
+    await scope(["b"]);
+    expect($("#ref-id").title).toBe("a"); // still focused
+    expect($("#lab .off-board").hidden).toBe(false);
+    store.setScope(null);
+    await settle();
+    expect($("#lab .off-board").hidden).toBe(true);
+  });
+
+  it("b and the Boards… button open the board menu for the focus", async () => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "b" }));
+    expect($(".margin .board-menu")).not.toBeNull();
+    $(".board-menu").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.querySelector(".board-menu")).toBeNull();
+    $<HTMLButtonElement>("#lab .boards-open").click();
+    expect($(".board-menu").getAttribute("aria-label")).toBe("Boards for Plate A");
   });
 });
