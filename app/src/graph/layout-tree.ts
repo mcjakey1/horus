@@ -30,12 +30,13 @@ export function spread(want: number[], gap: number): number[] {
 }
 
 /**
- * The label row (0, 1 or 2) of each branch and technique: by x order within its band, so labels
- * on one row are at least 3 × GAP = 192 apart, wider than a clipped label (final review I1).
+ * The label row (0, 1 or 2) of each operation, branch and technique: by x order within its band,
+ * so labels on one row are at least 3 × GAP = 192 apart, wider than a clipped label (final review
+ * I1). Operations need it too: one with no branches, or one branch of one technique, is one GAP wide.
  */
 export function labelRows(g: TaxGraph, p: Placed): Map<string, number> {
   const rows = new Map<string, number>();
-  for (const kind of ["branch", "tech"] as const) {
+  for (const kind of ["op", "branch", "tech"] as const) {
     const band = [...g.nodes.values()].filter((n) => n.kind === kind && p.has(n.id)).map((n) => n.id);
     band.sort((a, b) => p.get(a)!.x - p.get(b)!.x);
     band.forEach((id, k) => rows.set(id, k % 3));

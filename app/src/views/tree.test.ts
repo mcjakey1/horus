@@ -169,7 +169,7 @@ describe("Tree view", () => {
     const dy = (kind: string) => ns.filter((n) => n.kind === kind).map((n) => (n as { labelDy?: number }).labelDy);
     expect(new Set(dy("tech"))).toEqual(new Set([0, 18, 36]));
     expect(new Set(dy("branch"))).toEqual(new Set([0, 18, 36]));
-    expect(dy("op").every((d) => d === undefined)).toBe(true);
+    expect(new Set(dy("op"))).toEqual(new Set([0, 18, 36]));
   });
 
   it("an expanded technique hangs its references from one joint; only the selected one gets a connector (final review I5)", () => {
@@ -196,6 +196,14 @@ describe("Tree view", () => {
     expect(color("br:differentiate.feature")).toBe("var(--ink-3)");
     expect(color("tech:chiaroscuro")).toBe("var(--ink-3)");
     for (const e of fake.edges[fake.edges.length - 1]) expect(e.color).toBe("var(--line-2)"); // connectors stay hairlines
+  });
+
+  it("a selected technique with no branch keeps its at-rest outline (final review I7)", () => {
+    const tax = { ...seed, techniques: [...seed.techniques, { id: "orphan", name: "Orphan", icon: "", description: "", synonyms: [], examples: [], custom: true }] };
+    src.set({ ...snap(tax, refs), version: 1 });
+    fake.emit("select", "tech:orphan");
+    expect(fake.lastSel()).toBe("tech:orphan");
+    expect(fake.last().find((n) => n.id === "tech:orphan")).toMatchObject({ color: "var(--ink-3)" });
   });
 
   it("arrow_up_goes_to_parent", () => {

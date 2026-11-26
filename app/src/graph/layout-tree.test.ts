@@ -118,14 +118,20 @@ describe("layoutTree", () => {
   it("labels_never_overlap (final review I1)", () => {
     const long = synth(2);
     long.techniques.forEach((t, i) => (t.name = `A very long technique name number ${i}`)); // names the artist types
+    // new operations side by side: no branches, or one branch of one technique, so one GAP wide each
+    for (let k = 0; k < 4; k++) long.operations.push({ id: `n${k}`, name: `A brand new operation number ${k}`, plainLabel: "", icon: "", description: "" });
+    long.branches.push({ id: "n1.b", operationId: "n1", domainId: "d" });
+    long.techniques.push({ id: "lone", name: "lone", icon: "", description: "", synonyms: [], examples: [], custom: true });
+    long.branchTechniques.push({ branchId: "n1.b", techniqueId: "lone" });
     for (const tax of [seed, long]) {
       const g = buildTaxGraph(snap(tax));
       const p = layoutTree(g);
       const rows = labelRows(g, p);
-      for (const kind of ["branch", "tech"] as const) {
+      for (const kind of ["op", "branch", "tech"] as const) {
         const boxes = [...g.nodes.values()].filter((n) => n.kind === kind).map((n) => {
           const { x, y } = p.get(n.id)!;
-          return { id: n.id, box: labelBox(x, y, 20, clipLabel(nameOf(tax, n.id)), rows.get(n.id)) };
+          const name = n.kind === "op" ? tax.operations.find((o) => `op:${o.id}` === n.id)!.name : nameOf(tax, n.id);
+          return { id: n.id, box: labelBox(x, y, n.kind === "op" ? 28 : 20, clipLabel(name), rows.get(n.id)) };
         });
         expect(boxes.length).toBeGreaterThan(1);
         expect(clashes(boxes)).toEqual([]);
