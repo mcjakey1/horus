@@ -999,6 +999,20 @@ describe("links you draw", () => {
       expect(document.querySelectorAll(".link-editor")).toHaveLength(1);
     });
 
+    it("Esc unpins again after a drag that lost its capture (final review M4)", async () => {
+      await mount();
+      const pin = $<HTMLButtonElement>("#pane-callouts .call .pin");
+      pin.click();
+      expect(pin.getAttribute("aria-pressed")).toBe("true");
+      const handle = $("#lab .link-handle");
+      fire(handle, "pointerdown", 10, 10);
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); // cancels the drag only
+      expect(pin.getAttribute("aria-pressed")).toBe("true");
+      handle.dispatchEvent(new Event("lostpointercapture")); // no pointerup came
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      expect(pin.getAttribute("aria-pressed")).toBe("false");
+    });
+
     it("dropping on empty space, or cancelling, opens nothing", async () => {
       await mount();
       const handle = $("#lab .link-handle");
@@ -1134,6 +1148,47 @@ describe("board scope in the Reference view", () => {
     store.apply({ ...none, boards: [{ id: "h", name: "Harbour", referenceIds: ["a"] }, { id: "s", name: "Ships", referenceIds: ["a", "b"] }, { id: "x", name: "Other", referenceIds: ["b"] }] });
     await settle();
     expect($(".ref-boards").textContent).toBe("Boards: Harbour · Ships");
+  });
+
+  // ---------- final review fix wave ----------
+  it("C1: with no technique filter, Ranked keeps only members and counts them", async () => {
+    const D = ref("d", "Plate D", [tag("d1", "differentiate", "silhouette", "differentiate-feature")]);
+    const both: Scored[] = [
+      { id: "b", score: 0.8, sharedTechniques: ["silhouette"], sharedBranches: [] },
+      { id: "d", score: 0.5, sharedTechniques: ["silhouette"], sharedBranches: [] },
+    ];
+    vi.mocked(api.related).mockImplementation(async (id: string) => (id === "a" ? both : (scored[id] ?? [])));
+    store.apply({ ...none, references: [D] }); // shares a technique with the focus: Ranked refetches
+    await settle();
+    expect(document.querySelector('#pane-ranked .row:not(.linked)[data-go="d"]')).not.toBeNull();
+    await scope(["a", "b"]);
+    expect(document.querySelector('#pane-ranked .row:not(.linked)[data-go="b"]')).not.toBeNull();
+    expect(document.querySelector('#pane-ranked .row:not(.linked)[data-go="d"]')).toBeNull();
+    expect($("#pane-ranked .pane-note").textContent).toContain("1 related");
+  });
+
+  it("under a technique filter, a linked match appears once", async () => {
+    store.apply({ ...none, links: [...store.links, { id: "l2", fromRef: "a", toRef: "b", why: "both dark" }] });
+    await settle();
+    $<HTMLButtonElement>('#pane-callouts [data-filter="silhouette"]').click();
+    expect(document.querySelectorAll('#pane-ranked [data-go="b"]')).toHaveLength(1);
+  });
+
+  it("k and b work in any case and on a non-Latin layout (M1)", async () => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "K", shiftKey: true }));
+    expect(document.querySelector(".link-editor")).not.toBeNull();
+    document.querySelector<HTMLElement>(".link-editor [data-cancel], .link-editor .le-cancel")?.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "и", code: "KeyB" }));
+    expect(document.querySelector(".board-menu")).not.toBeNull();
+  });
+
+  it("the membership line follows the focus (M9)", async () => {
+    store.apply({ ...none, boards: [{ id: "h", name: "Harbour", referenceIds: ["a"] }, { id: "s", name: "Ships", referenceIds: ["b"] }] });
+    await settle();
+    expect($(".ref-boards").textContent).toBe("Boards: Harbour");
+    view.show("b");
+    await settle();
+    expect($(".ref-boards").textContent).toBe("Boards: Ships");
   });
 
   it("b and the Boards… button open the board menu for the focus", async () => {

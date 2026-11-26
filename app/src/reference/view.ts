@@ -4,7 +4,7 @@
 import type { Api, Reference, Scored, Settings, Tag } from "../api";
 import { esc } from "../esc";
 import { mountImport, warningHTML } from "../importer";
-import { digitOf } from "../keys";
+import { digitOf, letterOf } from "../keys";
 import { openLightboxWithPicker } from "../lightbox/dock";
 import { linkedFirst, linkErrorCopy, mountLinkEditor } from "../links/editor";
 import { mountBoardMenu } from "../boards/menu";
@@ -296,9 +296,10 @@ export function mountReference(
       : `<p class="pane-note">${list.length} related · strongest first</p>`;
     // SPEC §4: links the artist drew are always shown (a filter or a board scope never hides
     // them), listed first, never mixed into the score; a linked reference appears once.
-    const { linked, rest } = linkedFirst(S.related, linksOf(ref), ref.id);
+    const { linked } = linkedFirst(S.related, linksOf(ref), ref.id);
     const linkedIds = new Set(linked.map((x) => x.other));
-    const scoredRows = filtering ? list.filter((x) => !linkedIds.has(x.id)) : rest;
+    // `list` is already scoped to the board; a linked reference shows once, above (final review C1).
+    const scoredRows = list.filter((x) => !linkedIds.has(x.id));
     const mine = linked.length
       ? `<h4 class="group-head">Linked by you</h4>` +
         linked
@@ -526,7 +527,7 @@ export function mountReference(
   }, { signal });
   document.addEventListener("keydown", (e) => {
     if (e.isComposing || e.defaultPrevented) return; // a key a modal above already handled (Compare's Esc)
-    if (drag && e.key === "Escape") return cancelDrag(); // a link drag aborts
+    if (drag && !drag.cancelled && e.key === "Escape") return cancelDrag(); // a link drag aborts
     // Ctrl/⌘ combos (paste, copy…) belong to the browser; Alt only for Alt+← (Back).
     if (e.ctrlKey || e.metaKey || (e.altKey && e.key !== "ArrowLeft")) return;
     if ((document.body.dataset.view ?? "reference") !== "reference") return; // another view is showing
@@ -548,8 +549,8 @@ export function mountReference(
     } else if (e.key === "Backspace" || (e.altKey && e.key === "ArrowLeft")) $<HTMLButtonElement>("#back")!.click();
     else if (e.key === "t") openPicker();
     else if (e.key === "l" || e.key === "L") openLb();
-    else if (e.key === "k") openLinkEditor();
-    else if (e.key === "b") openBoardMenu();
+    else if (letterOf(e) === "k") openLinkEditor(); // any case, any layout (keys.ts policy)
+    else if (letterOf(e) === "b") openBoardMenu();
     else if (digitOf(e)) {
       if (pickerOpen()) return; // the picker's digits pick operations, never callouts
       const i = digitOf(e)! - 1;
@@ -674,6 +675,8 @@ export function mountReference(
     if (id && id !== S.focus && store.refs.has(id)) openLinkEditor({ toRef: id });
   }, { signal });
   handle.addEventListener("pointercancel", endDrag, { signal });
+  // A lost capture with no pointerup (a window switch) ends the drag too; after a pointerup it finds none.
+  handle.addEventListener("lostpointercapture", endDrag, { signal });
   handle.addEventListener("click", () => {
     if (justDragged) justDragged = false;
     else openLinkEditor();
