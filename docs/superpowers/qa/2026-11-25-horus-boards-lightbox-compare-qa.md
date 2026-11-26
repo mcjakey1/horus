@@ -12,7 +12,7 @@
 - Every item on the fix wave's QA-focus list (1–8) works on the real app, and so does Task 8's Important F1, the scope leak. Item 9, the pre-existing question, is answered: **yes, Esc in the lightbox picker's "Add technique" form closes the whole lightbox.** That is F1 below.
 - The four things Task 8 didn't check are now checked: search under scope, Tab onto a region while zoomed, and the credits file's bytes all pass. The hover label was seen only for an operation-only region (J3). Opening `credits.txt` in Notepad was not done (see "Not covered").
 - Review Focus 3 to 6 pass live. Review Focus 1 and 2 pass for what an artist meets: two exports into the same folder, and same-title references. The forbidden-character, reserved-name and unwritable-folder cases were not driven live (see "Not covered").
-- Undo covers each edit an artist makes here, one step each, and a link edit and a board rename survive a quit about 0.4 s after the save.
+- Undo covers each edit an artist makes here, one step each, and a link edit saved 0.4 s before the window closed is on disk after a relaunch. A board rename made about 2 s earlier is there too.
 - Plan 2 and Plan 3 regressions: see the run table.
 - Neither minor loses saved data.
 
@@ -42,7 +42,7 @@
   - The picker's Esc runs `closeForm()`, which empties the form slot (`slot.innerHTML = ""`), so the focused input leaves the DOM.
   - The same keydown then bubbles to the lightbox's handler (`lightbox/view.ts:223–232`). There `t.closest(".picker")` on the detached target returns `null`. So the key counts as the lightbox's own Esc, and with no draft in progress it calls `close()`.
   - A fix could stop propagation in the picker's Esc branch, or test `e.composedPath()` instead of `closest`.
-- **Evidence:** `results-p4.json` "Item 9" in all three logs: `form opened true; focus before Esc input; after Esc {"lightbox":false,…}`.
+- **Evidence:** "Item 9" in `run2.log`, `run3.log` and `run4.log`. All three read `form opened true; … after Esc {"lightbox":false,…}`. Passes 3 and 4 also log `focus before Esc input`; pass 2 had not yet recorded focus.
 
 ### F2 (Minor): a first-column board tile's "Open" button is clipped by the grid
 
@@ -57,24 +57,25 @@
 - **J2. Export copy, "Show in folder".** The button opens Explorer on the parent folder with the export folder selected. The label now says "Show in folder" (fix-wave item 8), which describes that exactly. No change needed. Noted because -59 asked about it.
 - **J3. The hover label for a partial region tag.** Tagging with `1` then Enter, with no technique highlighted, makes an operation-only region tag. Its hover label reads "Stand out", with no " › Technique". That fits a partial tag, but it means the full "Stand out › Rim light" form (Task 6) was not seen on hover live. Tab onto the same region labels and highlights it (`is-hot`, label visible), so the label mechanism itself works. The harness expectation was wrong for a partial tag. I'm counting this as a coverage gap, not a bug.
 
-### H1 (open, not counted): the first-run "Create a new library…" pick sometimes never registers
+### H1 (harness, not counted): the mocked first-run pick sometimes never registers
 
-- **Count:** 3 of my 10 launches, the same rate as -59's 3 of 7. When it misses, every retry in that launch misses too:
-  - 4/4 in Plan 4 pass 1;
-  - 10/10 in Plan 3 regression attempt 2;
-  - 4/4 in the first screenshot launch.
-  - The other 7 launches picked on the first click.
-- **It is not only -59's page reload:** pass 1 reloaded after attaching the dialog route (`plan4-e2e.js:46`), but the other two misses had no reload.
-- **What I can't tell:** whether the app or the harness is at fault. Every launch answers the folder dialog through a CDP route (`page.route` on the dialog IPC), because a real native dialog can't be driven here.
-  - One explanation is that the route sometimes isn't active yet when the first request goes out. A real native folder dialog would then open, possibly behind the window, and hold every later click.
-  - I added a window listing for the app's process on a miss, but the launch that carried it picked first time, so this is not confirmed.
-- **Suggestion:** a 2-minute hand check. Delete `%APPDATA%\art.horus.app`, launch `horus.exe` 5 times, and click "Create a new library…" each time. If the native dialog always appears, H1 is a harness artifact.
+- **With the harness's dialog mock** (`page.route` on the dialog IPC), "Create a new library…" never registered on 3 of my 10 launches. When it missed, every retry in that launch missed too:
+  - 4/4 in Plan 4 pass 1, with -59's reload after the route;
+  - 10/10 in Plan 3 regression attempt 2, no reload;
+  - 4/4 in the first screenshot launch, no reload.
+  - The other 7 launches picked on the first click. -59 saw 3 of 7.
+- **Without the mock, the app is fine.** I ran 6 cold launches (`h1probe.js`, not committed) with no route, only a passive request listener, and one click on "Create a new library…" each. On every launch:
+  - `plugin:dialog|open` went out;
+  - the native dialog "Choose a folder for the new library" (`#32770`) was open 3 s later.
+  - The app was killed after each launch and `%APPDATA%\art.horus.app` was removed.
+- **So H1 is a harness artifact,** an intermittent failure of the CDP route on the dialog IPC, and not an app bug. An artist's click opens the dialog 6/6.
+- **Suggestion for later harnesses:** when the pick misses, relaunch rather than retrying in the same launch.
 
 ## Fix-wave QA focus (`fix-wave-rereview.md`)
 
 | # | Item | Result |
 |---|---|---|
-| 1 | F3: Alt+→ keeps focus on the moved tile; a second Alt+→ moves it again; resize with a tile focused | **Pass.** Focus stays on the moved tile (`i` 0→1→2), Alt+← too, three Ctrl+Z restore the order. Resizing to 984 px and back keeps focus on the same tile, with `scrollTop` unchanged. |
+| 1 | F3: Alt+→ keeps focus on the moved tile; a second Alt+→ moves it again; resize with a tile focused | **Pass.** Focus stays on the moved tile (`i` 0→1→2), Alt+← too, three Ctrl+Z restore the order. Resizing to 984 px and back keeps focus on the same tile. The 8-tile board never scrolled (`scrollTop` 0 throughout), so "the grid doesn't jump" on a scrolled grid was not exercised. |
 | 2 | F2: draw at ~416 %, `1`, pick, save: zoom stays; `0` and `1` work after | **Pass.** 470 % at the draw, after the picker and after the tag. `0` → 45 %, `1` → 100 %. Region error 0.0000 at 470 % and at fit. |
 | 3a | F4: Link these two, why, save: focus on Edit link; Esc closes Compare, the pin is kept | **Pass.** Focus `cmp-link-btn` "Edit link"; "Linked by you: “same raking light”"; the score is unchanged (0.34); the pin is `true` → `true`. |
 | 3b | I3: after a notice's Dismiss in Compare, Esc, `x`, `v` and Ctrl+Z each act once | **Pass.** Focus was on `<body>` after Dismiss. `x` swapped once (titles reversed) and `v` flipped once (both tiles `is-value`). Ctrl+Z undid the link only, and the import before it stayed (54 → 54 refs). Esc closed Compare once (item 4). |
@@ -92,7 +93,7 @@
 |---|---|
 | Search under scope | **Pass.** A non-member's exact title gives 0 hits; a member's title finds it. |
 | Hover label | **Partial.** Hover marks the region `is-hot` and shows its label, which is visible. The tag was operation-only, so the label is "Stand out" (J3). |
-| Tab onto a region while zoomed (T6) | **Pass.** At 422 % Tab focuses the region (`lb-box is-hot`, label visible), and the lightbox pans so the region is in view. The plate moved 64, −958 px to show it. |
+| Tab onto a region while zoomed (T6) | **Pass.** At 422 % Tab focuses the region (`lb-box is-hot`, label visible), and the lightbox pans so the region is in view. The plate moved 64, −958 px to show it. This is the intended T6 behaviour: `task-6-report.md` "Reveal" pans the view to centre a box focused off screen, and `task-6-rereview-1.md` makes `.lb-stage` `overflow: clip`, so focus can't scroll the stage. The harness checked that the focused box itself was in view, whichever box Tab reached. |
 | credits.txt opens cleanly in Notepad | **Bytes checked, Notepad not opened.** The file is valid UTF-8 with no BOM and LF line ends, with 8 blocks (Title, Creator, Year, Credit, Source) in board order. A second export writes `credits (2).txt`. I did not open Notepad: on Windows 11 it restores the user's other tabs, and I didn't want to touch them. |
 
 ## Plan 4 as Mara, beyond the lists
@@ -112,8 +113,8 @@
   - A second export adds ` (2)` to all 9 files, including `credits (2).txt`, and leaves the first 9 byte-identical.
 - **Links:**
   - Dragging the Link… handle onto a Ranked row shows a leader line, then opens the editor "to Zodiaque ("La Plume")".
-  - Save is disabled while "why" is empty. A forced save of spaces is refused with "Say why these are connected." and the spaces stay.
-  - `k` opens the combobox, which never offers the reference itself or one it is already linked to. Arrow Down + Enter picks a reference.
+  - Save is disabled while "why" is empty. Only a forced save, with the harness re-enabling the button, got spaces through; it was refused with "Say why these are connected." and the spaces stayed.
+  - `k` opens the combobox, which never offers the reference itself or one it is already linked to. So the self-link and duplicate-pair refusals (Review Focus 4) are prevented by the UI. Their refusal messages were not seen live; the unit tests cover them. Arrow Down + Enter picks a reference.
   - "Linked by you" is the first group in Ranked, and it shows from the other end too.
   - Edit and Delete in the Links tab are one undo step each.
 - **Lightbox:**
@@ -125,8 +126,8 @@
   - Shift-click on a Ranked row opens a modal with Shared in the middle and "Only here" on each side.
   - Shared holds "Make them think › Crop at the edge", and the score is "0.34 · related by technique".
 - **Review Focus 6:**
-  - The board renamed to "Harbour quit" and the link note edited to "edited just before quitting" were both saved.
-  - The window was closed 394 ms after Save.
+  - The link note was edited to "edited just before quitting", and the window was closed 394 ms after Save. This is the close-flush test.
+  - The board rename to "Harbour quit" came about 2 s before the quit, so it may have been saved by the debounce rather than the flush.
   - After a relaunch, both are on disk and in the UI. The scope is not restored, which is right, because it is view state.
 - **Console errors:** none. **First-run pick misses:** 0 in passes 2–4; see H1 for the other launches.
 
@@ -138,6 +139,10 @@
 - **Opening `credits.txt` in Notepad, TextEdit or PureRef** (see Task 8 gaps).
 - **Board creation as its own undo step,** outside the menu's Ctrl+Z / Ctrl+Y check.
 - **Light theme only** for the Plan 4 views; dark theme not driven (AGY note).
+- **"Linked by you" first under a technique filter** (Global Constraint R13, -55's item 1). It was checked under board scope (item 5), not under a technique filter, at this build.
+- **Tree and Galaxy under board scope** (Task 5: deselect, arrow skipping, Galaxy inspector). Only the Reference view and search were driven under scope.
+- **The lightbox `v` value toggle.** `v` was driven in Compare, not in the lightbox.
+- **A full "Operation › Technique" hover label** (J3).
 - **Dragging the Link… handle onto an already-linked row.** The combobox exclusion of linked references was tested; the drag path to a linked row was not (AGY note).
 - **The lightbox `o` overlay toggle** (AGY note).
 - **Compare from the Galaxy.** It is the only other entry point, and it was not driven. Compare from the Tree and the Radial is deferred (C26).
@@ -171,6 +176,15 @@ Verdict: **PASS**. Asked to check each PASS claim against the logs, the F1/F2 se
 - I fixed the `%APPDATA%\art.horus.app` typo in H1.
 - I added AGY's three not-driven items (dark theme, the Link handle dragged onto an already-linked row, and `o`) to "Not covered".
 - **Review Focus 6:** AGY read the plan in the main checkout, which lists Review Focus 1–5. The plan at `836d276`, the build under test, has Review Focus 6 ("A link or board edit followed by a quit"), so the report keeps RF6.
+- **After a second review pass (not AGY):**
+  - H1 is now settled by 6 plain launches: the native dialog opened 6/6.
+  - The T6 row now cites the intended reveal (Task 6 report and re-review).
+  - Four more not-driven items are listed under "Not covered".
+  - Four claims are reworded so they don't over-claim:
+    - RF4: the refusal messages were not seen, and the empty why was forced;
+    - RF6: only the link edit tested the close flush;
+    - item 1: `scrollTop` stayed 0, so the grid not jumping on a scrolled grid was not exercised;
+    - F1: pass 2 has no focus log.
 
 ## Screenshots
 
