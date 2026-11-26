@@ -90,6 +90,19 @@ describe("IPC contract", () => {
     expect(args).toEqual({ paths: ["p"], note: "n", sourceUrl: null });
   });
 
+  it("absent moveTo and color reach Rust as null (Task 10 passes undefined)", async () => {
+    const seen: unknown[] = [];
+    mockIPC((_c, a) => void seen.push(a));
+    await tauriApi.deleteTechnique("t", undefined);
+    await tauriApi.unlinkTechnique("t", "b", undefined);
+    await tauriApi.addOperation("n", "l", "");
+    expect(seen).toEqual([
+      { id: "t", moveTo: null },
+      { techniqueId: "t", branchId: "b", moveTo: null },
+      { name: "n", plainLabel: "l", description: "", color: null },
+    ]);
+  });
+
   it("importBytes sends the raw bytes and the metadata in x-meta", async () => {
     mockIPC(() => null);
     const bytes = new Uint8Array([1, 2, 3]).buffer;

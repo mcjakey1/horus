@@ -28,6 +28,10 @@ export interface Scene {
   on(ev: "hover" | "select" | "activate", fn: (id: string | null, mods: Mods) => void): void; // activate = double-click or Enter
   setDraggable(pred: (id: string) => boolean): void; // default: nothing is draggable
   onDrop(fn: (dragged: string, target: string | null) => void): void; // target = node under the pointer on release
+  /** Task 10, optional: the node under a dragged one as it moves; `null` over nothing and once the drag ends. */
+  onDragOver?(fn: (dragged: string, target: string | null) => void): void;
+  /** Task 10, optional: outline a drop target in `color`, or show the not-allowed cursor; `null` clears. Cleared when a drag ends. */
+  setDropHint?(hint: { id: string; color: string } | "blocked" | null): void;
   select(id: string | null): void; // also from the keyboard
   destroy(): void;
 }

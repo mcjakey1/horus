@@ -1,10 +1,12 @@
 // Operation inks in styles.css (DESIGN.md "Extra operation inks", ruling B7): contrast and
 // distinctness, measured from the stylesheet itself.
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+// @ts-expect-error type error without @types/node package (as vite.config.ts)
+import { readFileSync } from "node:fs";
 import { EXTRA_INKS } from "./ops";
 
-const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+const css: string = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+
 function block(selector: RegExp): Record<string, string> {
   const m = selector.exec(css);
   if (!m) throw new Error(`no block for ${selector}`);

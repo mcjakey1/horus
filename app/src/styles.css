@@ -401,6 +401,46 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .insp-sel:hover, .insp-sel:focus-visible { border-color: var(--line-2); }
 .insp-sel .count { color: var(--ink-2); }
 .insp-body .text-btn { align-self: flex-start; }
+/* Task 10: taxonomy editing in the inspector, and its dialogs. No operation ink outside an operation's own swatch. */
+.insp-ro { margin: 0; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
+.insp-edit { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: text; }
+.insp-edit:hover { text-decoration: underline dotted var(--line-2); }
+.insp-field, .insp-form input, .insp-form textarea, .tx-search { width: 100%; padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--panel); color: var(--ink); font: 14px var(--sans); }
+.insp-title .insp-field { font: 500 21px/1.2 var(--serif); }
+.insp-area, .insp-form textarea { resize: vertical; }
+.insp-err, .insp-msg { display: block; margin: 0; font-size: 13px; color: var(--ink); }
+.insp-err:empty, .insp-msg:empty { display: none; }
+.insp-syns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 8px; border: 1px solid var(--line); background: var(--shell); font-size: 13px; }
+.insp-x { padding: 2px 6px; border: 0; background: none; color: var(--ink-2); font-size: 15px; line-height: 1; }
+.insp-x:disabled, .insp-act:disabled { color: var(--ink-3); cursor: not-allowed; }
+.insp-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; align-items: center; }
+.insp-inks { display: flex; gap: 10px; }
+.insp-ink { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line-2); border-radius: 50%; background: var(--ink-2); }
+.insp-ink[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
+.insp-ink[data-swatch="diff"] { background: var(--diff); }
+.insp-ink[data-swatch="group"] { background: var(--group); }
+.insp-ink[data-swatch="seq"] { background: var(--seq); }
+.insp-ink[data-swatch="infer"] { background: var(--infer); }
+.insp-ink[data-swatch="x-teal"] { background: var(--x-teal); }
+.insp-ink[data-swatch="x-olive"] { background: var(--x-olive); }
+.insp-ink[data-swatch="x-rose"] { background: var(--x-rose); }
+.insp-ink[data-swatch="x-indigo"] { background: var(--x-indigo); }
+.insp-ink[data-swatch="x-umber"] { background: var(--x-umber); }
+.insp-icons { display: grid; gap: 4px; }
+.insp-icon { padding: 6px 10px; border: 1px solid var(--line); background: var(--shell); text-align: left; font-size: 13px; color: var(--ink-2); }
+.insp-icon[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
+.insp-slot:empty { display: none; }
+.insp-form { display: grid; gap: 8px; }
+.insp-form label { display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); }
+.tx-dialog { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; background: rgb(0 0 0 / .28); }
+.tx-sheet { width: min(460px, calc(100vw - 40px)); max-height: 80vh; overflow: auto; display: grid; gap: 10px; padding: 18px 20px; background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); font-size: 14px; }
+.tx-title { margin: 0; font: 500 19px/1.25 var(--serif); }
+.tx-h { margin: 0; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.tx-list { margin: 0; padding: 0; list-style: none; max-height: 40vh; overflow: auto; display: grid; gap: 2px; }
+.tx-list li[hidden] { display: none; }
+.tx-actions { display: flex; gap: 14px; align-items: center; }
+.tx-ok:disabled { opacity: .5; cursor: not-allowed; }
 
 /* Plan 3 Task 8: the Radial view. The operation switch is a segmented control that wraps to a
    second row past five operations; the inspector is the Tree's (.insp). */
