@@ -114,7 +114,7 @@ impl std::fmt::Display for CustomError {
 }
 
 /// Case-folded, whitespace-collapsed: the "same name" rule (Review Focus 4).
-fn name_key(name: &str) -> String {
+pub(crate) fn name_key(name: &str) -> String {
     name.split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
@@ -130,6 +130,15 @@ fn slug(name: &str) -> String {
         .collect::<Vec<_>>()
         .join("-");
     if s.is_empty() { "technique".into() } else { s }
+}
+
+/// The slug of `name`, then `-2`, `-3` and so on, until one is not `taken`.
+pub(crate) fn free_id(name: &str, taken: &HashSet<&str>) -> String {
+    let base = slug(name);
+    std::iter::once(base.clone())
+        .chain((2..).map(|n| format!("{base}-{n}")))
+        .find(|id| !taken.contains(id.as_str()))
+        .expect("an unbounded sequence always finds a free id")
 }
 
 /// `Ok(None)` when the file is absent or is not a taxonomy. `Err` when an existing file can't
@@ -338,11 +347,7 @@ impl Taxonomy {
                     .map(|l| l.technique_id.as_str()),
             )
             .collect();
-        let base = slug(&name);
-        let id = std::iter::once(base.clone())
-            .chain((2..).map(|n| format!("{base}-{n}")))
-            .find(|id| !taken.contains(id.as_str()))
-            .expect("an unbounded sequence always finds a free id");
+        let id = free_id(&name, &taken);
         let technique = Technique {
             id: id.clone(),
             name,

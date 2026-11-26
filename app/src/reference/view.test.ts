@@ -71,6 +71,7 @@ function fakeApi(): Api {
     openLibrary: vi.fn(async () => library),
     getTaxonomy: vi.fn(async () => taxonomy),
     related: vi.fn(async (id: string) => scored[id] ?? []),
+    graphEdges: vi.fn(),
     importPaths: vi.fn(async () => imported([])),
     search: vi.fn(async () => []),
     getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "unset" as const })),
@@ -89,6 +90,17 @@ function fakeApi(): Api {
     setField: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     importBytes: vi.fn(async () => imported([])),
     imagePath: vi.fn(async (id: string) => `C:\\lib\\images\\${id}.jpg`),
+    updateTechnique: vi.fn(),
+    deleteTechnique: vi.fn(),
+    linkTechnique: vi.fn(),
+    unlinkTechnique: vi.fn(),
+    addBranch: vi.fn(),
+    addDomain: vi.fn(),
+    updateDomain: vi.fn(),
+    deleteDomain: vi.fn(),
+    addOperation: vi.fn(),
+    updateOperation: vi.fn(),
+    deleteOperation: vi.fn(),
     intakeBusy: vi.fn(async () => {}),
     retrySave: vi.fn(async () => {}),
     exitWithoutSaving: vi.fn(async () => {}),
@@ -551,6 +563,37 @@ describe("Reference view", () => {
     $<HTMLButtonElement>("#pane-ranked .chip-x").click();
     expect(chips()).toEqual([]);
     expect(document.activeElement).toBe($('.m-tab[data-pane="ranked"]'));
+  });
+
+  it("search_hit_navigates_first (Plan 3 R5)", async () => {
+    view.destroy();
+    const seen: string[] = [];
+    const onNavigate = vi.fn(() => {
+      const asked = vi.mocked(api.related).mock.calls.some(([id]) => id === "b");
+      const ranked = $('.m-tab[data-pane="ranked"]').getAttribute("aria-selected");
+      seen.push(`related(b)=${asked} ranked=${ranked}`);
+    });
+    view = mountReference(document.body, api, store, { onNavigate });
+    await view.ready;
+    view.show("a");
+    await settle();
+    vi.mocked(api.related).mockClear();
+    const q = $<HTMLInputElement>("#q");
+    vi.mocked(api.search).mockResolvedValue([{ kind: "reference", id: "b" }]);
+    q.value = "plate b";
+    q.dispatchEvent(new Event("input"));
+    await settle();
+    $('#q-results li[data-r="b"]').click();
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(api.related).toHaveBeenCalledWith("b");
+    vi.mocked(api.search).mockResolvedValue([{ kind: "technique", id: "rhythm", operationId: "sequence", count: 0 }]);
+    q.value = "rhy";
+    q.dispatchEvent(new Event("input"));
+    await settle();
+    $('#q-results li[data-t="rhythm"]').click();
+    expect(onNavigate).toHaveBeenCalledTimes(2);
+    expect($('.m-tab[data-pane="ranked"]').getAttribute("aria-selected")).toBe("true");
+    expect(seen).toEqual(["related(b)=false ranked=false", "related(b)=true ranked=false"]);
   });
 
   // ---------- Task 9 carry-ins ----------

@@ -31,6 +31,10 @@ tauri-plugin-dialog = "2"
 sysinfo = { version = "0.40.4", default-features = false, features = ["system"] }
 unicode-normalization = "0.1"
 
+[features]
+# Task 11's speed check only: HORUS_DEMO_DIR overrides the bundled demo folder (lib.rs).
+perf = []
+
 [dev-dependencies]
 tauri = { version = "2", features = ["protocol-asset", "test"] }
 

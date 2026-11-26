@@ -1,0 +1,204 @@
+### Item Verdicts
+- **Item 1: Labels (I1: P3-1, P3-3, J2 in part)** — ADDRESSED.
+  - **Dot LOD:** `frame.ts:102` gives every non-ref node `"thumb"`. Only references reach `lodFor` and the dot rule.
+  - **Helpers:** `frame.ts:59` `labelShown` (13·s ≥ 8), `frame.ts:62` `clipLabel` (24 + "…"), and `frame.ts:18` `labelDy?`.
+  - **Scene:**
+    - `scene.ts:251-255`: `make()` keeps `o.label` and adds `labelDy` to its y.
+    - `scene.ts:326`: `update()` toggles `visible`.
+    - `o.label` is otherwise used only by label-kind nodes (`:218-223`). Those `continue` at `:321`, and a theme change rebuilds through `clearObjs` (`:512`), so nothing recolours a taxonomy name.
+  - **Hysteresis:** there is none. It is a pure threshold at s = 8/13 ≈ 0.615. The tween eases monotonically (`:356-361`), so a key zoom or fit crosses it at most once, and at rest the scale is constant, so nothing oscillates. Only a user wheeling back and forth over the threshold toggles the labels, and that is intended.
+  - **Stagger and clip:** `layout-tree.ts:37` `labelRows` ranks % 3 by x per band (op, branch and tech). `tree.ts:133-134` applies `clipLabel` and `rows·LABEL_ROW`, and `radial.ts:198` applies `clipLabel`.
+  - **Radial chord sizing:** `layout-radial.ts:57` `r1 = max(BAND_GAP, chordR(nb))` and `:63` `r2 = max(r1+BAND_GAP, chordR(nt))`.
+    - This is the correct closed form of the review's rule: n·2·asin(L/2r) ≤ 2π ⇔ r ≥ L/(2·sin(π/n)).
+    - The `n < 2` guard is right.
+    - Techniques are placed with `onRing(…, r2, r2·labelAngle(r2))`.
+    - Centres at least 184 apart cannot overlap 175×18 boxes, since √(175²+18²) ≈ 176.
+  - **Constants:** moved to `constants.ts:13-23`.
+  - **README:** `README.md:65` is marked "re-check at QA".
+  - **`sameLook` (`frame.ts:178`)** compares every field except x/y, so a changed `labelDy` or clipped label rebuilds the object.
+  - **The tests can fail:**
+    - On base, `lodFor(20, 0.1)` planned a dot.
+    - On base, `labelDy` was undefined.
+    - The box oracle runs on the seed and on 34-character names.
+- **Item 2: Radial ring 3 packed into concentric rows (I2)** — ADDRESSED.
+  - **Packing (`layout-radial.ts:86-105`):**
+    - Capacities are `floor(TAU·r_j/REF_ARC)`, with the fewest rows that hold every reference.
+    - References are dealt in wanted-angle order to the least-full row (`:95`). A strict `<` sends ties to the inner row.
+    - A row never exceeds its capacity: while references remain, the least-full ratio is below 1.
+    - Zero references gives no rows.
+  - **Header:** rewritten (`:1-6`), and the Task 8 delta is named there.
+  - **Tests:**
+    - `ring3_packs_rows`: 2,000 references, radius ≤ 2,200, every point on a row, pairwise ≥ 0.95·REF_ARC.
+    - `radial_rings` and `radial_ring3_only_this_operation` are updated.
+  - **README:** `README.md:68` is marked "Re-measure at QA".
+  - **Ledger:** the plan delta is recorded only in `fix-wave-report.md`. The controller must copy it into the ledger.
+- **Item 3: Enter starts a selection in the Tree and Radial (I3)** — ADDRESSED.
+  - `tree.ts:216`: `if (!sel) select(move(g, null, "child"))`. `navigate.ts:24` returns `ops(g)[0]`.
+  - `radial.ts:241`: `if (!sel) select(\`op:${op}\`)`.
+  - **Real-app flow:**
+    - The scene `preventDefault`s Enter only when it has a selection (`scene.ts:484-487`).
+    - `canvasKeys` returns early on `defaultPrevented` (`navigate.ts:43`).
+    - So exactly one handler acts.
+  - **Tests:** one in each view, and both check the crumb.
+- **Item 4: Inspector crumb (I4)** — ADDRESSED.
+  - `styles.css:387` `.insp > * { flex: none; }`.
+  - No `.insp` child relies on growing: there is no `flex: 1` or `margin-top: auto` under `.insp`.
+  - Proof is the QA screenshot.
+- **Item 5: Tree single-expanded reference block (I5)** — ADDRESSED.
+  - **Layout:**
+    - `layout-tree.ts:48` `blockTech`.
+    - `:84-90`: a `ceil(√n)` block centred under the technique, starting at `3·BAND_GAP`.
+    - Show all keeps columns.
+  - **Connectors (`tree.ts:154-170`):**
+    - one `tech → j:rf:<tech>` segment;
+    - for the selected reference only, an orthogonal elbow `j:rf → j:rs:<ref> → ref`.
+  - **The elbow deviation:** accepted. It keeps the hairline-orthogonal constraint, and the orthogonality assert in `selected_path_coloured` still covers it.
+  - **Tests:**
+    - `single_expanded_refs_form_a_block` fails on base, where the references were a 1,158-row column.
+    - The `tree.test` joint and edge assert also covers Show all.
+  - **Ledger:** the Task 5/6 delta is in the source comment and the report only. The controller must copy it into the ledger.
+- **Item 6: The camera follows the selection (I6)** — ADDRESSED.
+  - `camera.ts:43` `reveal` returns the same object when the rect is inside the inset view. Otherwise it centres the rect at the same scale. The test `reveal_pans_only_when_outside` covers it.
+  - **Wiring (`scene.ts:577-588`), checked by reasoning:**
+    - It reveals only when `next && next !== selected`.
+    - `selected` is assigned in only three places.
+      - A click sets it before it emits (`:447-449`).
+      - `setNodes` nulls it only when the id is gone (`:553`).
+      - `select()` itself sets it (`:586`).
+    - So a re-render, a store change or a Galaxy tick re-sends the same id and never pans.
+    - **Clamp:** kept, because `reveal` keeps the scale of `base`, which is already clamped.
+    - **Reduced motion:** `setCamera(c, true)` jumps and nulls `tween` (`:369-374`).
+    - `c !== base` avoids an empty tween.
+    - Views call `select` after `setNodes` and before `fitAll`, so the node exists and a fit still wins.
+- **Item 7: At-rest contrast (I7, accepted)** — ADDRESSED.
+  - **Tree:**
+    - Operation nodes use `opInk(s.tax, n.opId).base` (`tree.ts:133`).
+    - `colorOf` returns `ink` only when `path.op` is set and the node is on the path; otherwise `OFF = var(--ink-3)` (`tree.ts:24`, `:116`).
+    - `8ffd4f7` fixes the orphan technique.
+  - **Radial:** `n.kind === "op" || path.has(id) ? ink : OFF` (`radial.ts:198`).
+  - **Connectors:** stay `--line-2`.
+  - **Tests:** both views at rest, plus the orphan case. `selected_path_coloured` is updated.
+- **Item 8: Keys compound (M1)** — ADDRESSED (by reasoning; no unit test, per R6).
+  - `scene.ts:481`: `base = tween?.to ?? cam` feeds `+`, `-` and the arrow pan. This holds in every state:
+    - **No tween:** `base` is `cam`.
+    - **After a tween ends:** `tick` nulls `tween` at t = 1 (`:361`).
+    - **Wheel or drag:** `setCamera` without `animate` nulls `tween`, so a stale target can't come back.
+    - **Reduced motion:** `tween` is never set.
+  - `zoomAt` clamps.
+- **Item 9: Collide radius (M2)** — ADDRESSED.
+  - `constants.ts:13` `COLLIDE_R = NODE·√½ + 2`, used in `force.ts:86` with `.iterations(2)`.
+  - **Test:** the 50-reference `force.test` fails at the old radius (the report's mutation check).
+  - **README:** the settle cells and carry-in are marked "before the radius change; re-measure" (`README.md:72`).
+- **Item 10: Radial deleted active operation (M3)** — ADDRESSED.
+  - `radial.ts:162-167`: `op = opSession = busiest(s); hovered = null; fit = true`.
+  - On mount, `op` always starts as a live operation (`radial.ts:71`), so the block only fires on a real deletion or on a library switch whose taxonomy lacks the operation. In the second case, recording the fallback in `opSession` is correct.
+  - **Test:** checks the refit, and the remembered session after an undo and remount. Both asserts fail without the fix.
+- **Item 11: Galaxy (M4, M5)** — ADDRESSED.
+  - **M4:** `galaxy.ts:170-178`. A rejection becomes `null`, and `edgesVersion`, `edgesFetched`, `byRef` and `allEdges` stay as they were. The test re-sends the same version, so a cached failure fails it.
+  - **M5:** `galaxy.ts:160-161` re-arms `fitOnEnd` and `centredOnce`. The test counts fits.
+- **Item 12: Inspector queue (M6)** — ADDRESSED.
+  - **Keys:**
+    - `inspector.ts:299` keys on `${target?.kind}:${target?.id}:${name}`.
+    - `:386` `field:${field}:${v}` and `:527` `description:${v}` carry the value.
+    - The change-plus-blur pair still shares one key.
+  - **Unfreeze:** `:393-397`. A `false` result without `fieldErr` resets `busy` and `data-saving`.
+  - **TDZ:** `target` (`:329`) is read only from event-time calls, so there is no risk.
+  - **Tests:** both new tests fail on base (B is dropped; the field stays frozen).
+- **Item 13: Vacuous tests and docs (M7, M8)** — ADDRESSED.
+  - **Tests:**
+    - `galaxy.test` `deleted_selection_clears` re-adds `a`.
+    - `superseded_layout_cannot_spend_the_fit` shares `a` and `b`.
+    - `inspector-edit.test`: the sole-link button must exist and be disabled.
+  - **Docs:**
+    - `correlate.rs:136`: the O(Σdf²) doc line.
+    - `api.ts:107`: `Scored = {`.
+    - `README.md:32`: the PowerShell line.
+    - `data.ts:7`: the Snapshot "live" comment.
+
+### New Breakage in the Fix Diff
+- **Minor: `layout-radial.ts:57-63` with `frame.ts:59`. The fitted Radial now hides every label for the default operation, even on the demo set.**
+  - The seed figures were computed for a 940×712 canvas with `fit` padding of 40 and ring 3 in one row. The label threshold is 0.615.
+
+    | Operation | Techniques | r2 | Fit scale |
+    |---|---|---|---|
+    | Differentiate | 19 | ≈ 559 | ≈ 0.43 |
+    | Infer | 17 | — | ≈ 0.46 |
+    | Group, Sequence | — | — | ≈ 0.63 |
+
+  - On base, Differentiate fitted at about 0.63 with its labels drawn, though colliding.
+  - At 2,500 references every operation loses its labels at fit (fit ≈ 0.2).
+  - This follows directly from the prescribed I1.2 and I1.5 maths, and it falls under the deferred "label floor at fit" (J2, Plan 6). Record it beside J2 and tell QA it is expected: two `+` presses restore the labels.
+- **Minor: `frame.ts:62` `clipLabel` keeps a trailing space before "…".** For example, "Chiaroscuro with a very …", which `tree.test` asserts. `.trimEnd()` on the slice would fix it. Cosmetic.
+- **Minor: `README.md:80-82` "Seen, not measured" is now stale.**
+  - "The Tree draws its 1,158 references as one column…" was fixed by I5.
+  - The Galaxy tile-overlap line predates M2.
+  - Neither is marked as pre-fix-wave or "re-check at QA".
+- **No other new breakage.** The diff was checked against every global constraint:
+  - no new `style=`;
+  - `pixi.js` is still loaded only in `scene.ts`, and no test imports it;
+  - operation inks only through `opInk`;
+  - the Galaxy edges are untouched;
+  - connectors are `--line-2`, orthogonal and hairline (asserted);
+  - no dashed or curved edges were added;
+  - the clamp and reduced motion are respected;
+  - the new tuning constants are in `constants.ts`. `tree.ts` `top = 3·BAND_GAP − NODE` is a derived value.
+
+### Out-of-Scope Observations
+- **Radial cross-ring label overlap is untested.**
+  - The oracle checks within ring 1 and within ring 2 only, as the review specified.
+  - Near the horizontal axis, a branch label at r1 and a technique label at r1 + 160 can intersect (160 < 175) when both names are about 23 characters or longer.
+  - The seed's domain names are short. This is a Plan 6 item.
+- **The Tree block's keyboard walk.**
+  - ←/→ walk the block row by row (sibling order), and ↓ from a reference does nothing, so there is no vertical move through a 35-column block.
+  - This predates the fix (the column era). It belongs to the Plan 6 a11y pass.
+- **The selected reference's vertical connector in a block** runs behind the opaque tiles above it in its column, because `edgeLayer` is under `nodeLayer` (`scene.ts:133`). It shows only in the 8-unit gaps.
+  - The base column segment behaved the same way, so this is not new.
+  - Routing the elbow down the gutter (x ± ROW/2) would avoid it. That is Plan 6 polish.
+
+### QA focus
+- **Tree at fit (demo and 2,500).** All taxonomy squares show in operation ink, and the names are hidden, which is expected (J2 deferred).
+- **Tree labels after zooming past 0.62.** Check on the seed and with long typed names:
+  - the 3-row stagger in the op, branch and tech bands;
+  - the 24-character "…" clip;
+  - no overlap with real Source Serif 4 widths (the 7 units a character is an estimate).
+- **Radial rings 1 and 2 when zoomed.**
+  - No label collisions; re-shoot `r02b`.
+  - At fit, Differentiate and Infer show no names, which is expected.
+- **The label toggle.** Wheel and `+`/`-` through about 0.615: the labels switch once, with no flicker.
+- **Radial at 2,500.**
+  - Ring 3's rows are on screen at fit (outer radius about 1,600, scale about 0.2).
+  - Re-measure pan fps with the references drawn.
+- **Tree with Complementary pairing expanded at 2,500.**
+  - The block fits on screen.
+  - At rest there is one joint stub.
+  - A selected reference gets an inked elbow, with no fan.
+  - Show all still draws its columns.
+- **Enter with nothing selected.**
+  - The Tree selects the first operation, and the Radial selects the centre.
+  - The crumb updates.
+  - A second Enter is the scene's again.
+- **Inspector at 1280×800** (Complementary pairing, the editing controls). The crumb is never squeezed, and the aside scrolls as a whole. Re-shoot T11's screenshot.
+- **Walk the selection past the view edge in all three views**, with the arrows and from the inspector's lists:
+  - the camera recentres once per new id;
+  - a click never pans;
+  - a store change with the same selection never pans;
+  - with reduced motion on, it jumps.
+- **P3-4 timing table.**
+  - Six `+` presses at a 0 ms gap compound to 1.25⁶ (capped at 4).
+  - Fast arrow pans with nothing selected also compound.
+  - A wheel or drag mid-tween does not snap back.
+- **Galaxy (demo and 2,500).** Fewer tiles overlap, and the settle is re-measured with the new collide radius.
+- **Radial: delete the active operation.** The view switches to the busiest and refits, and a remount keeps the live operation.
+- **Operations taken to 9.**
+  - Radial keys 1–9 work.
+  - New operations sit side by side in the Tree with staggered labels.
+
+### Verdict
+**Fix wave:** All items addressed, no new Critical/Important breakage.
+
+**Controller follow-ups (not blocking):**
+- Copy the Task 8 and Task 5/6 plan deltas from `fix-wave-report.md` into the ledger.
+- Record the Radial-at-fit label hiding beside J2.
+- Optionally:
+  - `trimEnd` in `clipLabel`;
+  - mark the README "Seen, not measured" bullets as pre-fix.

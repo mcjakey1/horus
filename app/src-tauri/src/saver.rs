@@ -75,8 +75,12 @@ impl Debounce {
     }
 }
 
-/// Saves what is dirty: taxonomy.json first, so a failed library.json save can only leave an
-/// unused technique behind, never tags naming a technique the file lacks. Never writes
+/// Saves what is dirty: taxonomy.json first, so after an addition a failed library.json save
+/// can only leave an unused technique behind. After a removal (a delete or a re-key, R16) no
+/// order is safe: a failed library.json save, or "Quit without saving", can leave tags on disk
+/// naming a technique or branch taxonomy.json no longer has. Plan 3 accepts these dangling ids:
+/// they are kept (SPEC §9), the UI shows the id and a neutral ink, and Plan 6's integrity check
+/// reports them. Never writes
 /// taxonomy.json when `!tax_writable` (the read-only seed fallback). On `Err` the unsaved parts
 /// stay dirty, and `d` waits for the next edit. Errors are worded as `library_error` words them.
 pub fn flush(

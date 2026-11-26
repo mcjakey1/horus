@@ -6,6 +6,12 @@
   --diff: #B87F00; --group: #1E8E5A; --seq: #2563D0; --infer: #D2462A;
   --diff-text: #7D5600; --group-text: #156B43; --seq-text: #1D4FA8; --infer-text: #A8341C;
   --diff-on: #161616; --group-on: #161616; --seq-on: #FFFFFF; --infer-on: #FFFFFF;
+  /* Extra operation inks (DESIGN.md): only ever an added operation's ink. */
+  --x-teal: #089B9B; --x-teal-text: #066B6B; --x-teal-on: #161616;
+  --x-olive: #6A7A1A; --x-olive-text: #455011; --x-olive-on: #FFFFFF;
+  --x-rose: #BC4E7B; --x-rose-text: #9B3B63; --x-rose-on: #FFFFFF;
+  --x-indigo: #8C84DB; --x-indigo-text: #675DD0; --x-indigo-on: #161616;
+  --x-umber: #815637; --x-umber-text: #5D3E28; --x-umber-on: #FFFFFF;
   --focus: #2563D0;
   --serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
   --mono: "Red Hat Mono", ui-monospace, "Cascadia Mono", monospace;
@@ -19,6 +25,11 @@
   --diff: #E0A42A; --group: #3DB07A; --seq: #5B8DEB; --infer: #EC6A4E;
   --diff-text: #E8B54A; --group-text: #5CC592; --seq-text: #8AAEF2; --infer-text: #F28A72;
   --diff-on: #161616; --group-on: #161616; --seq-on: #161616; --infer-on: #161616;
+  --x-teal: #0ABDBD; --x-teal-text: #0BDADA; --x-teal-on: #161616;
+  --x-olive: #9AA951; --x-olive-text: #A7B464; --x-olive-on: #161616;
+  --x-rose: #ED7EAC; --x-rose-text: #F098BD; --x-rose-on: #161616;
+  --x-indigo: #B7A4EF; --x-indigo-text: #CBBEF4; --x-indigo-on: #161616;
+  --x-umber: #A67E59; --x-umber-text: #B08E6D; --x-umber-on: #161616;
   --focus: #8AAEF2;
   color-scheme: dark;
 }
@@ -281,10 +292,17 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .pk-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px; border: 1px solid var(--line-2); font: 500 14px/1.25 var(--serif); }
 .pk-chip button { width: 22px; height: 22px; color: var(--ink-2); }
 
-/* Task 9: the view toggle (body[data-view]), the Inbox, intake notices and the Library menu */
-body[data-view="inbox"] { grid-template-rows: 52px 1fr 36px; }
-body[data-view="inbox"] > .record, body[data-view="inbox"] > .work { display: none; }
+/* The view shell (body[data-view]): only the Reference view has the record row; every other view
+   uses the Inbox row template, and graph views dock the breadcrumb in their inspector (SPEC §5).
+   No data-view yet (first run) keeps the Reference layout behind the dialog. */
+body[data-view]:not([data-view="reference"]) { grid-template-rows: 52px 1fr 36px; }
+body[data-view]:not([data-view="reference"]) > .record, body[data-view]:not([data-view="reference"]) > .work { display: none; }
 body:not([data-view="inbox"]) > .inbox { display: none; }
+.graph-host { position: relative; display: none; min-height: 0; }
+body[data-view="tree"] > [data-view-host="tree"],
+body[data-view="galaxy"] > [data-view-host="galaxy"],
+body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
+/* Task 9: the Inbox, intake notices and the Library menu */
 .top { position: relative; }
 .lib-btn { height: 32px; padding: 0 10px; margin-left: -10px; color: var(--ink-2); font-weight: 500; }
 .lib-btn[aria-expanded="true"] { color: var(--ink); }
@@ -348,3 +366,101 @@ body:not([data-view="inbox"]) > .inbox { display: none; }
   .lb-side { grid-column: 1; grid-row: 2; max-height: 45vh; border-left: 0; border-top: 1px solid var(--line); }
   .lb-bar { grid-row: 3; min-height: 36px; }
 }
+
+/* Plan 3 Task 4: the graph canvas, its WebGL fallback, and the dev-only scene harness */
+.graph-canvas { display: block; width: 100%; height: 100%; outline-offset: -2px; touch-action: none; }
+.graph-canvas[hidden] { display: none; } /* a lost WebGL context: the fallback shows instead */
+.graph-fallback { margin: 48px auto; max-width: 36ch; color: var(--ink-2); font: 15px/1.5 var(--serif); text-align: center; }
+.scene-demo-bar { position: fixed; top: 0; left: 0; right: 0; height: 40px; display: flex; gap: 16px; align-items: center; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.scene-demo-host { position: fixed; top: 40px; left: 0; right: 0; bottom: 0; background: var(--shell); }
+
+/* Plan 3 Task 6: the Tree view, and the graph inspector (DESIGN.md margin column, callout card
+   and record header). The inspector is the 340px margin column; its breadcrumb is a 2×2 .record. */
+.graph-host.tree { grid-template-columns: minmax(0, 1fr) 340px; }
+.tree-main { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+.tree-bar { display: flex; justify-content: flex-end; padding: 8px 20px; border-bottom: 1px solid var(--line); }
+.tree-all[aria-pressed="true"] { text-decoration-color: currentColor; }
+.tree-all[aria-pressed="true"]::after { content: " · on"; font: 500 11px var(--mono); color: var(--ink-2); }
+.tree-stage { position: relative; min-height: 0; overflow: hidden; }
+.tree-stage > canvas { display: block; width: 100%; height: 100%; }
+.insp { display: flex; flex-direction: column; min-height: 0; overflow: auto; border-left: 1px solid var(--line); background: var(--panel); }
+.insp > * { flex: none; } /* final review I4: a tall body scrolls the aside; it never squeezes the crumb under the title */
+.insp-crumb { grid-template-columns: repeat(2, minmax(0, 1fr)); min-height: 0; }
+.insp-crumb .cell { padding: 10px 16px; border-top: 1px solid var(--line); }
+.insp-crumb .cell:nth-child(-n + 2) { border-top: 0; }
+.insp-crumb .cell:nth-child(odd) { border-left: 0; }
+.insp-crumb .v, .insp-crumb .v.serif { font-size: 16px; }
+.insp-body { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 24px; }
+.insp-title { margin: 0; font: 500 21px/1.2 var(--serif); }
+.insp-plain { margin: 0; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.insp-desc, .insp-syn { margin: 0; font-size: 14px; color: var(--ink-2); }
+.insp-syn { font-style: italic; }
+.insp-count { margin: 0; font-size: 12px; color: var(--ink-2); }
+.insp-h { margin: 6px 0 0; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.insp-list { display: grid; gap: 6px; }
+.insp-sel { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); background: var(--shell); text-align: left; font: 500 15px/1.25 var(--serif); }
+.insp-sel:hover, .insp-sel:focus-visible { border-color: var(--line-2); }
+.insp-sel .count { color: var(--ink-2); }
+.insp-body .text-btn { align-self: flex-start; }
+/* Task 10: taxonomy editing in the inspector, and its dialogs. No operation ink outside an operation's own swatch. */
+.insp-ro { margin: 0; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
+.insp-edit { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: text; }
+.insp-edit:hover { text-decoration: underline dotted var(--line-2); }
+.insp-ph { color: var(--ink-3); }
+.insp-field, .insp-form input, .insp-form textarea, .tx-search { width: 100%; padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--panel); color: var(--ink); font: 14px var(--sans); }
+.insp-title .insp-field { font: 500 21px/1.2 var(--serif); }
+.insp-area, .insp-form textarea { resize: vertical; }
+.insp-err, .insp-msg { display: block; margin: 0; font-size: 13px; color: var(--ink); }
+.insp-err:empty, .insp-msg:empty { display: none; }
+.insp-syns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.insp-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 8px; border: 1px solid var(--line); background: var(--shell); font-size: 13px; }
+.insp-x { padding: 2px 6px; border: 0; background: none; color: var(--ink-2); font-size: 15px; line-height: 1; }
+.insp-x:disabled, .insp-act:disabled { color: var(--ink-3); cursor: not-allowed; }
+.insp-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; align-items: center; }
+.insp-inks { display: flex; gap: 10px; }
+.insp-ink { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line-2); border-radius: 50%; background: var(--c, var(--ink-2)); /* --c: opInk, set through the CSSOM */ }
+.insp-ink[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
+.insp-icons { display: grid; gap: 4px; }
+.insp-icon { padding: 6px 10px; border: 1px solid var(--line); background: var(--shell); text-align: left; font-size: 13px; color: var(--ink-2); }
+.insp-icon[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
+.insp-slot:empty { display: none; }
+.insp-form { display: grid; gap: 8px; }
+.insp-form label { display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); }
+.tx-dialog { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; background: rgb(0 0 0 / .28); }
+.tx-sheet { width: min(460px, calc(100vw - 40px)); max-height: 80vh; overflow: auto; display: grid; gap: 10px; padding: 18px 20px; background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); font-size: 14px; }
+.tx-title { margin: 0; font: 500 19px/1.25 var(--serif); }
+.tx-h { margin: 0; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.tx-list { margin: 0; padding: 0; list-style: none; max-height: 40vh; overflow: auto; display: grid; gap: 2px; }
+.tx-list li[hidden] { display: none; }
+.tx-actions { display: flex; gap: 14px; align-items: center; }
+.tx-ok:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Plan 3 Task 8: the Radial view. The operation switch is a segmented control that wraps to a
+   second row past five operations; the inspector is the Tree's (.insp). */
+.graph-host.radial { grid-template-columns: minmax(0, 1fr) 340px; }
+.radial-main { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+.radial-ops { display: grid; grid-template-columns: repeat(5, minmax(0, max-content)); border-bottom: 1px solid var(--line); background: var(--panel); }
+.radial-op { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-right: 1px solid var(--line); color: var(--ink-2); font-weight: 500; white-space: nowrap; }
+.radial-op[aria-pressed="true"] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.radial-op .sw { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none; }
+.radial-stage { position: relative; min-height: 0; overflow: hidden; }
+.radial-stage > canvas { display: block; width: 100%; height: 100%; }
+
+/* Plan 3 Task 7: the Galaxy, a canvas with the inspector docked on the right (DESIGN margin width) */
+.gx { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 0; }
+.gx-canvas { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.gx-insp { border-left: 1px solid var(--line); background: var(--panel); padding: 20px 22px; overflow: auto; min-height: 0; }
+.gx-title { margin: 0 0 12px; font: 500 22px/1.2 var(--serif); }
+.gx-open { padding: 6px 10px; border: 1px solid var(--line-2); border-radius: 2px; color: var(--ink); font-weight: 500; }
+.gx-open:hover { background: var(--shell); }
+.gx-neighbours { list-style: none; margin: 18px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.gx-neighbours button { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; width: 100%; padding: 10px 0; border-bottom: 1px solid var(--line); text-align: left; }
+.gx-neighbours button:hover .gx-name { text-decoration: underline; }
+.gx-name { font: 500 15px/1.3 var(--serif); }
+.gx-shares { grid-column: 1; color: var(--ink-2); font-size: 13px; }
+.gx-shares i { font-family: var(--serif); }
+.gx-neighbours .mono { grid-column: 2; grid-row: 1; color: var(--ink-2); font-size: 12px; }
+.gx-note { margin: 0; color: var(--ink-2); font: 15px/1.5 var(--serif); }
+
+/* Task 11's speed check: dev or VITE_PERF builds only (scene.ts perfOverlay). */
+.perf-overlay { position: absolute; left: 8px; bottom: 8px; z-index: 5; padding: 2px 6px; font: 11px/1.4 var(--mono, monospace); background: var(--ink); color: var(--panel); cursor: pointer; white-space: pre; }

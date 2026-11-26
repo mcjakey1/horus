@@ -20,6 +20,15 @@ pub struct Scored {
     pub shared_branches: Vec<String>,
 }
 
+/// A Galaxy edge: one per unordered pair, with `a < b` in string order.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Edge {
+    pub a: String,
+    pub b: String,
+    pub score: f64,
+}
+
 pub struct Index {
     idf: HashMap<String, f64>,
 }
@@ -116,6 +125,77 @@ impl Index {
             .collect();
         out.sort_by(|x, y| y.score.total_cmp(&x.score));
         out
+    }
+
+    /// Galaxy edges: the union of every reference's top `k` related, one edge per pair.
+    /// Each reference keeps its own top `k` with score ≥ MIN_SCORE, ranked by
+    /// (score desc, other id asc) so ties at the k boundary are deterministic.
+    /// Candidates come from an inverted index (technique → references), so only pairs that
+    /// share a technique are scored. Pairs that share only a branch are skipped (c5): they
+    /// score low, and scanning them would bring back O(N²).
+    /// Cost: O(Σ df²) over the techniques' document frequencies, so a technique on most
+    /// references is the worst case, close to O(N²) again. Measured (Task 11, release, 2,500
+    /// references): Zipf 491–525 ms; head-heavy, one technique on at least 80%, 1,074–1,201 ms,
+    /// against the 1.5 s budget.
+    /// Each vector and its norm are built once; the cosine is `score`'s maths.
+    pub fn graph_edges(&self, data: &LibraryData, k: usize) -> Vec<Edge> {
+        let refs = &data.references;
+        let vecs: Vec<_> = refs
+            .iter()
+            .map(|r| {
+                let v = self.vector(r);
+                let n = v.values().map(|w| w * w).sum::<f64>().sqrt();
+                (v, n)
+            })
+            .collect();
+        let mut postings: HashMap<&str, Vec<usize>> = HashMap::new();
+        for (i, (v, _)) in vecs.iter().enumerate() {
+            for key in v.keys() {
+                if let Key::Technique(t) = key {
+                    postings.entry(t).or_default().push(i);
+                }
+            }
+        }
+        let mut out: BTreeMap<(&str, &str), f64> = BTreeMap::new();
+        for (i, (va, na)) in vecs.iter().enumerate() {
+            let me = refs[i].id.as_str();
+            let cands: BTreeSet<usize> = va
+                .keys()
+                .filter_map(|key| match key {
+                    Key::Technique(t) => postings.get(t),
+                    Key::Branch(_) => None,
+                })
+                .flatten()
+                .copied()
+                .collect();
+            let mut top: Vec<(f64, &str)> = cands
+                .into_iter()
+                .filter(|&j| refs[j].id != me)
+                .filter_map(|j| {
+                    let (vb, nb) = &vecs[j];
+                    if *na == 0.0 || *nb == 0.0 {
+                        return None; // zero vector: score 0, never NaN
+                    }
+                    let dot: f64 = va
+                        .iter()
+                        .filter_map(|(key, w)| vb.get(key).map(|w2| w * w2))
+                        .sum();
+                    let s = dot / (na * nb);
+                    (s >= MIN_SCORE).then_some((s, refs[j].id.as_str()))
+                })
+                .collect();
+            top.sort_by(|x, y| y.0.total_cmp(&x.0).then_with(|| x.1.cmp(y.1)));
+            for (s, other) in top.into_iter().take(k) {
+                out.insert((me.min(other), me.max(other)), s);
+            }
+        }
+        out.into_iter()
+            .map(|((a, b), score)| Edge {
+                a: a.to_string(),
+                b: b.to_string(),
+                score,
+            })
+            .collect()
     }
 }
 
@@ -315,5 +395,242 @@ mod tests {
         let ids: Vec<_> = out.iter().map(|s| s.id.as_str()).collect();
         assert_eq!(ids, vec!["b", "c"]);
         assert!(out.iter().all(|s| s.score >= MIN_SCORE));
+    }
+
+    /// xorshift64: the test's only randomness (no `rand` crate).
+    struct Rng(u64);
+    impl Rng {
+        fn next(&mut self, n: u64) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0 % n
+        }
+    }
+
+    /// Per reference: every other reference sharing a technique, scored with `Index::score`,
+    /// ranked (score desc, id asc), the top k ≥ MIN_SCORE; the union keyed (min, max).
+    fn brute(d: &LibraryData, k: usize) -> BTreeMap<(String, String), f64> {
+        let idx = Index::build(d);
+        let techs = |r: &Reference| -> BTreeSet<String> {
+            r.tags
+                .iter()
+                .filter_map(|t| t.technique_id.clone())
+                .collect()
+        };
+        let mut out = BTreeMap::new();
+        for a in &d.references {
+            let ta = techs(a);
+            let mut c: Vec<Scored> = d
+                .references
+                .iter()
+                .filter(|b| b.id != a.id && !techs(b).is_disjoint(&ta))
+                .map(|b| idx.score(a, b))
+                .filter(|s| s.score >= MIN_SCORE)
+                .collect();
+            c.sort_by(|x, y| y.score.total_cmp(&x.score).then_with(|| x.id.cmp(&y.id)));
+            for s in c.into_iter().take(k) {
+                let key = if a.id < s.id {
+                    (a.id.clone(), s.id)
+                } else {
+                    (s.id, a.id.clone())
+                };
+                out.insert(key, s.score);
+            }
+        }
+        out
+    }
+
+    fn edges(d: &LibraryData, k: usize) -> Vec<Edge> {
+        Index::build(d).graph_edges(d, k)
+    }
+
+    fn random_lib() -> LibraryData {
+        let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+        let refs = (0..200)
+            .map(|i| {
+                let tags = (0..1 + rng.next(4))
+                    .map(|_| match rng.next(10) {
+                        0 => partial(),
+                        _ => tech(&format!("t{}", rng.next(30)), &format!("b{}", rng.next(6))),
+                    })
+                    .collect();
+                // Permuted ids (37 is coprime with 200): id order is not index order, so the
+                // (score desc, id asc) tie-break is exercised.
+                r(&format!("r{:03}", (i * 37) % 200), tags)
+            })
+            .collect();
+        lib(refs)
+    }
+
+    #[test]
+    fn graph_edges_match_bruteforce() {
+        let d = random_lib();
+        let want = brute(&d, 8);
+        let got = edges(&d, 8);
+        assert!(!want.is_empty());
+        let got_keys: BTreeSet<_> = got.iter().map(|e| (e.a.clone(), e.b.clone())).collect();
+        let want_keys: BTreeSet<_> = want.keys().cloned().collect();
+        assert_eq!(got_keys, want_keys);
+        for e in &got {
+            let w = want[&(e.a.clone(), e.b.clone())];
+            assert!((e.score - w).abs() < 1e-12, "{e:?} vs {w}");
+        }
+    }
+
+    #[test]
+    fn graph_edges_no_self_no_dupes() {
+        let got = edges(&random_lib(), 8);
+        assert!(!got.is_empty());
+        let mut seen = BTreeSet::new();
+        for e in &got {
+            assert!(e.a < e.b, "{e:?}");
+            assert!(seen.insert((e.a.clone(), e.b.clone())), "dupe {e:?}");
+        }
+    }
+
+    #[test]
+    fn graph_edges_respects_k_and_min() {
+        // The hub shares a distinct rare technique with each leaf; leaf i also carries i
+        // unique fillers, so the hub ranks the leaves l00 > l01 > ... and keeps l00..l07.
+        let hub = r(
+            "hub",
+            (0..20)
+                .map(|i| tech(&format!("x{i}"), &format!("bx{i}")))
+                .collect(),
+        );
+        let mut refs = vec![hub];
+        for i in 0..20 {
+            let mut tags = vec![tech(&format!("x{i}"), &format!("bx{i}"))];
+            tags.extend((0..i).map(|j| tech(&format!("u{i}_{j}"), &format!("bu{i}_{j}"))));
+            refs.push(r(&format!("l{i:02}"), tags));
+        }
+        let d = lib(refs);
+        let got = edges(&d, 8);
+        let idx = Index::build(&d);
+        let hub_of = |e: &Edge| match (e.a.as_str(), e.b.as_str()) {
+            ("hub", o) | (o, "hub") => Some(o.to_string()),
+            _ => None,
+        };
+        let hub_edges: BTreeSet<String> = got.iter().filter_map(hub_of).collect();
+        // The hub's own top 8 are all there.
+        let mut ranked: Vec<Scored> = d.references[1..]
+            .iter()
+            .map(|l| idx.score(&d.references[0], l))
+            .filter(|s| s.score >= MIN_SCORE)
+            .collect();
+        ranked.sort_by(|x, y| y.score.total_cmp(&x.score).then_with(|| x.id.cmp(&y.id)));
+        assert!(ranked.len() > 8, "the star must overflow k");
+        for s in &ranked[..8] {
+            assert!(hub_edges.contains(&s.id), "{} missing", s.id);
+        }
+        // The union may add more hub edges, from the leaves' side, but only leaves above MIN_SCORE.
+        assert_eq!(hub_edges.len(), ranked.len());
+        assert!(got.iter().all(|e| e.score >= MIN_SCORE), "{got:?}");
+        assert_eq!(
+            got.len(),
+            hub_edges.len(),
+            "leaves share nothing with each other"
+        );
+    }
+
+    #[test]
+    fn graph_edges_empty_and_partial() {
+        assert!(edges(&lib(vec![]), 8).is_empty());
+        let d = lib(vec![
+            r("a", vec![partial()]),
+            r("b", vec![partial(), partial()]),
+        ]);
+        assert!(edges(&d, 8).is_empty());
+    }
+
+    /// A synthetic 2,500-reference library shaped like `scripts/make_perf_library.py`'s:
+    /// 55 (technique, branch) links like the seed's branchTechniques (48 techniques, 18 branches),
+    /// 1-4 distinct links per reference drawn Zipf (weight 1/rank). With `head`, link 0 is also
+    /// put on ~85% of the references (the carry-in's head-heavy case).
+    fn perf_lib(head: bool) -> LibraryData {
+        const LINKS: usize = 55;
+        let link = |i: usize| tech(&format!("t{}", i % 48), &format!("b{}", i % 18));
+        let cum: Vec<f64> = (1..=LINKS)
+            .scan(0.0, |s, r| {
+                *s += 1.0 / r as f64;
+                Some(*s)
+            })
+            .collect();
+        let mut rng = Rng(0x2545_F491_4F6C_DD1D);
+        let refs = (0..2500)
+            .map(|i| {
+                let mut picked = BTreeSet::new();
+                if head && rng.next(100) < 85 {
+                    picked.insert(0);
+                }
+                let want = picked.len() + 1 + rng.next(4) as usize;
+                while picked.len() < want.min(4) {
+                    let u = rng.next(1_000_000) as f64 / 1e6 * cum[LINKS - 1];
+                    picked.insert(cum.iter().position(|&c| u < c).unwrap_or(LINKS - 1));
+                }
+                r(&format!("p{i:04}"), picked.into_iter().map(link).collect())
+            })
+            .collect();
+        lib(refs)
+    }
+
+    /// Release only, one test at a time for a clean number:
+    /// `cargo test --release -- --ignored graph_edges_2500 --nocapture --test-threads=1`.
+    /// Both tests in parallel measured ~1.37 s head-heavy (one sample) against ~1.1 s alone.
+    fn under_budget(d: &LibraryData, label: &str) {
+        if cfg!(debug_assertions) {
+            panic!("run with --release");
+        }
+        let t0 = std::time::Instant::now();
+        let idx = Index::build(d);
+        let built = t0.elapsed();
+        let t1 = std::time::Instant::now();
+        let got = idx.graph_edges(d, 8);
+        let took = t1.elapsed();
+        println!(
+            "{label}: Index::build {built:?}, graph_edges {took:?}, {} edges",
+            got.len()
+        );
+        assert!(!got.is_empty());
+        assert!(
+            took.as_secs_f64() < 1.5,
+            "{label}: graph_edges took {took:?}"
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn graph_edges_2500_under_budget() {
+        under_budget(&perf_lib(false), "zipf");
+    }
+
+    #[test]
+    #[ignore]
+    fn graph_edges_2500_head_heavy_under_budget() {
+        let d = perf_lib(true);
+        let on_head = d
+            .references
+            .iter()
+            .filter(|r| {
+                r.tags
+                    .iter()
+                    .any(|t| t.technique_id.as_deref() == Some("t0"))
+            })
+            .count();
+        assert!(on_head >= 2000, "head technique on only {on_head} of 2,500");
+        under_budget(&d, "head-heavy");
+    }
+
+    #[test]
+    fn graph_edges_skip_branch_only() {
+        let d = lib(vec![
+            r("a", vec![tech("t1", "b1")]),
+            r("b", vec![tech("t2", "b1")]),
+        ]);
+        // The pair would pass MIN_SCORE on the shared branch alone: it is skipped by design (c5).
+        let s = Index::build(&d).score(find(&d, "a"), find(&d, "b"));
+        assert!(s.score >= MIN_SCORE, "{}", s.score);
+        assert!(edges(&d, 8).is_empty());
     }
 }

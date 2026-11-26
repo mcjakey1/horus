@@ -1,0 +1,22 @@
+busiest :: {"op":["Differentiate",2190],"tech":["Complementary pairing",1158],"branch":"differentiate.feature"}
+first run picked :: true
+first run controls :: ["fr-btn:Create a new library…","fr-btn:Open an existing library…","fr-demo:true","fr-btn:Turn on now","fr-btn:Not now","fr-go:Begin"]
+seed 2,500 (Start with the demo set) s :: 108.9
+library count :: 2500 references
+window :: {"w":1280,"h":800,"dpr":1}
+Galaxy first layout :: {"firstTickMs":1241,"settledMs":7039,"ticks":20,"longTasks":2,"longestMs":194,"maxFrameGapMs":199}
+galaxy canvas :: {"x":0,"y":52,"width":940,"height":712}
+Galaxy fitted (min fps since the tab click) :: {"fps":133.7,"minFps":45.2,"tex":600,"maxTex":600}
+Galaxy pan fitted :: {"fps":131.7,"minFps":127.2,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":15}
+Galaxy pan at notch 6 :: {"fps":130.7,"minFps":71.2,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":24}
+Galaxy pan zoomed in :: {"fps":128.6,"minFps":128.6,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":17}
+Galaxy far zoom :: {"fps":131.1,"minFps":111,"tex":600,"maxTex":600}
+Tree crumb :: 01 OPERATION Differentiate 02 DOMAIN Feature 03 TECHNIQUE Complementary pairing 04 REFERENCE
+Tree busiest technique pan fitted :: {"fps":131.6,"minFps":130.7,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Tree busiest technique pan zoomed :: {"fps":131.9,"minFps":129.9,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Show all pressed :: true
+Tree show all pan fitted :: {"fps":132.2,"minFps":130.8,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Tree show all pan zoomed :: {"fps":131.1,"minFps":125.9,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":29}
+Tree far zoom :: {"fps":131.6,"minFps":81.8,"tex":600,"maxTex":600}
+Radial busiest operation pan fitted :: {"fps":131.2,"minFps":128.2,"tex":0,"maxTex":0,"longTasks":0,"longestMs":0,"maxFrameGapMs":15}
+Radial busiest operation pan zoomed :: {"fps":131.2,"minFps":130.2,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}

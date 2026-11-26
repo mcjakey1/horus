@@ -1,0 +1,29 @@
+1
+busiest :: {"op":["Differentiate",2190],"tech":["Complementary pairing",1158],"branch":"differentiate.feature"}
+first run picked :: true
+first run controls :: ["fr-btn:Create a new library…","fr-btn:Open an existing library…","fr-demo:true","fr-btn:Turn on now","fr-btn:Not now","fr-go:Begin"]
+seed 2,500 (Start with the demo set) s :: 90.4
+library count :: 2500 references
+window :: {"w":1280,"h":800,"dpr":1}
+Galaxy first layout :: {"firstTickMs":960,"settledMs":5103,"ticks":20,"longTasks":3,"longestMs":164,"maxFrameGapMs":168}
+galaxy canvas :: {"x":0,"y":52,"width":940,"height":712}
+Galaxy fitted thumbs :: {"fps":132.3,"minFps":38.3,"tex":600,"maxTex":600}
+Galaxy pan fitted :: {"fps":130.3,"minFps":129.7,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":16}
+Galaxy pan at notch 6 :: {"fps":106.5,"minFps":76,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":32}
+Galaxy thumbs per notch :: [null,null,null,null,null,null,null,null,null,null,null,null,null]
+Galaxy pan zoomed in :: {"fps":130.4,"minFps":118.2,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":16}
+Galaxy far zoom :: {"fps":131.4,"minFps":105.2,"tex":600,"maxTex":600}
+Tree crumb :: 01 OPERATION Differentiate 02 DOMAIN Feature 03 TECHNIQUE Complementary pairing 04 REFERENCE
+Tree busiest technique pan fitted :: {"fps":132.6,"minFps":129.9,"tex":24,"maxTex":24,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Tree busiest technique thumbs per notch :: [null,null,null,null,null,null,null,null,null,null,null,null,null,null]
+Tree busiest technique pan zoomed :: {"fps":130.9,"minFps":130,"tex":89,"maxTex":89,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Show all pressed :: true
+Tree show all pan fitted :: {"fps":131.1,"minFps":129.4,"tex":89,"maxTex":89,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Tree show all thumbs per notch :: [null,null,null,null,null,null,null,null,null,null,null,null,null,null]
+Tree show all pan zoomed :: {"fps":130,"minFps":130,"tex":154,"maxTex":154,"longTasks":0,"longestMs":0,"maxFrameGapMs":15}
+Tree far zoom :: {"fps":131.3,"minFps":89.4,"tex":154,"maxTex":154}
+Radial busiest operation pan fitted :: {"fps":130,"minFps":130,"tex":0,"maxTex":0,"longTasks":0,"longestMs":0,"maxFrameGapMs":16}
+Radial thumbs per notch :: [null,null,null,null,null,null,null,null,null,null,null,null,null,null]
+Radial busiest operation pan zoomed :: {"fps":133,"minFps":131,"tex":0,"maxTex":0,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+
+[exited with code 0]

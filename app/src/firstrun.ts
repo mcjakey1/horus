@@ -10,8 +10,12 @@ import { wireUndoKeys } from "./keys";
 import { mountLibraryMenu } from "./library-menu";
 import { mountReference } from "./reference/view";
 import { mountSaveDialog, wireSaveStatus } from "./save-dialog";
+import { storeSource } from "./data";
 import { createStore } from "./store";
 import { mountViews } from "./views";
+import { mountTree } from "./views/tree";
+import { mountRadial } from "./views/radial";
+import { mountGalaxy } from "./views/galaxy";
 
 /** SPEC §5a, verbatim. */
 export const FIND_SIMILAR_COPY =
@@ -39,7 +43,11 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   const store = createStore(lib, await api.getTaxonomy());
   const notice = noticeIn(root);
   const unwire = wireUndoKeys(document, api, store, notice);
-  const view = mountReference(root, api, store);
+  // Plan 3: the view shell. Search hits from any view switch to the Reference view first (R5).
+  const shell = mountViews(root, { showReference: (id) => view.show(id) });
+  const view = mountReference(root, api, store, { onNavigate: () => shell.select("reference") });
+  // The graph views' read-only data seam; Tasks 6-8 pass it to their views.
+  const source = storeSource(store);
 
   // Task 9: the Inbox, intake, the view toggle and the Library menu.
   const inboxRoot = root.querySelector<HTMLElement>("#inbox")!;
@@ -48,21 +56,32 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   dock = dockPicker(inboxRoot.querySelector<HTMLElement>(".inbox-dock")!, api, store);
   // Switching to the Inbox lands on its first item, or on the one intake is opening.
   let landOn: string | null = null;
-  const views = mountViews(root, { inbox: () => (landOn ? inbox.focusId(landOn) : inbox.focus(0)) });
+  const still = () => {};
+  // The Reference view is always mounted; CSS shows it.
+  shell.register("reference", () => ({ show: still, hide: still, destroy: still }));
+  // Plan 3 Task 7: the Galaxy.
+  shell.register("galaxy", () => mountGalaxy(root.querySelector<HTMLElement>('[data-view-host="galaxy"]')!, source, { api, openReference: shell.openReference }));
+  shell.register("inbox", () => ({
+    show: () => (landOn ? inbox.focusId(landOn) : inbox.focus(0)),
+    hide: still,
+    destroy: still,
+  }));
+  // Plan 3 Task 6: the taxonomy Tree, mounted on its first select.
+  shell.register("tree", () =>
+    mountTree(root.querySelector<HTMLElement>('[data-view-host="tree"]')!, source, { api, apply: store.apply, notice, openReference: shell.openReference }));
+  // Plan 3 Task 8: the Radial view, one operation at a time.
+  shell.register("radial", () =>
+    mountRadial(root.querySelector<HTMLElement>('[data-view-host="radial"]')!, source, { api, openReference: shell.openReference }));
   const unIntake = wireIntake(win ?? null, document, {
     api,
     store,
     notice,
-    show: (id) => {
-      views.select("reference");
-      view.show(id);
-    },
+    show: shell.openReference,
     // ponytail: several new references each keep their preset; the Inbox lands on the last one
     openPicker: (o) => {
       if (o.preset?.length) dock?.remember(o.refId, o.preset);
       landOn = o.refId;
-      if (views.current() === "inbox") inbox.focusId(o.refId);
-      else views.select("inbox");
+      shell.select("inbox"); // the Inbox's show lands on landOn, a re-select included
       landOn = null;
     },
   });
@@ -72,8 +91,9 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   return {
     ...view,
     store,
+    source,
     destroy: () =>
-      (unwire(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), dock?.close(), inbox.destroy(), view.destroy()),
+      (unwire(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
   };
 }
 

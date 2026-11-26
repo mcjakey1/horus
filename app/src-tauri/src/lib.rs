@@ -28,6 +28,11 @@ pub fn run() {
             let demo = app
                 .path()
                 .resolve("resources/demo", BaseDirectory::Resource)?;
+            // Task 11's speed check: a perf build seeds from a synthetic demo folder instead.
+            #[cfg(feature = "perf")]
+            let demo = std::env::var_os("HORUS_DEMO_DIR")
+                .filter(|s| !s.is_empty())
+                .map_or(demo, std::path::PathBuf::from);
             // The picker's demo-set examples (SPEC §6.2). The asset protocol only reads.
             app.asset_protocol_scope()
                 .allow_directory(demo.join("images"), false)?;
@@ -61,6 +66,7 @@ pub fn run() {
             commands::open_library,
             commands::get_taxonomy,
             commands::related,
+            commands::graph_edges,
             commands::import_paths,
             commands::import_bytes,
             commands::search,
@@ -72,6 +78,17 @@ pub fn run() {
             commands::remove_tag,
             commands::set_field,
             commands::add_technique,
+            commands::update_technique,
+            commands::delete_technique,
+            commands::link_technique,
+            commands::unlink_technique,
+            commands::add_branch,
+            commands::add_domain,
+            commands::update_domain,
+            commands::delete_domain,
+            commands::add_operation,
+            commands::update_operation,
+            commands::delete_operation,
             commands::undo,
             commands::redo,
             commands::image_path,

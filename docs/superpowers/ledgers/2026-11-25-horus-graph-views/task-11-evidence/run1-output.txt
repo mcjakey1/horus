@@ -1,0 +1,23 @@
+busiest :: {"op":["Differentiate",2190],"tech":["Complementary pairing",1158],"branch":"differentiate.feature"}
+first run picked :: true
+first run controls :: ["fr-btn:Create a new library…","fr-btn:Open an existing library…","fr-demo:true","fr-btn:Turn on now","fr-btn:Not now","fr-go:Begin"]
+seed 2,500 (Start with the demo set) s :: 109.8
+library count :: 2500 references
+window :: {"w":1280,"h":800,"dpr":1}
+Galaxy first layout :: {"firstTickMs":966,"settledMs":5040,"ticks":20,"longTasks":1,"longestMs":187,"maxFrameGapMs":186}
+galaxy canvas :: {"x":0,"y":52,"width":940,"height":712}
+Galaxy pan fitted :: {"fps":129.9,"minFps":115.9,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Galaxy pan at the TEX_CAP zoom :: {"fps":131.7,"minFps":129.7,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Galaxy textures per zoom step :: [600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600,600]
+Galaxy pan zoomed in :: {"fps":130.7,"minFps":130.7,"tex":600,"maxTex":600,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Galaxy far zoom :: {"fps":131.7,"minFps":129.4,"tex":600,"maxTex":600}
+Tree crumb :: 01 OPERATION Differentiate 02 DOMAIN Feature 03 TECHNIQUE Complementary pairing 04 REFERENCE
+Tree busiest technique pan fitted :: {"fps":132.9,"minFps":130.7,"tex":24,"maxTex":24,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Tree busiest technique pan zoomed :: {"fps":131.7,"minFps":131,"tex":89,"maxTex":89,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Show all pressed :: true
+Tree show all pan fitted :: {"fps":130.4,"minFps":129.8,"tex":89,"maxTex":89,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Tree show all pan zoomed :: {"fps":131.3,"minFps":130.2,"tex":153,"maxTex":153,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Radial busiest operation pan fitted :: {"fps":130,"minFps":130,"tex":0,"maxTex":0,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+Radial busiest operation pan zoomed :: {"fps":131,"minFps":130.7,"tex":0,"maxTex":0,"longTasks":0,"longestMs":0,"maxFrameGapMs":9}
+
+[exited with code 0]

@@ -1,0 +1,207 @@
+{
+ "busiest": {
+  "op": [
+   "Differentiate",
+   2190
+  ],
+  "tech": [
+   "Complementary pairing",
+   1158
+  ],
+  "branch": "differentiate.feature"
+ },
+ "first run picked": true,
+ "first run controls": [
+  "fr-btn:Create a new library…",
+  "fr-btn:Open an existing library…",
+  "fr-demo:true",
+  "fr-btn:Turn on now",
+  "fr-btn:Not now",
+  "fr-go:Begin"
+ ],
+ "seed 2,500 (Start with the demo set) s": "86.4",
+ "library count": "2500 references",
+ "window": {
+  "w": 1280,
+  "h": 800,
+  "dpr": 1
+ },
+ "Galaxy first layout": {
+  "firstTickMs": 967,
+  "settledMs": 5058,
+  "ticks": 20,
+  "longTasks": 1,
+  "longestMs": 162,
+  "maxFrameGapMs": 161
+ },
+ "galaxy canvas": {
+  "x": 0,
+  "y": 52,
+  "width": 940,
+  "height": 712
+ },
+ "Galaxy fitted thumbs": {
+  "fps": 132.1,
+  "minFps": 41.1,
+  "tex": 600,
+  "maxTex": 600
+ },
+ "Galaxy pan fitted": {
+  "fps": 132,
+  "minFps": 127.4,
+  "tex": 600,
+  "maxTex": 600,
+  "longTasks": 0,
+  "longestMs": 0,
+  "maxFrameGapMs": 15
+ },
+ "Galaxy pan at notch 6": {
+  "fps": 127.6,
+  "minFps": 90,
+  "tex": 600,
+  "maxTex": 600,
+  "longTasks": 0,
+  "longestMs": 0,
+  "maxFrameGapMs": 22
+ },
+ "Galaxy thumbs per notch": [
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null
+ ],
+ "Galaxy pan zoomed in": {
+  "fps": 131,
+  "minFps": 115.1,
+  "tex": 600,
+  "maxTex": 600,
+  "longTasks": 0,
+  "longestMs": 0,
+  "maxFrameGapMs": 76
+ },
+ "Galaxy far zoom": {
+  "fps": 133.1,
+  "minFps": 98,
+  "tex": 600,
+  "maxTex": 600
+ },
+ "Tree crumb": "01 OPERATION Differentiate 02 DOMAIN Feature 03 TECHNIQUE Complementary pairing 04 REFERENCE",
+ "Tree busiest technique pan fitted": {
+  "fps": 130.4,
+  "minFps": 130.4,
+  "tex": 24,
+  "maxTex": 24,
+  "longTasks": 0,
+  "longestMs": 0,
+  "maxFrameGapMs": 9
+ },
+ "Tree busiest technique thumbs per notch": [
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null
+ ],
+ "Tree busiest technique pan zoomed": {
+  "fps": 131.4,
+  "minFps": 130.4,
+  "tex": 89,
+  "maxTex": 89,
+  "longTasks": 0,
+  "longestMs": 0,
+  "maxFrameGapMs": 9
+ },
+ "Show all pressed": "true",
+ "Tree show all pan fitted": {
+  "fps": 132.1,
+  "minFps": 129.8,
+  "tex": 89,
+  "maxTex": 89,
+  "longTasks": 0,
+  "longestMs": 0,
+  "maxFrameGapMs": 9
+ },
+ "Tree show all thumbs per notch": [
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null
+ ],
+ "Tree show all pan zoomed": {
+  "fps": 125.6,
+  "minFps": 125.6,
+  "tex": 154,
+  "maxTex": 154,
+  "longTasks": 0,
+  "longestMs": 0,
+  "maxFrameGapMs": 31
+ },
+ "Tree far zoom": {
+  "fps": 131,
+  "minFps": 87,
+  "tex": 154,
+  "maxTex": 154
+ },
+ "Radial busiest operation pan fitted": {
+  "fps": 130.9,
+  "minFps": 130.8,
+  "tex": 0,
+  "maxTex": 0,
+  "longTasks": 0,
+  "longestMs": 0,
+  "maxFrameGapMs": 9
+ },
+ "Radial thumbs per notch": [
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null,
+  null
+ ],
+ "Radial busiest operation pan zoomed": {
+  "fps": 130.3,
+  "minFps": 130.3,
+  "tex": 0,
+  "maxTex": 0,
+  "longTasks": 0,
+  "longestMs": 0,
+  "maxFrameGapMs": 9
+ }
+}
