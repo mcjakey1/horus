@@ -33,7 +33,7 @@ Plan 3 Task 11: the graph views at 2,500 references.
 - Run: start `src-tauri/target/release/horus.exe` with `HORUS_DEMO_DIR=OUT_DIR`. On first run, create a new library with "Start with the demo set".
   - The `perf` feature is what lets `HORUS_DEMO_DIR` replace the bundled demo set.
   - The overlay (bottom left of each graph view) shows the Pixi ticker's fps, the minimum since reset, and live textures. Click it to reset.
-- Harness: `docs/superpowers/qa/plan3-perf.js` drives the build over WebView2 CDP.
+- Harness: `docs/superpowers/qa/plan3-perf.js` drives the build over WebView2 CDP. It is a tidied copy of the script that produced these numbers: the same steps and the same zoom notches. The copy was syntax-checked but not re-run.
   - It reads the same numbers from `window.__horusPerf.<view>`.
   - It records long tasks and the worst gap between animation frames.
 
@@ -41,7 +41,8 @@ Plan 3 Task 11: the graph views at 2,500 references.
 - Zipf: 491–525 ms.
 - Head-heavy (one technique on at least 80% of references): 1,074–1,201 ms. Running both tests in parallel gave 1,372 ms (one sample).
 
-**Manual check,** run 2026-11-26 on the release perf build of `p3-t11` (Plan 3 Tasks 1–10 merged, plus Task 11), three runs.
+**Manual check,** run 2026-11-26 on the release perf build of `p3-t11` (Plan 3 Tasks 1–10 merged, plus Task 11).
+- **Runs:** three, each on a fresh library. The "runs" column counts only the runs whose screenshots show the measured content on screen. Run 1's zoomed pans landed on empty canvas, and so did run 2's zoomed Galaxy pan; those are left out.
 - **Machine:** Ryzen 5 3600, RTX 2060, 16 GB RAM.
 - **Window:** 1280×800 at DPR 1, so the canvas was 940×712.
 - **Frame rate:** at rest the ticker reported about 130 fps. WMI reported the display's current refresh rate as 60 Hz. So the fps figures are frames the Pixi ticker ran, not frames on screen.
@@ -50,19 +51,20 @@ Plan 3 Task 11: the graph views at 2,500 references.
   - Busiest technique: Complementary pairing, on 1,158 references.
   - Busiest operation: Differentiate, on 2,190 references.
 
-| Check | Target | Measured | Verdict |
-|---|---|---|---|
-| "Start with the demo set" on 2,500 images | — | 86–110 s | — |
-| Galaxy first layout (opening the Galaxy to the first drawn positions) | ≤ 3 s | 960–967 ms (fully settled 5.04–5.10 s) | Pass |
-| UI responsive during that layout | responsive | 1–3 long tasks, longest 162–187 ms; worst frame gap 161–186 ms; lowest 500 ms fps window 38–41 | Pass, with one hitch of under 0.2 s |
-| Galaxy pan, fitted | ≥ 55 fps | min 116–130 | Pass |
-| Galaxy pan where more than 600 references would be thumbnails (600 thumbnails, the rest dots) | ≥ 55 fps | min 76–90; worst frame gap 22–32 ms | Pass |
-| Galaxy pan, zoomed in (thumbnails) | ≥ 55 fps | min 118 | Pass |
-| Peak live textures (any view, any run) | ≤ 600 | 600 (Galaxy); 154 (Tree); 0 (Radial) | Pass |
-| Far zoom shows only dots (Galaxy, Tree) | all dots | all dots, judged from screenshots | Pass |
-| Tree, Complementary pairing expanded: pan fitted / zoomed | ≥ 55 fps | min 130 / 130 | Pass |
-| Tree, "Show all references" on: pan fitted / zoomed | ≥ 55 fps | min 129–130 / 125–130 | Pass |
-| Radial, Differentiate: pan fitted / zoomed | ≥ 55 fps | min 130 / 131 | Pass. No reference thumbnails were drawn in this state (0 textures). |
+| Check | Target | Measured | Runs | Verdict |
+|---|---|---|---|---|
+| "Start with the demo set" on 2,500 images | — | 86–110 s | 3 | — |
+| Galaxy first layout (from the tab click to the layout worker's first position message) | ≤ 3 s | 960–967 ms (settled 5.04–5.10 s) | 3 | Pass, if "first layout" means the first positions. The settle is over 3 s. |
+| UI responsive during that layout | responsive | 1–3 long tasks, longest 162–187 ms; worst frame gap 161–186 ms; lowest 500 ms fps window 38–41 | 3 | Pass: no main-thread stall reached 0.2 s |
+| Galaxy pan, fitted | ≥ 55 fps | min 116–130 | 3 | Pass |
+| Galaxy pan where more than 600 references would be thumbnails (600 thumbnails, the rest dots) | ≥ 55 fps | min 76–90; worst frame gap 22–32 ms | 2 | Pass |
+| Galaxy pan, zoomed in (thumbnails) | ≥ 55 fps | min 118 | 1 | Pass |
+| Zooming | ≥ 55 fps | Zoom-in fps: not measured. Lowest fps across a zoomed pan, a fit and 30 notches out to far zoom: Galaxy 98–105, Tree 87–89 | 2 | Pass for zooming out; zoom-in not measured |
+| Peak live textures (any view, any run) | ≤ 600 | 600 (Galaxy); 154 (Tree); 0 (Radial) | 3 | Pass |
+| Far zoom shows only dots (Galaxy, Tree) | all dots | all dots, judged from screenshots | 2 (Galaxy) / 1 (Tree) | Pass |
+| Tree, Complementary pairing expanded: pan fitted / zoomed | ≥ 55 fps | min 130–131 / 130 | 3 / 1 | Pass |
+| Tree, "Show all references" on: pan fitted / zoomed | ≥ 55 fps | min 129–130 / 125–130 | 3 / 2 | Pass |
+| Radial, Differentiate: pan fitted / zoomed | ≥ 55 fps | min 130–131 / 130–131 | 3 / 2 | Pass. Only the taxonomy wheel is drawn here: no references, 0 textures. |
 
 **Carry-ins:**
 - **The ~110 empty `PIXI.Text` joint nodes in the Tree:** not measured. The release build exposes no scene-graph hook.
