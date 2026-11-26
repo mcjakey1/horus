@@ -387,6 +387,21 @@ describe("openLightbox", () => {
     expect($(".lb-plate").style.width).toBe("450px");
   });
 
+  it("AZERTY's & and à set 100% and fit (final review M2)", () => {
+    key("0");
+    key("&", { code: "Digit1" });
+    expect($(".lb-zoom").textContent).toBe("100%");
+    key("à", { code: "Digit0" });
+    expect($(".lb-zoom").textContent).toBe("150%");
+  });
+
+  it("the hover label goes when the pointer leaves the stage (M8)", () => {
+    pointer("pointermove", at(0.2, 0.3)); // over R's region (0.1..0.4, 0.2..0.6)
+    expect(document.querySelector(".lb-box.is-hot")).not.toBeNull();
+    $(".lb-stage").dispatchEvent(new MouseEvent("pointerleave"));
+    expect(document.querySelector(".lb-box.is-hot")).toBeNull();
+  });
+
   it("arrow_pans_when_zoomed_in_and_drafts_at_fit", () => {
     $(".lb-stage").focus();
     key("+"); // 150% to 187.5% at the centre: the plate is 750 tall in a 600 stage

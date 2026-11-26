@@ -7,7 +7,7 @@
 // otherwise a preview, or the thumbnail, with a note saying so (never a blank pane).
 import type { Api, Region } from "../api";
 import { esc } from "../esc";
-import { isTextEntry } from "../keys";
+import { digitOf, isTextEntry } from "../keys";
 import { opInk, opLabel } from "../ops";
 import type { Box } from "../reference/tile";
 import type { Store } from "../store";
@@ -197,6 +197,8 @@ export function openLightbox(
   };
   stage.addEventListener("pointercancel", dropDrag, { signal });
   stage.addEventListener("lostpointercapture", dropDrag, { signal });
+  // The hover label goes when the pointer leaves the stage (M8).
+  stage.addEventListener("pointerleave", () => boxes.querySelectorAll(".is-hot").forEach((b) => b.classList.remove("is-hot")), { signal });
   // The wheel and a trackpad pinch (a ctrl+wheel) zoom at the cursor.
   stage.addEventListener("wheel", (e) => {
     e.preventDefault();
@@ -235,11 +237,11 @@ export function openLightbox(
       if (e.key === "o") return void (boxes.hidden = !boxes.hidden);
       const zoom = ZOOM_KEYS[e.key];
       if (zoom) return void zoomBy(zoom);
-      if (e.key === "0") {
+      if (e.key === "0" || (!e.shiftKey && e.code === "Digit0")) { // AZERTY's unshifted "à" (M2)
         fitted = true;
         return layout();
       }
-      if (e.key === "1") return void zoomBy(1 / cur().scale); // one image pixel per CSS pixel
+      if (digitOf(e) === 1) return void zoomBy(1 / cur().scale); // one image pixel per CSS pixel; AZERTY "&" too (M2)
     }
     // The stage's keys work from a Tab-focused region box too (review I1).
     if (t !== stage && !t.matches(".lb-box")) return;

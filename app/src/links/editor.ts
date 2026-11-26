@@ -26,6 +26,7 @@ export function linkErrorCopy(err: unknown): string {
   if (code === "SelfLink") return "A reference can't link to itself.";
   if (code === "EmptyWhy") return "Say why these are connected.";
   if (code.startsWith("DuplicateLink:")) return "These two are already linked — edit the note instead.";
+  if (code.startsWith("UnknownLink:")) return "That link is gone. It may have been undone."; // e.g. a double-clicked Delete (M3)
   return "That change didn't save. Try again.";
 }
 

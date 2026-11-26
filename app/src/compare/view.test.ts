@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Api, Reference, Scored, Tag, Taxonomy } from "../api";
 import { createStore, type Store } from "../store";
+import { wireUndoKeys } from "../keys";
 import { makeOpenCompare } from "./view";
 
 const tax: Taxonomy = {
@@ -133,6 +134,81 @@ describe("Compare", () => {
     close.dispatchEvent(on);
     expect(on.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(first); // and round to the first
+  });
+
+  // ---------- final review fix wave ----------
+  it("a store event leaves focus in the docked link editor (I3a)", async () => {
+    open("a", "b");
+    await tick();
+    $<HTMLButtonElement>(".cmp-link-btn").click();
+    const why = $<HTMLTextAreaElement>(".compare .link-editor .le-why");
+    why.focus();
+    store.apply({ references: [A], removed: [], canUndo: true, canRedo: false }); // a background change
+    expect(document.activeElement).toBe(why);
+    key("x", why); // typed into the note: no swap
+    expect($('.cmp-side[data-side="a"] .cmp-title').textContent).toBe("Plate a");
+  });
+
+  it("keys aimed at <body> reach Compare: Esc closes, Ctrl+Z undoes once (I3b)", async () => {
+    vi.mocked(api.scorePair).mockResolvedValue(scored(0.42));
+    (api as unknown as { undo: unknown }).undo = vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: true }));
+    const unwire = wireUndoKeys(document, api, store, () => {});
+    open("a", "b");
+    await tick();
+    (document.activeElement as HTMLElement).blur(); // e.g. a notice's Dismiss removed the focused control
+    expect(document.activeElement).toBe(document.body);
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
+    await tick();
+    expect(api.undo).toHaveBeenCalledTimes(1);
+    expect(document.querySelector(".compare")).not.toBeNull();
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(document.querySelector(".compare")).toBeNull();
+    unwire();
+  });
+
+  it("after saving a link from the docked editor, Esc still closes Compare (I3)", async () => {
+    (api as unknown as { addLink: unknown }).addLink = vi.fn(async () => ({
+      references: [], removed: [], canUndo: true, canRedo: false, created: "l9",
+      links: [{ id: "l9", fromRef: "a", toRef: "b", why: "Same light" }],
+    }));
+    open("a", "b");
+    await tick();
+    $<HTMLButtonElement>(".cmp-link-btn").click();
+    const why = $<HTMLTextAreaElement>(".compare .link-editor .le-why");
+    why.value = "Same light";
+    why.dispatchEvent(new Event("input", { bubbles: true }));
+    $<HTMLButtonElement>(".compare .le-save").click();
+    await tick();
+    expect(api.addLink).toHaveBeenCalled();
+    const target = document.activeElement && document.activeElement !== document.body ? document.activeElement : document.body;
+    target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(document.querySelector(".compare")).toBeNull();
+  });
+
+  it("is named after both references, in side order (I4)", async () => {
+    open("a", "b");
+    await tick();
+    expect($(".compare").getAttribute("aria-label")).toBe("Compare Plate a and Plate b");
+    key("x");
+    expect($(".compare").getAttribute("aria-label")).toBe("Compare Plate b and Plate a");
+  });
+
+  it("plates and outlines are placed in % of the tile (I5)", async () => {
+    open("a", "b");
+    await tick();
+    $('.cmp-shared li[data-tech="t2"]').dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    for (const sel of ['.cmp-side[data-side="a"] .cmp-plate', '.cmp-side[data-side="a"] .cmp-out']) {
+      const s = $(sel).style;
+      for (const k of ["left", "top", "width", "height"] as const) expect(s[k]).toMatch(/%$/);
+    }
+  });
+
+  it("the value view starts as the artist was looking (M7)", async () => {
+    document.body.classList.add("value");
+    open("a", "b");
+    await tick();
+    expect([...document.querySelectorAll(".cmp-tile")].every((t) => t.classList.contains("is-value"))).toBe(true);
+    document.body.classList.remove("value");
   });
 
   it("a link between them shows its why above Shared; a 0 score is not related", async () => {

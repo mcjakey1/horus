@@ -16,8 +16,9 @@ import { sides } from "./sides";
 const TILE = 420; // the N5 tile each plate letterboxes into (px)
 const FOCUSABLE = "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea, [href], [tabindex]";
 const aspect = (r: Reference) => (r.width && r.height ? r.width / r.height : 3 / 4);
+/** In % of the tile, so a tile narrower than TILE px (a narrow window) scales its plate too (I5). */
 const place = (el: HTMLElement, b: Box) => {
-  for (const k of ["left", "top", "width", "height"] as const) el.style.setProperty(k, `${b[k]}px`);
+  for (const k of ["left", "top", "width", "height"] as const) el.style.setProperty(k, `${(b[k] / TILE) * 100}%`);
 };
 
 export function mountCompare(
@@ -35,7 +36,7 @@ export function mountCompare(
   let scored: Scored | null = null;
   let pending = true; // a scorePair request is out: the lists use the local intersection meanwhile
   let req = 0; // the latest request wins
-  let value = false;
+  let value = document.body.classList.contains("value"); // starts as the artist was looking (M7)
   let pointerSide: "a" | "b" = "a";
   let closed = false;
   let lightbox: { close(): void } | null = null;
@@ -85,7 +86,9 @@ export function mountCompare(
         <h3 class="cmp-h">Only here</h3><ul class="cmp-only">${only.map(techItem).join("")}</ul>
         ${partial.length ? `<h3 class="cmp-h">Operation only</h3><ul class="cmp-partial">${partial.map(opItem).join("")}</ul>` : ""}
       </section>`;
-    const inside = el.contains(document.activeElement) && document.activeElement !== el;
+    // Only the rewritten part counts: focus in the docked link editor stays where it is (I3).
+    const inside = body.contains(document.activeElement);
+    el.setAttribute("aria-label", `Compare ${ra.title} and ${rb.title}`); // follows a swap (I4)
     body.innerHTML = `
       <header class="cmp-top">
         <p class="cmp-link"${link ? "" : " hidden"}>${link ? `Linked by you: “${esc(link.why)}”` : ""}</p>
@@ -207,6 +210,16 @@ export function mountCompare(
   }, { signal });
   el.addEventListener("mouseleave", () => outline(null), { signal });
   // Focus stays in the dialog, unless a dialog raised over it (the lightbox, a notice) has it.
+  // A key aimed outside the dialog (focus fell to <body>, e.g. after a notice's Dismiss or the
+  // editor's save) is stopped and re-sent from the dialog, so Esc, v, x and Ctrl+Z still act, once (I3).
+  document.addEventListener("keydown", (e) => {
+    const t = e.target as Element;
+    if (closed || !el.isConnected || lightbox || e.isComposing || el.contains(t) || t?.closest?.('.lightbox, [role="alertdialog"], .notice')) return;
+    e.stopPropagation();
+    e.preventDefault();
+    el.focus();
+    if (e.key !== "Tab") el.dispatchEvent(new KeyboardEvent("keydown", e));
+  }, { capture: true, signal });
   document.addEventListener("focusin", (e) => {
     const t = e.target as Element;
     if (!el.contains(t) && !t.closest?.('.lightbox, [role="alertdialog"], .notice')) el.focus();

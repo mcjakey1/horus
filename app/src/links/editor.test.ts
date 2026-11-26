@@ -47,6 +47,7 @@ describe("linkErrorCopy", () => {
     expect(linkErrorCopy("SelfLink")).toBe("A reference can't link to itself.");
     expect(linkErrorCopy("EmptyWhy")).toBe("Say why these are connected.");
     expect(linkErrorCopy("DuplicateLink:L1")).toBe("These two are already linked — edit the note instead.");
+    expect(linkErrorCopy("UnknownLink:x")).toBe("That link is gone. It may have been undone."); // M3
     expect(linkErrorCopy("UnknownReference:zz")).toBe("That change didn't save. Try again.");
     expect(linkErrorCopy(new Error("os error 5"))).toBe("That change didn't save. Try again.");
   });
