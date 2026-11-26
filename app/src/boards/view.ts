@@ -124,10 +124,15 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
       (err) => msg(boardErrorCopy(err, store, b.name)),
     );
   }
+  /** Reorders the shown members only; an id the library doesn't show (a hidden, bad-hash
+   * reference) keeps its slot instead of being dropped (final review M0a). */
   const move = (from: number, to: number) => {
-    const ids = members(board()).map((r) => r.id);
-    const next = moveItem(ids, from, to);
-    if (next !== ids && from !== to) setMembers(next, to);
+    const b = board();
+    const ids = members(b).map((r) => r.id);
+    const vis = moveItem(ids, from, to);
+    if (!b || vis === ids || from === to) return;
+    let k = 0;
+    setMembers(b.referenceIds.map((id) => (store.refs.has(id) ? vis[k++] : id)), to);
   };
 
   async function exportBoard() {
@@ -150,10 +155,10 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
     say(
       `<p>Exported ${n} to ${esc(dest)}${m ? ` · ${m} skipped` : ""}${report.credits ? "" : " · credits.txt was not written"}</p>` +
         (m ? `<details><summary>Why some were skipped</summary><ul>${reasons}</ul></details>` : "") +
-        `<p><button type="button" class="text-btn" data-act="reveal">Open folder</button></p>`,
+        `<p><button type="button" class="text-btn" data-act="reveal">Show in folder</button></p>`,
     );
   }
-  // The notice lives outside this view; its "Open folder" is wired here, once.
+  // The notice lives outside this view; its "Show in folder" (revealItemInDir) is wired here, once.
   document.addEventListener("click", (e) => {
     if ((e.target as Element).closest?.('#import-notice [data-act="reveal"]') && S.lastDest) void api.revealFolder(S.lastDest).catch(() => {});
   }, { signal });
@@ -185,7 +190,7 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
     if (!act || !b) return;
     const id = t.closest<HTMLElement>(".bd-tile")?.dataset.id;
     if (act === "open" && id) deps.openReference(id);
-    else if (act === "remove" && id) setMembers(b.referenceIds.filter((x) => x !== id && store.refs.has(x)));
+    else if (act === "remove" && id) setMembers(b.referenceIds.filter((x) => x !== id)); // hidden ids stay (M0a)
     else if (act === "scope") store.setScope(store.scope === b.id ? null : b.id);
     else if (act === "rename") {
       S.renaming = true;

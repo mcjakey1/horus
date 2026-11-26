@@ -57,6 +57,16 @@ describe("mountBoards", () => {
     expect(tiles()).toEqual(["r1", "r2"]);
   });
 
+  it("reorder and Remove keep a hidden member in its slot (final review M0a)", async () => {
+    mount([{ id: "h", name: "Harbour", referenceIds: ["r1", "ghost", "r2", "r3"] }]);
+    $('.bd-tile[data-id="r1"]').dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true }));
+    await flush();
+    expect(api.setBoardMembers).toHaveBeenLastCalledWith("h", ["r2", "ghost", "r1", "r3"]);
+    $<HTMLButtonElement>('.bd-tile[data-id="r2"] [data-act="remove"]').click();
+    await flush();
+    expect(api.setBoardMembers).toHaveBeenLastCalledWith("h", ["r1", "ghost", "r3"]);
+  });
+
   it("Alt+→ on tile 1 swaps tiles 1 and 2 in one call", async () => {
     mount();
     $('.bd-tile[data-id="r1"]').dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true }));
@@ -205,10 +215,11 @@ describe("mountBoards", () => {
       expect(notice()).toContain("credits.txt was not written");
     });
 
-    it("Open folder reveals the folder", async () => {
+    it("Show in folder reveals the folder", async () => {
       mount();
       $<HTMLButtonElement>('[data-act="export"]').click();
       await flush();
+      expect($('#import-notice [data-act="reveal"]').textContent).toBe("Show in folder");
       $<HTMLButtonElement>('#import-notice [data-act="reveal"]').click();
       expect(api.revealFolder).toHaveBeenCalledWith("D:/out");
     });

@@ -57,6 +57,35 @@ describe("mountBoardMenu", () => {
     expect(document.querySelector(".board-menu")).not.toBeNull();
   });
 
+  // ---------- final review fix wave ----------
+  it("a tick keeps focus on that box, and Create focuses the new board's box (I2)", async () => {
+    const store = storeWith([ref("r1"), ref("r2"), ref("r3")], [harbour, ships]);
+    const api = boardsApi({ createBoard: vi.fn(async () => change({ created: "n", boards: [harbour, ships, { id: "n", name: "Boats", referenceIds: ["r3"] }] })) });
+    mountBoardMenu(host, api, store, "r3");
+    const box = $<HTMLInputElement>('[data-board="h"]');
+    box.focus();
+    box.click();
+    await flush();
+    expect(document.activeElement).toBe($('[data-board="h"]'));
+    $<HTMLButtonElement>(".bm-new").click();
+    const name = $<HTMLInputElement>(".bm-name");
+    name.value = "Boats";
+    name.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flush();
+    expect(document.activeElement).toBe($('[data-board="n"]'));
+  });
+
+  it("a boards Change while open updates the ticks (M5)", () => {
+    const store = storeWith([ref("r1"), ref("r2"), ref("r3")], [harbour, ships]);
+    const menu = mountBoardMenu(host, boardsApi(), store, "r3");
+    expect($<HTMLInputElement>('[data-board="h"]').checked).toBe(false);
+    store.apply(change({ boards: [{ ...harbour, referenceIds: ["r1", "r2", "r3"] }, ships] })); // e.g. a redo
+    expect($<HTMLInputElement>('[data-board="h"]').checked).toBe(true);
+    menu.close();
+    store.apply(change({ boards: [harbour, ships] })); // after close: no work on a detached menu
+    expect(document.querySelector(".board-menu")).toBeNull();
+  });
+
   it("Esc closes it", () => {
     const store = storeWith([ref("r3")], []);
     mountBoardMenu(host, boardsApi(), store, "r3");

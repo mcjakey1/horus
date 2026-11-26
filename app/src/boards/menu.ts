@@ -25,7 +25,10 @@ export function mountBoardMenu(anchor: HTMLElement, api: Api, store: Store, refI
   el.setAttribute("aria-label", `Boards for ${store.refs.get(refId)?.title ?? "this reference"}`);
   const $ = <T extends Element = HTMLElement>(s: string) => el.querySelector<T>(s)!;
 
-  function render() {
+  /** Rewrites the list. Focus on a board's box stays on that box (final review I2); `focusId`
+   * moves it to another one (a board just created). */
+  function render(focusId?: string) {
+    const was = (document.activeElement as HTMLElement | null)?.closest?.<HTMLInputElement>("input[data-board]")?.dataset.board;
     const rows = store.boards
       .map((b) => {
         const on = b.referenceIds.includes(refId);
@@ -33,6 +36,8 @@ export function mountBoardMenu(anchor: HTMLElement, api: Api, store: Store, refI
       })
       .join("");
     $(".bm-list").innerHTML = rows || `<li class="none">No boards yet.</li>`;
+    const id = focusId ?? (el.contains(document.activeElement) && document.activeElement !== document.body ? undefined : was);
+    if (id) [...el.querySelectorAll<HTMLInputElement>("input[data-board]")].find((i) => i.dataset.board === id)?.focus();
   }
 
   el.innerHTML = `
@@ -66,8 +71,8 @@ export function mountBoardMenu(anchor: HTMLElement, api: Api, store: Store, refI
       (c) => {
         store.apply(c);
         $<HTMLInputElement>(".bm-name").value = "";
-        $(".bm-create-row").hidden = true;
-        render();
+        $(".bm-create-row").hidden = true; // it held focus: the new board's box takes it
+        render(c.created ?? undefined);
       },
       (err) => say(boardErrorCopy(err, store, name)),
     );
@@ -89,10 +94,13 @@ export function mountBoardMenu(anchor: HTMLElement, api: Api, store: Store, refI
     }
   });
 
+  // An undo, an import or another view's edit changes the boards while the menu is open (M5).
+  const unsubscribe = store.subscribe((c) => void ((c.boards || c.reset) && render()));
   let open = true;
   function close() {
     if (!open) return;
     open = false;
+    unsubscribe();
     el.remove();
     if (opener?.isConnected) opener.focus();
   }
