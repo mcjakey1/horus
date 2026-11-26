@@ -451,6 +451,47 @@ describe("inspector editing", () => {
     expect(el.querySelector('.insp-ink[data-ink="rose"]')).not.toBe(rose); // the deferred render ran after the click
   });
 
+  it("restored definition text saves on blur, with no change event (fix N1)", async () => {
+    render(tech("rim-light"));
+    const d = el.querySelector<HTMLTextAreaElement>("textarea[data-field=description]")!;
+    d.focus();
+    type(d, "Light from behind.");
+    render(tech("rim-light"), { ...s, version: 11 }); // a store event: the text is put back by script
+    const d2 = el.querySelector<HTMLTextAreaElement>("textarea[data-field=description]")!;
+    expect(d2.value).toBe("Light from behind.");
+    d2.blur(); // click away, no typing, no change event
+    await flush();
+    expect(api.updateTechnique).toHaveBeenCalledTimes(1);
+    expect(api.updateTechnique).toHaveBeenCalledWith("rim-light", { description: "Light from behind." });
+    // a change followed by its blur is still one save
+    render(tech("rim-light"), { ...s, version: 12 });
+    const d3 = el.querySelector<HTMLTextAreaElement>("textarea[data-field=description]")!;
+    d3.focus();
+    type(d3, "Light from the back.");
+    d3.dispatchEvent(new Event("change", { bubbles: true }));
+    d3.blur();
+    await flush();
+    expect(api.updateTechnique).toHaveBeenCalledTimes(2);
+  });
+
+  it("a native drag's end, a cancelled pointer or a window blur releases the render hold (fix N2)", async () => {
+    opts.assetUrl = (p: string) => `asset://${p}`;
+    render(tech("rim-light"));
+    const imgs = [...el.querySelectorAll<HTMLImageElement>(".thumb img")];
+    expect(imgs.length).toBeGreaterThan(0);
+    expect(imgs.every((i) => !i.draggable)).toBe(true);
+    for (const end of [() => document.dispatchEvent(new Event("dragend")), () => document.dispatchEvent(new Event("pointercancel")), () => window.dispatchEvent(new Event("blur"))]) {
+      render({ kind: "op", id: "op:group" });
+      const before = el.querySelector(".insp-title");
+      el.querySelector<HTMLElement>(".insp-ink")!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      render({ kind: "op", id: "op:infer" }); // held while the button is down
+      expect(el.querySelector(".insp-title")).toBe(before);
+      end();
+      await flush();
+      expect(el.querySelector(".insp-title")!.textContent).toBe("Infer"); // the held render applied
+    }
+  });
+
   it("a blur with a changed name saves it; Esc still cancels (I2)", async () => {
     render(tech("rim-light"));
     const f = nameField();

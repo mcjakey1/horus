@@ -259,16 +259,29 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
   el.onchange = el.onsubmit = null;
   el.onmousedown = E
     ? () => {
+        if (pressed.has(el)) return;
         pressed.add(el);
-        el.ownerDocument.addEventListener("mouseup", () => setTimeout(() => {
-          pressed.delete(el);
-          const later = deferred.get(el);
-          deferred.delete(el);
-          later?.();
-        }), { once: true });
+        // Any end of the press releases the hold: a mouseup (after its click), a native drag's
+        // end, a cancelled pointer, or the window losing focus (a swallowed mouseup). (Fix N2)
+        const doc = el.ownerDocument;
+        const win = doc.defaultView;
+        const off = new AbortController();
+        const release = () => {
+          off.abort();
+          setTimeout(() => {
+            pressed.delete(el);
+            const later = deferred.get(el);
+            deferred.delete(el);
+            later?.();
+          });
+        };
+        for (const ev of ["mouseup", "dragend", "pointercancel"]) doc.addEventListener(ev, release, { signal: off.signal, capture: true });
+        win?.addEventListener("blur", release, { signal: off.signal });
       }
     : null;
   if (!E) return;
+  // A thumbnail's image would start a native drag; while editing, only the scene drags (N2).
+  el.querySelectorAll<HTMLImageElement>(".thumb img").forEach((i) => (i.draggable = false));
 
   // ---------- Editing (Task 10) ----------
   const api = opts.api!;
@@ -492,14 +505,20 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
       .then((ok) => ok && clearSlot())
       .finally(() => (submitting = false));
   };
-  // A textarea's change fires on blur, and only when the text changed.
-  el.onchange = (e) => {
-    const a = e.target as HTMLTextAreaElement;
-    if (!a.matches("textarea[data-field=description]") || !target || rewriting.has(el)) return;
+  // The definition saves when it loses focus and differs from the stored text. Blur, not only
+  // change: text put back by a re-render was set by script, and change never fires for it (N1).
+  // The change that precedes a blur and the blur itself share the "description" key: one save.
+  const saveArea = (a: HTMLTextAreaElement) => {
+    if (!target || rewriting.has(el)) return;
     const old = target.kind === "tech" ? N.tech(target.id)?.description : target.kind === "domain" ? N.domain(target.id)?.description : tax.operations.find((o) => o.id === target.id)?.description;
     const v = a.value.trim();
     if (v !== (old ?? "")) void run("description", () => update({ description: v }));
   };
+  el.onchange = (e) => {
+    if ((e.target as Element).matches("textarea[data-field=description]")) saveArea(e.target as HTMLTextAreaElement);
+  };
+  const defArea = el.querySelector<HTMLTextAreaElement>("textarea[data-field=description]");
+  if (defArea) defArea.onblur = () => saveArea(defArea);
 
   // Put back what was open (same selection only), then the focus, by the control's data-* key.
   if (keep) {
