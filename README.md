@@ -76,12 +76,12 @@ Horus is for illustrators, concept artists, photographers, and designers who kee
   </tr>
   <tr>
     <td width="50%">
-      <img src="docs/images/boards-view.png" alt="The Boards view with a list of boards and the references of one board as tiles">
-      <br><sub><strong>Boards.</strong> Collect references for a project. Change their order, or show only that board in the other views.</sub>
+      <img src="docs/images/boards-view.png" alt="The Boards view: the board Harbour light with 8 references as tiles, and a line at the bottom that shows the board and Show all">
+      <br><sub><strong>Boards.</strong> The board "Harbour light" has 8 references. Only this board shows in the other views, and the line at the bottom tells you this.</sub>
     </td>
     <td width="50%">
-      <img src="docs/images/compare-view.png" alt="Compare with two references side by side and their shared techniques in the middle">
-      <br><sub><strong>Compare.</strong> Two references side by side. The shared techniques are in the middle, and the unique techniques are on each side.</sub>
+      <img src="docs/images/compare-view.png" alt="Compare: Zodiaque (La Plume) and The Great Wave side by side, with a score of 0.49 and two shared techniques in the middle">
+      <br><sub><strong>Compare.</strong> Zodiaque ("La Plume") and The Great Wave, with a score of 0.49. Two shared techniques are in the middle. The unique techniques are on each side.</sub>
     </td>
   </tr>
 </table>
@@ -260,6 +260,7 @@ For the product design, read [`SPEC.md`](SPEC.md), [`PRODUCT.md`](PRODUCT.md), a
 - You cannot edit the title, creator, year, or credit of a reference yet.
 - Compare opens from the Reference view and the Galaxy only. It does not open from the Tree or the Radial.
 - **Show in folder** opens the parent folder and selects the export folder in it. It does not open the export folder.
+- Plan 6 fixes two small problems from Plan 4 QA. In the lightbox, `Esc` in the **Add technique** form closes the lightbox. In the Boards view, the first column cuts off the tile tools that show on hover.
 - At the zoom that fits the full graph, the Tree and the Radial hide the names of items. Zoom in to read them. Plan 6 adds a minimum name size.
 - In the Tree, **Show all references** draws the references of each technique as one thin column.
 - A long import shows "Importing…" only. It does not show a count or a Cancel button yet.
