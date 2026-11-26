@@ -225,6 +225,20 @@ describe("Radial view", () => {
     for (const n of others) expect(n).toMatchObject({ color: "var(--ink-3)" });
   });
 
+  it("deleting the active operation moves to the busiest, refits and remembers it (final review M3)", async () => {
+    button("Lead the eye").click();
+    const fits = vi.mocked(fake.scene.fitAll).mock.calls.length;
+    const tax = { ...seed, operations: seed.operations.filter((o) => o.id !== "sequence"), branches: seed.branches.filter((b) => b.operationId !== "sequence") };
+    src.set({ ...snap(tax, refs), version: 1 });
+    expect(pressed()).toBe("Make them think"); // the busiest left
+    expect(ids(fake.last(), "op")).toEqual(["op:infer"]);
+    expect(fake.scene.fitAll).toHaveBeenCalledTimes(fits + 1);
+    src.set({ ...snap(seed, refs), version: 2 }); // undo brings "sequence" back
+    view.destroy();
+    await mount();
+    expect(pressed()).toBe("Make them think"); // the session remembers the live operation, not the deleted one
+  });
+
   it("remembers the operation for the session; a reset clears and fits", async () => {
     button("Lead the eye").click();
     fake.emit("select", "op:sequence");

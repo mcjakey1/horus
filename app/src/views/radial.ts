@@ -159,7 +159,12 @@ export function mountRadial(
 
   function render(fit = false) {
     const s = data.get();
-    if (!exists(op)) op = busiest(s);
+    if (!exists(op)) {
+      // The active operation was deleted: the busiest takes over, remembered, and fitted (M3).
+      op = opSession = busiest(s);
+      hovered = null;
+      fit = true;
+    }
     const l = layout();
     if (sel && l.rep.has(sel)) sel = l.rep.get(sel)!; // a change can make another node the drawn one
     if (sel && !l.placed.has(sel)) sel = null; // gone since the change (Review Focus 3)
