@@ -53,7 +53,7 @@ beforeEach(() => {
   opener.focus();
   store = createStore({ root: "C:\\lib", references: [R], links: [], boards: [], warning: null, taxonomyReadOnly: false }, taxonomy);
   api = {
-    imagePath: vi.fn(async (id: string) => `C:\\lib\\images\\${id}.jpg`),
+    lightboxSource: vi.fn(async (id: string) => ({ path: `C:\\lib\\images\\${id}.jpg`, full: true, width: 300, height: 400 })),
     assetUrl: (p: string) => `asset://${encodeURIComponent(p)}`,
   } as unknown as Api;
   openPicker = vi.fn<(o: PickerOpts) => void>();
@@ -283,8 +283,9 @@ describe("openLightbox", () => {
     expect(document.querySelectorAll(".lightbox [style]:not(.lb-box):not(.lb-plate)")).toHaveLength(0);
   });
 
-  it("full_image_from_imagePath_with_thumb_fallback", async () => {
+  it("full_image_from_lightboxSource_with_thumb_fallback", async () => {
     const src = () => $<HTMLImageElement>(".lb-plate img").getAttribute("src");
+    const note = () => $(".lb-note").hidden === false;
     const reopen = () => {
       lb.close();
       lb = openLightbox(api, store, "r", { openPicker });
@@ -295,32 +296,36 @@ describe("openLightbox", () => {
     reopen();
     expect(src()).toBe(api.assetUrl(R.thumb1024)); // the thumbnail at once
     await tick();
-    expect(api.imagePath).toHaveBeenLastCalledWith("r");
+    expect(api.lightboxSource).toHaveBeenLastCalledWith("r");
     expect(preloads).toHaveBeenLastCalledWith(api.assetUrl("C:\\lib\\images\\r.jpg"));
     expect(src()).toBe(api.assetUrl(R.thumb1024)); // not swapped before it loads
     preload().dispatchEvent(new Event("load"));
     expect(src()).toBe(api.assetUrl("C:\\lib\\images\\r.jpg")); // then the original
+    expect(note()).toBe(false); // full size: no preview note
     reopen();
     await tick();
-    preload().dispatchEvent(new Event("error")); // e.g. a TIFF original the WebView can't decode
+    preload().dispatchEvent(new Event("error")); // e.g. an original gone from disk (carry-in b)
     expect(src()).toBe(api.assetUrl(R.thumb1024));
+    expect(note()).toBe(true); // never a blank pane, and it says why
     reopen();
     await tick();
     const pending = preload();
     lb.close();
     pending.dispatchEvent(new Event("load")); // a load after close changes nothing
     lb = openLightbox(api, store, "r", { openPicker });
+    await tick(); // its own lightboxSource call is made before the next mock is set
     preloads.mockRestore();
-    vi.mocked(api.imagePath).mockRejectedValueOnce("Unknown reference"); // an unknown or hidden reference
+    vi.mocked(api.lightboxSource).mockRejectedValueOnce("Unknown reference"); // an unknown or hidden reference
     reopen();
     await tick();
     expect(src()).toBe(api.assetUrl(R.thumb1024));
-    let late!: (p: string) => void;
-    vi.mocked(api.imagePath).mockImplementationOnce(() => new Promise<string>((r) => (late = r)));
+    expect(note()).toBe(true);
+    let late!: (s: { path: string; full: boolean; width: number; height: number }) => void;
+    vi.mocked(api.lightboxSource).mockImplementationOnce(() => new Promise((r) => (late = r)));
     reopen();
     await tick();
     lb.close();
-    late("C:\\late.jpg"); // an answer after close changes nothing and throws nothing
+    late({ path: "C:\\late.jpg", full: true, width: 1, height: 1 }); // an answer after close changes nothing and throws nothing
     await tick();
     expect(document.querySelector(".lightbox")).toBeNull();
   });
@@ -336,5 +341,80 @@ describe("openLightbox", () => {
     store.apply({ ...none, removed: ["r"] });
     expect(document.querySelector(".lightbox")).toBeNull();
     expect(document.activeElement).toBe(opener);
+  });
+
+  // ---------- Plan 4 Task 6: zoom, pan, overlays, preview ----------
+
+  it("preview_note_for_a_preview_source", async () => {
+    vi.mocked(api.lightboxSource).mockResolvedValueOnce({ path: "C:\\cache\\r.png", full: false, width: 300, height: 400 });
+    lb.close();
+    lb = openLightbox(api, store, "r", { openPicker });
+    expect($(".lb-note").hidden).toBe(true);
+    await tick();
+    expect($(".lb-note").hidden).toBe(false);
+    expect($(".lb-note").textContent).toBe("Showing a preview — this format can't be shown at full size here.");
+  });
+
+  it("o_toggles_the_overlays", () => {
+    key("o");
+    expect($(".lb-boxes").hidden).toBe(true);
+    key("o");
+    expect($(".lb-boxes").hidden).toBe(false);
+  });
+
+  it("toolbar_shows_zoom_and_source_size_and_1_is_100_percent", () => {
+    key("0"); // refit to the stubbed stage
+    expect($(".lb-zoom").textContent).toBe("150%");
+    expect($(".lb-size").textContent).toBe("300 × 400");
+    key("1");
+    expect($(".lb-plate").style.width).toBe("300px");
+    expect($(".lb-zoom").textContent).toBe("100%");
+    key("0");
+    expect($(".lb-plate").style.width).toBe("450px");
+  });
+
+  it("arrow_pans_when_zoomed_in_and_drafts_at_fit", () => {
+    $(".lb-stage").focus();
+    key("+"); // 150% to 187.5% at the centre: the plate is 750 tall in a 600 stage
+    expect($(".lb-plate").style.top).toBe("-75px");
+    key("ArrowUp"); // no draft: pans down by 10% of the stage
+    expect($(".lb-plate").style.top).toBe("-15px");
+    expect($(".lb-draft").hidden).toBe(true);
+    key("0");
+    key("ArrowUp"); // at fit: the centred draft, as in Plan 2
+    expect($(".lb-draft").hidden).toBe(false);
+  });
+
+  it("wheel_zooms_at_the_cursor", () => {
+    key("0");
+    // at the stage centre (400, 300), over the plate's middle: that image point stays put
+    $(".lb-stage").dispatchEvent(new WheelEvent("wheel", { deltaY: -1000, clientX: 400, clientY: 300, cancelable: true, bubbles: true }));
+    const n = (k: "left" | "top" | "width" | "height") => parseFloat($(".lb-plate").style[k]);
+    expect(n("width")).toBeGreaterThan(450);
+    expect((400 - n("left")) / n("width")).toBeCloseTo(0.5, 4); // the px strings are rounded
+    expect((300 - n("top")) / n("height")).toBeCloseTo(0.5, 4);
+  });
+
+  it("overlay_ink_from_taxonomy", () => {
+    const tax: Taxonomy = {
+      ...taxonomy,
+      operations: [...taxonomy.operations, { id: "pulse", name: "Pulse", plainLabel: "Beat", color: "teal", icon: "", description: "" }],
+      techniques: [{ id: "rim-light", name: "Rim light", icon: "", description: "", synonyms: [], examples: [], custom: false }],
+    };
+    const tagged = { ...tag("p1", "pulse", { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }), techniqueId: "rim-light", branchId: "pulse.x" };
+    const R3 = ref("r3", [tagged, tag("g1", "ghost", { x: 0.6, y: 0.6, w: 0.2, h: 0.2 })]);
+    lb.close();
+    store = createStore({ root: "C:\\lib", references: [R3], links: [], boards: [], warning: null, taxonomyReadOnly: false }, tax);
+    lb = openLightbox(api, store, "r3", { openPicker });
+    stubStage();
+    const [pulse, ghost] = [...document.querySelectorAll<HTMLElement>(".lb-box")];
+    expect(pulse.style.getPropertyValue("--c")).toBe("var(--x-teal)");
+    expect(ghost.style.getPropertyValue("--c")).toBe("var(--ink-2)"); // unknown: neutral, never amber
+    store.apply({ ...none, taxonomy: { ...tax, operations: tax.operations.map((o) => (o.id === "pulse" ? { ...o, plainLabel: "Throb" } : o)) } });
+    pointer("pointermove", at(0.2, 0.2)); // hover the pulse region
+    const hot = document.querySelector<HTMLElement>(".lb-box.is-hot")!;
+    expect(hot.querySelector(".lb-tag")!.textContent).toBe("Throb › Rim light");
+    expect(hot.querySelector(".lb-tag .text")!.textContent).toBe("Throb");
+    expect(hot.tabIndex).toBe(0); // Tab reaches it too
   });
 });
