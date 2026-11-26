@@ -39,6 +39,31 @@ colors:
   infer-vermilion-dark: "#EC6A4E"
   infer-vermilion-text-dark: "#F28A72"
   operation-on-dark: "#161616"
+  extra-teal: "#089B9B"
+  extra-teal-text: "#066B6B"
+  extra-teal-on: "#161616"
+  extra-olive: "#6A7A1A"
+  extra-olive-text: "#455011"
+  extra-olive-on: "#FFFFFF"
+  extra-rose: "#BC4E7B"
+  extra-rose-text: "#9B3B63"
+  extra-rose-on: "#FFFFFF"
+  extra-indigo: "#8C84DB"
+  extra-indigo-text: "#675DD0"
+  extra-indigo-on: "#161616"
+  extra-umber: "#815637"
+  extra-umber-text: "#5D3E28"
+  extra-umber-on: "#FFFFFF"
+  extra-teal-dark: "#0ABDBD"
+  extra-teal-text-dark: "#0BDADA"
+  extra-olive-dark: "#9AA951"
+  extra-olive-text-dark: "#A7B464"
+  extra-rose-dark: "#ED7EAC"
+  extra-rose-text-dark: "#F098BD"
+  extra-indigo-dark: "#B7A4EF"
+  extra-indigo-text-dark: "#CBBEF4"
+  extra-umber-dark: "#A67E59"
+  extra-umber-text-dark: "#B08E6D"
 typography:
   wordmark:
     fontFamily: "Source Serif 4, Iowan Old Style, Georgia, serif"
@@ -192,6 +217,29 @@ A colourless desk around a fixed grey card, with four operation inks as the only
 - **Infer Vermilion** (infer-vermilion / infer-vermilion-dark): the "Make them think" operation, in the same roles.
 
 Each ink comes in three forms: the base ink for fills and strokes, a `-text` variant darkened (light theme) or lightened (dark theme) for legible type on the panel, and an `-on` colour for the numeral inside a filled badge. In the light theme, amber and green take near-black numerals while blue and vermilion take white. In dark, every badge takes near-black (operation-on-dark).
+
+### Extra operation inks
+Operations are data: an artist can add up to nine. The four seed operations keep the inks above; an added operation takes one of five extra inks, the first free one unless the artist picks another. The Operation-Only Chroma Rule is unchanged: these inks only ever name an operation.
+
+- **Teal** (hue 180°), **Olive** (70°), **Rose** (335°), **Indigo** (246° light, 255° dark; kept clear of Iris's purple, about 285°) and **Umber** (25°, darker and less saturated than Vermilion).
+- Tokens: `--x-<name>` (base), `--x-<name>-text` and `--x-<name>-on`, in both themes. Every dark `-on` is near-black, as for the dark seed inks.
+
+| Theme | Ink | base | `-text` | `-on` | `-on` / base | `-text` / panel | Min ΔE2000 (nearest) |
+|---|---|---|---|---|---|---|---|
+| light | teal | `#089B9B` | `#066B6B` | `#161616` | 5.32 | 6.05 | 18.5 (group) |
+| light | olive | `#6A7A1A` | `#455011` | `#FFFFFF` | 4.76 | 8.35 | 18.9 (group) |
+| light | rose | `#BC4E7B` | `#9B3B63` | `#FFFFFF` | 4.65 | 6.28 | 24.2 (infer) |
+| light | indigo | `#8C84DB` | `#675DD0` | `#161616` | 5.55 | 4.96 | 18.3 (seq) |
+| light | umber | `#815637` | `#5D3E28` | `#FFFFFF` | 6.33 | 9.20 | 18.8 (infer) |
+| dark | teal | `#0ABDBD` | `#0BDADA` | `#161616` | 7.78 | 9.89 | 18.1 (group) |
+| dark | olive | `#9AA951` | `#A7B464` | `#161616` | 7.04 | 7.67 | 18.5 (group) |
+| dark | rose | `#ED7EAC` | `#F098BD` | `#161616` | 7.05 | 8.15 | 21.8 (indigo) |
+| dark | indigo | `#B7A4EF` | `#CBBEF4` | `#161616` | 8.25 | 10.02 | 18.5 (seq) |
+| dark | umber | `#A67E59` | `#B08E6D` | `#161616` | 4.95 | 5.69 | 18.8 (infer) |
+
+Contrast is WCAG 2 against light panel `#FAFAF9` and dark panel `#1B1B1B`; ΔE2000 is against the other eight bases of the same theme, seed inks included. The floor is 15; the smallest pair is 18.3 in light (Sequence Blue / Indigo) and 18.1 in dark (Group Green / Teal). `app/src/inks.test.ts` checks every value from `styles.css`.
+
+**Delta (ruling B7, carried to Plan 6).** Light Group Green's `-on` (`#161616` on `#1E8E5A`) measures 4.37:1, under AA's 4.5:1. The other seed `-on` values pass (light 5.23 amber, 5.56 blue, 4.52 vermilion; dark 8.20, 6.63, 5.56, 5.81), and every seed `-text` is 6.25 to 9.14 on the panel. It is not changed yet, because that is a visible change to a seed ink: Plan 6 decides.
 
 ### Neutral
 - **Bench Shell** (shell / shell-dark): the application ground, plus the fill of callout cards, link cards and the search field.
