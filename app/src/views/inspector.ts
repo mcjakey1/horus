@@ -1,7 +1,6 @@
 // The graph views' docked inspector (SPEC §5): the breadcrumb on top, then the selection's
 // detail. With `editable` (and `api` and `apply`), the Tree edits the taxonomy here (Task 10).
-// Markup carries no style=; tile geometry and inks go through the CSSOM or CSS attribute
-// selectors (Plan 6 CSP, R11).
+// Markup carries no style=; tile geometry and inks go through the CSSOM (Plan 6 CSP, R11).
 import type { Api, Change, DomainMove, OpMove, Taxonomy } from "../api";
 import type { Snapshot } from "../data";
 import { esc } from "../esc";
@@ -42,8 +41,12 @@ export const DOMAIN_ICONS = [
   "a plain square",
   "a dot inside a ring",
 ];
-const SEED_INK_NAME: Record<string, string> = { diff: "Amber", group: "Green", seq: "Blue", infer: "Vermilion" };
 const cap = (w: string) => w[0].toUpperCase() + w.slice(1);
+/** A resolved ink (opInk's `base`) by name, for the swatches' labels. */
+const INK_NAME: Record<string, string> = {
+  "var(--diff)": "Amber", "var(--group)": "Green", "var(--seq)": "Blue", "var(--infer)": "Vermilion",
+  ...Object.fromEntries(EXTRA_INKS.map((k) => [`var(--x-${k})`, cap(k)])),
+};
 const FIELD_LABEL: Record<string, string> = { name: "Name", plainLabel: "Plain label", synonym: "New synonym" };
 const partialCopy = (n: number) =>
   n === 1
@@ -76,8 +79,23 @@ function names(tax: Taxonomy) {
   return { domain, branch, tech, branchLabel: (id: string) => branchLabel(tax, id) };
 }
 
-/** Inspectors with an edit command in flight: a second click waits, so one click is one undo step. */
-const inFlight = new WeakSet<HTMLElement>();
+// Per-inspector state that outlives a render (each render rebuilds the aside and its closures).
+/** Edit commands run one at a time, in order; a repeat of a pending one (a double click) is dropped. */
+const queues = new WeakMap<HTMLElement, { tail: Promise<unknown>; keys: Set<string> }>();
+/** The newest taxonomy, for a queued command that builds its patch when it runs. */
+const latest = new WeakMap<HTMLElement, Taxonomy>();
+/** A mouse button is down in the inspector: a render waits for the click, so it can't detach it. */
+const pressed = new WeakSet<HTMLElement>();
+const deferred = new WeakMap<HTMLElement, () => void>();
+/** The innerHTML rewrite is under way: a blur or change it causes is not the artist's. */
+const rewriting = new WeakSet<HTMLElement>();
+const lastSel = new WeakMap<HTMLElement, string | null>();
+/** The data-* attributes that name a control across renders. */
+const KEYS = ["data-field", "data-edit", "data-act", "data-sel", "data-ink", "data-icon", "data-unlink", "data-link", "data-add-branch", "data-syn-add", "data-syn-del", "data-open", "data-cancel"];
+function keyOf(a: Element): string | null {
+  for (const k of KEYS) if (a.hasAttribute(k)) return `[${k}="${CSS.escape(a.getAttribute(k)!)}"]`;
+  return null;
+}
 
 function roNote(): HTMLElement {
   const p = document.createElement("p");
@@ -88,6 +106,9 @@ function roNote(): HTMLElement {
 }
 
 export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, opts: InspectorOpts): void {
+  latest.set(el, s.tax);
+  if (pressed.has(el)) return void deferred.set(el, () => renderInspector(el, s, sel, opts));
+  deferred.delete(el);
   const { tax } = s;
   const N = names(tax);
   const techId = sel?.kind === "tech" ? sel.id.slice(5) : sel?.kind === "ref" ? sel.id.split(":")[1] : null;
@@ -115,6 +136,7 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     `<textarea class="insp-field insp-area" data-field="description" aria-label="${label}" rows="3">${esc(v)}</textarea>`;
   const act = (a: string, label: string, extra = "") => `<button class="text-btn insp-act" data-act="${a}"${extra}>${esc(label)}</button>`;
   const tail = `<div class="insp-slot"></div><p class="insp-msg" role="status"></p>`;
+  const swatches: { ink: string; base: string }[] = [];
   let body = "";
   if (!node) {
     body = `<h2 class="insp-title" tabindex="-1">Operations</h2><div class="insp-list">${tax.operations
@@ -127,17 +149,19 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
       body = `<p class="insp-plain">${esc(op.plainLabel)}</p><h2 class="insp-title" tabindex="-1">${esc(op.name)}</h2>
       <p class="insp-desc">${esc(op.description)}</p>`;
     else {
-      const cur = op.color && (EXTRA_INKS as readonly string[]).includes(op.color)
-        ? { sw: `x-${op.color}`, name: cap(op.color) }
-        : Object.prototype.hasOwnProperty.call(SEED_INK, op.id)
-          ? { sw: SEED_INK[op.id], name: SEED_INK_NAME[SEED_INK[op.id]] }
-          : { sw: "neutral", name: "Neutral" };
-      const free = EXTRA_INKS.filter((k) => k !== op.color && !tax.operations.some((o) => o.id !== op.id && o.color === k));
-      const swatch = (ink: string, sw: string, name: string, on: boolean) =>
-        `<button class="insp-ink" data-ink="${ink}" data-swatch="${sw}" aria-label="${name}" aria-pressed="${on}"></button>`;
+      // Every swatch's ink resolves through opInk: the current one, the seed ink back (I3, sent
+      // as `color: null`) and each free extra ink, as this operation would draw with it.
+      const inkAs = (color: string | null) => opInk({ ...tax, operations: [{ ...op, color }] }, op.id).base;
+      const cur = opInk(tax, op.id).base;
+      swatches.push({ ink: "", base: cur });
+      if (Object.prototype.hasOwnProperty.call(SEED_INK, op.id) && inkAs(null) !== cur) swatches.push({ ink: "seed", base: inkAs(null) });
+      for (const k of EXTRA_INKS)
+        if (k !== op.color && !tax.operations.some((o) => o.id !== op.id && o.color === k)) swatches.push({ ink: k, base: inkAs(k) });
       body = `<p class="insp-plain">${edit("plainLabel", op.plainLabel)}</p><h2 class="insp-title" tabindex="-1">${edit("name", op.name)}</h2>
       ${area("Description", op.description)}
-      <div class="insp-inks" role="group" aria-label="Ink">${swatch("", cur.sw, cur.name, true)}${free.map((k) => swatch(k, `x-${k}`, cap(k), false)).join("")}</div>`;
+      <div class="insp-inks" role="group" aria-label="Ink">${swatches
+        .map((w, i) => `<button class="insp-ink" data-ink="${w.ink}" aria-label="${INK_NAME[w.base] ?? "Neutral"}" aria-pressed="${i === 0}"></button>`)
+        .join("")}</div>`;
     }
     body += `<p class="insp-count mono">${node.count} ${node.count === 1 ? "reference" : "references"}</p>
       <div class="insp-list">${(g.children.get(node.id) ?? []).map((b) => selBtn(b, N.branchLabel(b.slice(3)), (g.nodes.get(b) as { count: number }).count)).join("")}</div>`;
@@ -186,12 +210,28 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
       <button class="text-btn" data-open="${esc(ref.id)}">Open in Reference view</button>`;
   }
   // Rewriting the aside destroys the focused button: keep the keyboard route inside it (I1).
-  const hadFocus = el.contains(document.activeElement);
+  const active = el.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
+  // Same selection, editing: what the artist has open survives the rewrite (T10 fix I1): the
+  // slot (a form or a pick list), an open name or synonym field, and unsaved definition text.
+  const same = E && lastSel.get(el) === (sel?.id ?? null);
+  lastSel.set(el, sel?.id ?? null);
+  const openField = same ? el.querySelector<HTMLInputElement>("input.insp-field[data-field]:not([data-saving])") : null;
+  const keep = same
+    ? {
+        slot: el.querySelector<HTMLElement>(".insp-slot"),
+        field: openField && { name: openField.dataset.field!, value: openField.value, err: errOf(openField)?.textContent ?? "" },
+        area: active?.matches("textarea[data-field=description]") ? (active as HTMLTextAreaElement).value : null,
+      }
+    : null;
+  const focusKey = same && active ? keyOf(active) : null;
   // The read-only note is kept across renders, so role="status" announces it once.
   const ro = s.taxonomyReadOnly && opts.apply ? (el.querySelector<HTMLElement>(":scope > .insp-ro") ?? roNote()) : null;
+  rewriting.add(el);
   el.innerHTML = `${crumb}<div class="insp-body">${body}</div>`;
+  rewriting.delete(el);
   if (ro) el.prepend(ro);
-  if (hadFocus) el.querySelector<HTMLElement>(".insp-title")?.focus();
+  if (active && !same) el.querySelector<HTMLElement>(".insp-title")?.focus();
+  el.querySelectorAll<HTMLElement>(".insp-ink").forEach((b, i) => b.style.setProperty("--c", swatches[i].base));
 
   // Inks and tile geometry, through the CSSOM.
   if (opId) el.querySelector<HTMLElement>(".insp-crumb")!.style.setProperty("--op-text", opInk(tax, opId).text);
@@ -217,6 +257,17 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     if (E) editClick(t);
   };
   el.onchange = el.onsubmit = null;
+  el.onmousedown = E
+    ? () => {
+        pressed.add(el);
+        el.ownerDocument.addEventListener("mouseup", () => setTimeout(() => {
+          pressed.delete(el);
+          const later = deferred.get(el);
+          deferred.delete(el);
+          later?.();
+        }), { once: true });
+      }
+    : null;
   if (!E) return;
 
   // ---------- Editing (Task 10) ----------
@@ -226,11 +277,16 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     if (opts.notice) opts.notice(`<p>${esc(text)}</p>`);
     else if (el.querySelector(".insp-msg")) el.querySelector(".insp-msg")!.textContent = text;
   };
-  /** Applies a command's Change, or says why it was refused. A read-only refusal reverts the UI. */
-  const run = (call: () => Promise<Change>, fieldErr?: (msg: string) => void): Promise<boolean> => {
-    if (inFlight.has(el)) return Promise.resolve(false);
-    inFlight.add(el);
-    return call().then(
+  /**
+   * Queues a command behind any in flight, applies its Change, or says why it was refused. A
+   * read-only refusal reverts the UI. `key` names it: a repeat while it is pending is dropped.
+   */
+  const run = (key: string, call: () => Promise<Change>, fieldErr?: (msg: string) => void): Promise<boolean> => {
+    const q = queues.get(el) ?? { tail: Promise.resolve(), keys: new Set<string>() };
+    queues.set(el, q);
+    if (q.keys.has(key)) return Promise.resolve(false);
+    q.keys.add(key);
+    const p = q.tail.then(call).then(
       (c) => {
         opts.apply!(c);
         if (c.madePartial) say(partialCopy(c.madePartial));
@@ -240,13 +296,20 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
         const msg = sayError(err, tax);
         if (msg === READ_ONLY) {
           say(msg);
+          clearSlot();
           rerender();
         } else if (fieldErr) fieldErr(msg);
         else say(msg);
         return false;
       },
-    ).finally(() => inFlight.delete(el));
+    ).finally(() => q.keys.delete(key));
+    q.tail = p;
+    return p;
   };
+  /** The selected technique as it is now: a queued command builds its patch from this. */
+  const nowTech = (id: string) => latest.get(el)!.techniques.find((x) => x.id === id);
+  const clearSlot = () => el.querySelector(".insp-slot")?.replaceChildren();
+  let restoring = false; // reopening what was open: nothing takes focus
   // What the name, description and icon fields edit.
   const target =
     node?.kind === "tech" ? { kind: "tech", id: node.techId } : node?.kind === "branch" ? { kind: "domain", id: node.domainId } : node?.kind === "op" ? { kind: "op", id: node.opId } : null;
@@ -261,8 +324,8 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     if (!document.activeElement || document.activeElement === document.body) el.querySelector<HTMLElement>(".insp-title")?.focus();
   };
 
-  /** Swaps `anchor` for a text field. Enter saves `patch(value)` (null: nothing to save); Esc and blur cancel. */
-  function inline(anchor: HTMLElement, field: string, patch: (v: string) => Record<string, unknown> | null, old = "") {
+  /** Swaps `anchor` for a text field. Enter or blur saves `save(value)` (null: nothing to save); Esc cancels. */
+  function inline(anchor: HTMLElement, field: string, save: (v: string) => (() => Promise<Change>) | null, old = "") {
     const input = document.createElement("input");
     input.className = "insp-field";
     input.dataset.field = field;
@@ -273,8 +336,10 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     err.setAttribute("role", "alert");
     anchor.replaceWith(input);
     (input.parentElement?.matches(".insp-title, .insp-plain") ? input.parentElement : input).after(err);
-    input.focus();
-    input.select();
+    if (!restoring) {
+      input.focus();
+      input.select();
+    }
     let busy = false; // Enter saved or cancelled: the blur that follows does nothing
     // Cancel puts the button back in place. A full re-render here would detach whatever the
     // artist is clicking, mid-click, when the blur comes from that click.
@@ -292,19 +357,25 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
       }
       if (e.key !== "Enter") return;
       e.preventDefault();
-      const p = patch(input.value.trim());
-      if (!p) return cancel(true);
+      commit(true);
+    };
+    // T10 fix I2: clicking away saves a changed value, as the definition does.
+    input.onblur = () => void (busy || rewriting.has(el) || commit(false));
+    function commit(enter: boolean) {
+      const call = save(input.value.trim());
+      if (!call) return cancel(enter);
       busy = true;
-      void run(() => update(p), (m) => {
+      input.dataset.saving = ""; // a re-render while it saves doesn't reopen it
+      void run(`field:${field}`, call, (m) => {
         err.textContent = m;
         busy = false;
-        input.focus();
-      }).then((ok) => ok && leave());
-    };
-    input.onblur = () => void (busy || cancel(false));
+        delete input.dataset.saving;
+        if (enter) input.focus();
+      }).then((ok) => ok && enter && leave());
+    }
   }
 
-  function editClick(t: Element) {
+  function editClick(t: Element): void {
     const b = t.closest<HTMLButtonElement>("button");
     if (!b || b.disabled) return;
     const d = b.dataset;
@@ -312,24 +383,47 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     const tech = techNode ? N.tech(techNode.techId)! : null;
     if (d.edit) {
       const old = d.old ?? "";
-      return inline(b, d.edit, (v) => (v === old ? null : { [d.edit!]: v }), old);
+      const f = d.edit;
+      return inline(b, f, (v) => (v === old ? null : () => update({ [f]: v })), old);
     }
-    if (tech && "synAdd" in d) return inline(b, "synonym", (v) => (!v || tech.synonyms.includes(v) ? null : { synonyms: [...tech.synonyms, v] }));
-    if (tech && d.synDel) return void run(() => update({ synonyms: tech.synonyms.filter((_, i) => i !== +d.synDel!) }));
+    // Synonym edits build their list when they run, from the newest taxonomy, so queued ones compose.
+    const syns = (f: (cur: string[]) => string[]) => () => {
+      const cur = nowTech(tech!.id);
+      return cur ? update({ synonyms: f(cur.synonyms) }) : Promise.reject(`unknown technique: ${tech!.id}`);
+    };
+    if (tech && "synAdd" in d)
+      return inline(b, "synonym", (v) => (!v || tech.synonyms.includes(v) ? null : syns((cur) => (cur.includes(v) ? cur : [...cur, v]))));
+    if (tech && d.synDel) {
+      const word = tech.synonyms[+d.synDel];
+      return void run(`syn-del:${word}`, syns((cur) => cur.filter((x) => x !== word)));
+    }
     if (tech && d.unlink) {
       const br = d.unlink;
       // R20: no tag uses the pair, so nothing to move.
-      if (!refsUsing(s, tech.id, br)) return void run(() => api.unlinkTechnique(tech.id, br, undefined));
-      return void openMoveTags(dialogHost(), { s, techId: tech.id, branchId: br }).then((m) => m && run(() => api.unlinkTechnique(tech.id, br, m)));
+      if (!refsUsing(s, tech.id, br)) return void run(`unlink:${br}`, () => api.unlinkTechnique(tech.id, br, undefined));
+      return void openMoveTags(dialogHost(), { s, techId: tech.id, branchId: br }).then((m) => m && run(`unlink:${br}`, () => api.unlinkTechnique(tech.id, br, m)));
     }
-    if (tech && d.link) return void run(() => api.linkTechnique(tech.id, d.link!));
-    if (d.ink && node?.kind === "op") return void run(() => api.updateOperation(node.opId, { color: d.ink }));
-    if (d.icon && node?.kind === "branch" && d.icon !== N.domain(node.domainId)?.icon) return void run(() => api.updateDomain(node.domainId, { icon: d.icon }));
-    if (d.addBranch && node?.kind === "op") return void run(() => api.addBranch(node.opId, d.addBranch!));
+    if (tech && d.link) {
+      const br = d.link;
+      return void run(`link:${br}`, () => api.linkTechnique(tech.id, br)).then((ok) => ok && clearSlot());
+    }
+    if (d.ink && node?.kind === "op") {
+      const ink = d.ink;
+      return void run(`ink:${ink}`, () => api.updateOperation(node.opId, { color: ink === "seed" ? null : ink }));
+    }
+    if (d.icon && node?.kind === "branch" && d.icon !== N.domain(node.domainId)?.icon) {
+      const icon = d.icon;
+      return void run(`icon:${icon}`, () => api.updateDomain(node.domainId, { icon }));
+    }
+    if (d.addBranch && node?.kind === "op") {
+      const dom = d.addBranch;
+      return void run(`branch:${dom}`, () => api.addBranch(node.opId, dom)).then((ok) => ok && clearSlot());
+    }
     if ("cancel" in d) return slot().replaceChildren();
     const pickList = (label: string, items: string) => {
+      slot().dataset.slot = d.act;
       slot().innerHTML = `<div class="insp-list insp-pick" role="group" aria-label="${label}">${items}<button class="text-btn" data-cancel>Cancel</button></div>`;
-      slot().querySelector<HTMLElement>("button")!.focus();
+      if (!restoring) slot().querySelector<HTMLElement>("button")!.focus();
     };
     switch (d.act) {
       case "also": {
@@ -341,20 +435,22 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
           .join(""));
       }
       case "del-tech":
-        if (refsUsing(s, tech!.id)) return void openMoveTags(dialogHost(), { s, techId: tech!.id }).then((m) => m && run(() => api.deleteTechnique(tech!.id, m)));
-        return void confirmDelete(dialogHost(), `Delete ${tech!.name}?`, "Delete technique").then((yes) => yes && run(() => api.deleteTechnique(tech!.id, undefined)));
+        if (refsUsing(s, tech!.id)) return void openMoveTags(dialogHost(), { s, techId: tech!.id }).then((m) => m && run("del", () => api.deleteTechnique(tech!.id, m)));
+        return void confirmDelete(dialogHost(), `Delete ${tech!.name}?`, "Delete technique").then((yes) => yes && run("del", () => api.deleteTechnique(tech!.id, undefined)));
       case "del-op":
-        return void openMoveBranches(dialogHost(), { s, kind: "op", id: target!.id }).then((m) => m && run(() => api.deleteOperation(target!.id, m as OpMove)));
+        return void openMoveBranches(dialogHost(), { s, kind: "op", id: target!.id }).then((m) => m && run("del", () => api.deleteOperation(target!.id, m as OpMove)));
       case "del-domain":
-        return void openMoveBranches(dialogHost(), { s, kind: "domain", id: target!.id }).then((m) => m && run(() => api.deleteDomain(target!.id, m as DomainMove)));
+        return void openMoveBranches(dialogHost(), { s, kind: "domain", id: target!.id }).then((m) => m && run("del", () => api.deleteDomain(target!.id, m as DomainMove)));
       case "add-tech":
         // The form's api applies its Change; one argument (C17).
+        slot().dataset.slot = "form";
         return mountTechniqueForm(slot(), {
           ...api,
           addTechnique: (x) => api.addTechnique(x).then((c) => (opts.apply!(c), c), (err) => {
             const msg = sayError(err, tax);
             if (msg === READ_ONLY) {
               say(msg);
+              clearSlot();
               rerender();
             }
             throw new Said(msg); // the form shows it as is, names resolved
@@ -375,10 +471,11 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
   }
 
   function form(kind: "op" | "domain", fields: [string, string][], ok: string) {
+    slot().dataset.slot = "form";
     slot().innerHTML = `<form class="insp-form" data-form="${kind}" novalidate>${fields
       .map(([n, l]) => `<label>${l} <input name="${n}" autocomplete="off"></label>`)
       .join("")}<p class="insp-err" role="alert"></p><div class="tx-actions"><button class="fr-btn">${ok}</button><button type="button" class="text-btn" data-cancel>Cancel</button></div></form>`;
-    slot().querySelector<HTMLInputElement>("input")!.focus();
+    if (!restoring) slot().querySelector<HTMLInputElement>("input")!.focus();
   }
   let submitting = false;
   el.onsubmit = (e) => {
@@ -391,14 +488,53 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     const p = () => f.dataset.form === "op"
       ? api.addOperation(v("name"), v("plainLabel"), v("description")) // no color: the first free ink
       : api.addDomain(v("name"), v("description"), undefined, target!.id); // one call, one undo step
-    void run(p, (m) => void (f.querySelector(".insp-err")!.textContent = m)).finally(() => (submitting = false));
+    void run(`form:${f.dataset.form}`, p, (m) => void (f.querySelector(".insp-err")!.textContent = m))
+      .then((ok) => ok && clearSlot())
+      .finally(() => (submitting = false));
   };
   // A textarea's change fires on blur, and only when the text changed.
   el.onchange = (e) => {
     const a = e.target as HTMLTextAreaElement;
-    if (!a.matches("textarea[data-field=description]") || !target) return;
+    if (!a.matches("textarea[data-field=description]") || !target || rewriting.has(el)) return;
     const old = target.kind === "tech" ? N.tech(target.id)?.description : target.kind === "domain" ? N.domain(target.id)?.description : tax.operations.find((o) => o.id === target.id)?.description;
     const v = a.value.trim();
-    if (v !== (old ?? "")) void run(() => update({ description: v }));
+    if (v !== (old ?? "")) void run("description", () => update({ description: v }));
   };
+
+  // Put back what was open (same selection only), then the focus, by the control's data-* key.
+  if (keep) {
+    restoring = true;
+    const fresh = el.querySelector<HTMLElement>(".insp-slot");
+    if (keep.slot?.childElementCount && fresh) {
+      const open = keep.slot.dataset.slot;
+      const again = open && open !== "form" ? el.querySelector<HTMLElement>(`[data-act="${open}"]`) : null;
+      if (again) editClick(again); // a pick list is rebuilt from the new data
+      else if (open === "form") fresh.replaceWith(keep.slot); // a form keeps its nodes, listeners and text
+    }
+    if (keep.field) {
+      const anchor = el.querySelector<HTMLElement>(keep.field.name === "synonym" ? "[data-syn-add]" : `.insp-edit[data-edit="${keep.field.name}"]`);
+      if (anchor) {
+        editClick(anchor);
+        const input = el.querySelector<HTMLInputElement>(`input[data-field="${keep.field.name}"]`)!;
+        input.value = keep.field.value;
+        const err = errOf(input);
+        if (err) err.textContent = keep.field.err;
+      }
+    }
+    if (keep.area !== null) {
+      const a = el.querySelector<HTMLTextAreaElement>("textarea[data-field=description]");
+      if (a) a.value = keep.area;
+    }
+    restoring = false;
+  }
+  if (active && same) {
+    const back = (active.isConnected && el.contains(active) ? active : null) ?? (focusKey ? el.querySelector<HTMLElement>(focusKey) : null);
+    (back ?? el.querySelector<HTMLElement>(".insp-title"))?.focus();
+  }
+}
+
+/** An inline field's error line: after its title or plain-label line, else right after it. */
+function errOf(input: HTMLElement): Element | null {
+  const host = input.parentElement?.matches(".insp-title, .insp-plain") ? input.parentElement : input;
+  return host.nextElementSibling?.matches(".insp-err") ? host.nextElementSibling : null;
 }

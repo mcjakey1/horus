@@ -417,17 +417,8 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .insp-x:disabled, .insp-act:disabled { color: var(--ink-3); cursor: not-allowed; }
 .insp-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; align-items: center; }
 .insp-inks { display: flex; gap: 10px; }
-.insp-ink { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line-2); border-radius: 50%; background: var(--ink-2); }
+.insp-ink { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line-2); border-radius: 50%; background: var(--c, var(--ink-2)); /* --c: opInk, set through the CSSOM */ }
 .insp-ink[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
-.insp-ink[data-swatch="diff"] { background: var(--diff); }
-.insp-ink[data-swatch="group"] { background: var(--group); }
-.insp-ink[data-swatch="seq"] { background: var(--seq); }
-.insp-ink[data-swatch="infer"] { background: var(--infer); }
-.insp-ink[data-swatch="x-teal"] { background: var(--x-teal); }
-.insp-ink[data-swatch="x-olive"] { background: var(--x-olive); }
-.insp-ink[data-swatch="x-rose"] { background: var(--x-rose); }
-.insp-ink[data-swatch="x-indigo"] { background: var(--x-indigo); }
-.insp-ink[data-swatch="x-umber"] { background: var(--x-umber); }
 .insp-icons { display: grid; gap: 4px; }
 .insp-icon { padding: 6px 10px; border: 1px solid var(--line); background: var(--shell); text-align: left; font-size: 13px; color: var(--ink-2); }
 .insp-icon[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }

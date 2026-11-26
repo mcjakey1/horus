@@ -246,12 +246,25 @@ describe("inspector editing", () => {
     const sw = [...el.querySelectorAll<HTMLButtonElement>(".insp-ink")];
     expect(sw.map((b) => b.getAttribute("aria-label"))).toEqual(["Amber", "Olive", "Rose", "Indigo", "Umber"]);
     expect(sw[0].getAttribute("aria-pressed")).toBe("true");
-    expect(sw.map((b) => b.dataset.swatch)).toEqual(["diff", "x-olive", "x-rose", "x-indigo", "x-umber"]);
+    // every swatch's colour comes from opInk, through the CSSOM (fix I4)
+    expect(sw.map((b) => b.style.getPropertyValue("--c"))).toEqual(["var(--diff)", "var(--x-olive)", "var(--x-rose)", "var(--x-indigo)", "var(--x-umber)"]);
+    expect(sw.some((b) => b.hasAttribute("data-swatch"))).toBe(false);
     sw[2].click();
     await flush();
     expect(api.updateOperation).toHaveBeenCalledWith("differentiate", { color: "rose" });
     render({ kind: "op", id: "op:pulse" }, snap(t, refs));
     expect([...el.querySelectorAll(".insp-ink")].map((b) => b.getAttribute("aria-label"))).toEqual(["Teal", "Olive", "Rose", "Indigo", "Umber"]);
+  });
+
+  it("a seed operation on an extra ink can take its seed ink back (fix I3)", async () => {
+    const t: Taxonomy = { ...mine, operations: mine.operations.map((o) => (o.id === "differentiate" ? { ...o, color: "rose" } : o)) };
+    render({ kind: "op", id: "op:differentiate" }, snap(t, refs));
+    const sw = [...el.querySelectorAll<HTMLButtonElement>(".insp-ink")];
+    expect(sw.map((b) => b.getAttribute("aria-label"))).toEqual(["Rose", "Amber", "Teal", "Olive", "Indigo", "Umber"]);
+    expect(sw.map((b) => b.style.getPropertyValue("--c")).slice(0, 2)).toEqual(["var(--x-rose)", "var(--diff)"]);
+    sw[1].click();
+    await flush();
+    expect(api.updateOperation).toHaveBeenCalledWith("differentiate", { color: null });
   });
 
   it("operation fields edit inline", async () => {
@@ -328,6 +341,7 @@ describe("inspector editing", () => {
     const rose = el.querySelector<HTMLButtonElement>('.insp-ink[data-ink="rose"]')!;
     rose.click();
     rose.click();
+    await flush(); // queued: the call goes out on the next microtask
     finish(done());
     await flush();
     expect(api.updateOperation).toHaveBeenCalledTimes(1);
@@ -348,6 +362,111 @@ describe("inspector editing", () => {
     expect(opts.notice).toHaveBeenCalledWith(expect.stringContaining(READ_ONLY));
     expect(el.querySelector("form.tx-tech")).toBeNull();
     expect(opts.apply).not.toHaveBeenCalled();
+  });
+
+  // ---------- Fix round 1 (review I1, I2) ----------
+  /** A pending api call, resolved by hand. */
+  function pending(m: Mock) {
+    let finish!: (c: Change) => void;
+    m.mockImplementationOnce(() => new Promise<Change>((r) => (finish = r)));
+    return (c: Change = done()) => finish(c);
+  }
+
+  it("a command clicked while a definition save is pending is queued, not dropped (I1a)", async () => {
+    const finish = pending(api.updateOperation);
+    render({ kind: "op", id: "op:group" });
+    const d = el.querySelector<HTMLTextAreaElement>("textarea[data-field=description]")!;
+    type(d, "Things that belong.");
+    d.dispatchEvent(new Event("change", { bubbles: true }));
+    el.querySelector<HTMLButtonElement>('.insp-ink[data-ink="rose"]')!.click();
+    await flush();
+    expect(api.updateOperation).toHaveBeenCalledTimes(1);
+    finish();
+    await flush();
+    expect(api.updateOperation.mock.calls).toEqual([["group", { description: "Things that belong." }], ["group", { color: "rose" }]]);
+    expect(opts.apply).toHaveBeenCalledTimes(2);
+  });
+
+  it("a form opened while a save is pending survives the save's re-render, with its text (I1c)", async () => {
+    let snapNow = s;
+    opts.apply.mockImplementation(() => render({ kind: "branch", id: "br:group.social" }, (snapNow = { ...snapNow, version: snapNow.version + 1 })));
+    const finish = pending(api.updateDomain);
+    render({ kind: "branch", id: "br:group.social" });
+    const d = el.querySelector<HTMLTextAreaElement>("textarea[data-field=description]")!;
+    type(d, "Faces and bodies.");
+    d.dispatchEvent(new Event("change", { bubbles: true }));
+    button(el, "+ Technique…")!.click();
+    const name = el.querySelector<HTMLInputElement>('form.tx-tech [name="name"]')!;
+    type(name, "Gaze line");
+    await flush(); // the queued save goes out
+    finish();
+    await flush();
+    expect(opts.apply).toHaveBeenCalledTimes(1); // the save landed and re-rendered the aside
+    const form = el.querySelector<HTMLFormElement>("form.tx-tech")!;
+    expect(form.querySelector<HTMLInputElement>('[name="name"]')!.value).toBe("Gaze line");
+    expect(document.activeElement).toBe(name); // the same node, still focused
+    form.requestSubmit();
+    await flush();
+    expect(api.addTechnique).toHaveBeenCalledWith({ name: "Gaze line", description: "", operationId: "group", domainId: "social" });
+  });
+
+  it("an open name field and unsaved definition text survive a store event (I1c)", () => {
+    render(tech("rim-light"));
+    const f = nameField();
+    type(f, "Rim gl");
+    render(tech("rim-light"), { ...s, version: 9 }); // e.g. an import landing
+    const g = el.querySelector<HTMLInputElement>('input[data-field="name"]')!;
+    expect(g.value).toBe("Rim gl");
+    expect(document.activeElement).toBe(g);
+    expect(api.updateTechnique).not.toHaveBeenCalled(); // the rewrite's blur is not a save
+    key(g, "Escape");
+    const d = el.querySelector<HTMLTextAreaElement>("textarea[data-field=description]")!;
+    d.focus();
+    type(d, "Half a thought");
+    render(tech("rim-light"), { ...s, version: 10 });
+    const d2 = el.querySelector<HTMLTextAreaElement>("textarea[data-field=description]")!;
+    expect(d2.value).toBe("Half a thought");
+    expect(document.activeElement).toBe(d2);
+  });
+
+  it("focus comes back to the control that had it, by its key (I1d)", () => {
+    render({ kind: "op", id: "op:group" });
+    el.querySelector<HTMLButtonElement>('.insp-ink[data-ink="olive"]')!.focus();
+    render({ kind: "op", id: "op:group" }, { ...s, version: 3 }); // the definition's save landing after Tab
+    expect(document.activeElement).toBe(el.querySelector('.insp-ink[data-ink="olive"]'));
+    render({ kind: "op", id: "op:infer" }); // a new selection: the title, as before
+    expect(document.activeElement).toBe(el.querySelector(".insp-title"));
+  });
+
+  it("a render waits while the mouse is down in the inspector, so the click lands (I1b)", async () => {
+    render({ kind: "op", id: "op:group" });
+    const rose = el.querySelector<HTMLButtonElement>('.insp-ink[data-ink="rose"]')!;
+    rose.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    render({ kind: "op", id: "op:group" }, { ...s, version: 4 }); // a save resolving mid-click
+    expect(el.querySelector('.insp-ink[data-ink="rose"]')).toBe(rose); // not detached
+    rose.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    rose.click();
+    await flush();
+    expect(api.updateOperation).toHaveBeenCalledWith("group", { color: "rose" });
+    expect(el.querySelector('.insp-ink[data-ink="rose"]')).not.toBe(rose); // the deferred render ran after the click
+  });
+
+  it("a blur with a changed name saves it; Esc still cancels (I2)", async () => {
+    render(tech("rim-light"));
+    const f = nameField();
+    type(f, "Rim glow");
+    f.dispatchEvent(new FocusEvent("blur"));
+    await flush();
+    expect(api.updateTechnique).toHaveBeenCalledWith("rim-light", { name: "Rim glow" });
+    render(tech("rim-light"), { ...s, version: 5 });
+    el.querySelector<HTMLElement>("[data-syn-add]")!.click();
+    const g = el.querySelector<HTMLInputElement>('input[data-field="synonym"]')!;
+    type(g, "back light");
+    g.dispatchEvent(new FocusEvent("blur"));
+    await flush();
+    const syns = mine.techniques.find((t) => t.id === "rim-light")!.synonyms;
+    expect(api.updateTechnique).toHaveBeenLastCalledWith("rim-light", { synonyms: [...syns, "back light"] });
+    expect(api.updateTechnique).toHaveBeenCalledTimes(2);
   });
 
   it("read_only_error_toast", async () => {
