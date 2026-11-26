@@ -38,7 +38,7 @@ pub fn export_board(
     let dest = fs::canonicalize(dest)
         .ok()
         .filter(|d| d.is_dir())
-        .ok_or("That folder can't be found. Choose another.")?;
+        .ok_or(OUTSIDE)?; // the brief's one message for "missing" and "inside"
     let root = fs::canonicalize(root).map_err(|e| format!("The library can't be read: {e}"))?;
     if dest.starts_with(&root) {
         return Err(OUTSIDE.into());
@@ -257,6 +257,11 @@ mod tests {
     #[test]
     fn exports_in_board_order() {
         let l = lib(["Harbour", "Pier", "Gull"]);
+        let originals: Vec<Vec<u8>> = l
+            .refs
+            .iter()
+            .map(|r| fs::read(image_path_in(&l.root, &r.file).unwrap()).unwrap())
+            .collect();
         let dest = tempfile::tempdir().unwrap();
         let rep = export_board(&l.root, &l.board, &l.refs, dest.path()).unwrap();
         let want: Vec<String> = l
@@ -267,11 +272,12 @@ mod tests {
             .collect();
         assert_eq!(rep.written, want);
         assert!(rep.skipped.is_empty());
-        for (r, name) in l.refs.iter().zip(&rep.written) {
-            let original = fs::read(image_path_in(&l.root, &r.file).unwrap()).unwrap();
+        for ((r, name), before) in l.refs.iter().zip(&rep.written).zip(&originals) {
+            let after = fs::read(image_path_in(&l.root, &r.file).unwrap()).unwrap();
+            assert_eq!(&after, before, "the original is unchanged (SPEC §9)");
             assert_eq!(
-                fs::read(dest.path().join(name)).unwrap(),
-                original,
+                &fs::read(dest.path().join(name)).unwrap(),
+                before,
                 "{name} is byte-identical"
             );
         }
@@ -373,20 +379,28 @@ mod tests {
         let refused = |d: &Path| export_board(&l.root, &l.board, &l.refs, d).unwrap_err();
         assert_eq!(refused(&dotted), OUTSIDE, "a `..` segment");
         assert_eq!(refused(&l.root), OUTSIDE, "the root itself");
-        // Case-insensitive file systems (Windows, default macOS) find the same folder; Linux
-        // has no such folder, so it is refused as missing.
+        // Case-insensitive file systems (Windows, default macOS) find the same folder; on Linux
+        // it doesn't exist, which gives the same message.
         let upper = PathBuf::from(images.to_string_lossy().to_uppercase());
-        let err = refused(&upper);
-        if cfg!(windows) {
-            assert_eq!(err, OUTSIDE, "a different case");
-        }
+        assert_eq!(refused(&upper), OUTSIDE, "a different case");
     }
 
     #[test]
     fn missing_dest_refused() {
         let l = lib(["Harbour", "Pier", "Gull"]);
         let dest = tempfile::tempdir().unwrap();
-        assert!(export_board(&l.root, &l.board, &l.refs, &dest.path().join("nope")).is_err());
+        let missing = dest.path().join("nope");
+        assert_eq!(
+            export_board(&l.root, &l.board, &l.refs, &missing).unwrap_err(),
+            OUTSIDE
+        );
+        let file = dest.path().join("a file");
+        fs::write(&file, b"x").unwrap();
+        assert_eq!(
+            export_board(&l.root, &l.board, &l.refs, &file).unwrap_err(),
+            OUTSIDE,
+            "a file is not a folder"
+        );
     }
 
     #[test]
@@ -528,6 +542,53 @@ mod tests {
         let rep = export_board(&l.root, &board, &l.refs, dest.path()).unwrap();
         assert_eq!(rep.written[0], format!("01 - Harbour.{}", ext(&l.refs[0])));
         assert_eq!(rep.skipped.len(), 7);
+    }
+
+    #[test]
+    fn write_failure_leaves_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let err = write_new(dir.path(), "a.jpg", |_| Err(io::Error::other("disk full")));
+        assert!(err.unwrap_err().contains("disk full"));
+        assert!(names_in(dir.path()).is_empty(), "the temp file is gone");
+    }
+
+    #[test]
+    fn write_never_clobbers() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("a.jpg"), b"old").unwrap();
+        assert!(write_new(dir.path(), "a.jpg", |f| f.write_all(b"new")).is_err());
+        assert_eq!(fs::read(dir.path().join("a.jpg")).unwrap(), b"old");
+        assert_eq!(names_in(dir.path()), ["a.jpg"], "no leftover temp file");
+    }
+
+    #[test]
+    fn blank_field_prints_dash() {
+        let board = Board {
+            id: "b".into(),
+            name: "B".into(),
+            reference_ids: vec![],
+        };
+        let mut a = reference("T");
+        a.creator = Some("   ".into());
+        let text = credits_text(&board, &[("1 - T.jpg".into(), &a)]);
+        assert!(text.contains("Creator: \u{2014}\n"));
+    }
+
+    #[test]
+    fn all_skipped_board_writes_header_only() {
+        let l = lib(["Harbour", "Pier", "Gull"]);
+        for r in &l.refs {
+            fs::remove_file(image_path_in(&l.root, &r.file).unwrap()).unwrap();
+        }
+        let dest = tempfile::tempdir().unwrap();
+        let rep = export_board(&l.root, &l.board, &l.refs, dest.path()).unwrap();
+        assert!(rep.written.is_empty());
+        assert_eq!(rep.skipped.len(), 3);
+        assert_eq!(
+            fs::read_to_string(dest.path().join("credits.txt")).unwrap(),
+            "Horus board: Harbour\n"
+        );
+        assert_eq!(names_in(dest.path()), ["credits.txt"]);
     }
 
     #[test]
