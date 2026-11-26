@@ -4,6 +4,7 @@ import type { Link, Reference, Taxonomy } from "./api";
 import type { Store } from "./store";
 
 export type Snapshot = {
+  /** Live: the store's own Map and array, not copies. Key any cache on `version`, never on identity. */
   refs: Map<string, Reference>;
   links: Link[];
   tax: Taxonomy;

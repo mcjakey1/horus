@@ -216,6 +216,13 @@ describe("Galaxy", () => {
     t.wk.finish();
     expect(lastEdges(t.sc)).toEqual([]);
     expect(t.host.querySelector(".gx-neighbours")).toBeNull();
+    // "a" comes back (an undo): a kept selection would show it again; a cleared one does not (M7)
+    t.change(snapOf(["a", "b", "c"], 3));
+    await settle();
+    t.wk.finish();
+    expect(t.host.querySelector(".gx-title")).toBeNull();
+    expect(last(t.sc.calls.select)).toBeNull();
+    expect(lastEdges(t.sc)).toEqual([]);
   });
 
   it("a failed graph_edges is not cached as no edges (final review M4)", async () => {
@@ -355,7 +362,7 @@ describe("Galaxy", () => {
     const t = setup();
     await settle(); // first start posted, its layout still running
     const old = t.wk.lastStart();
-    t.change(snapOf(["x", "y"], 2), true);
+    t.change(snapOf(["a", "b", "x"], 2), true); // shares ids with the old library, so a warm start would show (M7)
     expect(last(t.wk.posted).type).toBe("stop"); // the old run is stopped before graph_edges returns
     // The worker had already posted a batch of the old run before it read the stop: it arrives late.
     t.wk.deliver({ type: "tick", run: old.run, ids: old.input.ids, xy: new Float32Array([0, 0, 1, 1, 2, 2]), alpha: 0.005 });

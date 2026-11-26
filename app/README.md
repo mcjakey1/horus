@@ -29,7 +29,7 @@ Plan 3 Task 11: the graph views at 2,500 references.
 - Synthetic library: `python -I scripts/make_perf_library.py OUT_DIR --n 2500 --seed 7` (needs Pillow 10.1 or later).
   - 2,500 numbered 600×800 colour fields.
   - Each one gets 1–4 seed techniques, drawn Zipf.
-- Perf build: `VITE_PERF=1 npm run tauri build -- --features perf --no-bundle`.
+- Perf build: `VITE_PERF=1 npm run tauri build -- --features perf --no-bundle`. In PowerShell: `$env:VITE_PERF=1; npm run tauri build -- --features perf --no-bundle`.
 - Run: start `src-tauri/target/release/horus.exe` with `HORUS_DEMO_DIR=OUT_DIR`. On first run, create a new library with "Start with the demo set".
   - The `perf` feature is what lets `HORUS_DEMO_DIR` replace the bundled demo set.
   - The overlay (bottom left of each graph view) shows the Pixi ticker's fps, the minimum since reset, and live textures. Click it to reset.

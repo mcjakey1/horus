@@ -207,7 +207,9 @@ describe("inspector editing", () => {
     await flush();
     expect(api.unlinkTechnique).toHaveBeenLastCalledWith("chiaroscuro", "differentiate.feature", { kind: "partial" });
     render(tech("rim-light")); // a sole link cannot be removed (LastLink)
-    expect(el.querySelector<HTMLButtonElement>('[data-unlink="differentiate.feature"]')?.disabled ?? true).toBe(true);
+    const sole = el.querySelector<HTMLButtonElement>('[data-unlink="differentiate.feature"]');
+    expect(sole).not.toBeNull(); // the button is there (final review M7) …
+    expect(sole!.disabled).toBe(true); // … and disabled
   });
 
   it("also use under: same-operation domains are offered, so the domain ask is reachable (ae N3)", async () => {

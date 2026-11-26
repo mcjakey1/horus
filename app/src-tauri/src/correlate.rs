@@ -133,6 +133,10 @@ impl Index {
     /// Candidates come from an inverted index (technique → references), so only pairs that
     /// share a technique are scored. Pairs that share only a branch are skipped (c5): they
     /// score low, and scanning them would bring back O(N²).
+    /// Cost: O(Σ df²) over the techniques' document frequencies, so a technique on most
+    /// references is the worst case, close to O(N²) again. Measured (Task 11, release, 2,500
+    /// references): Zipf 491–525 ms; head-heavy, one technique on at least 80%, 1,074–1,201 ms,
+    /// against the 1.5 s budget.
     /// Each vector and its norm are built once; the cosine is `score`'s maths.
     pub fn graph_edges(&self, data: &LibraryData, k: usize) -> Vec<Edge> {
         let refs = &data.references;
