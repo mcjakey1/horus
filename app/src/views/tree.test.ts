@@ -206,6 +206,30 @@ describe("Tree view", () => {
     expect(fake.last().find((n) => n.id === "tech:orphan")).toMatchObject({ color: "var(--ink-3)" });
   });
 
+  // ---------- Plan 4 Task 5 [R17]: board scope in the Tree ----------
+  it("a selected reference that falls out of scope is deselected (T6 M2)", () => {
+    fake.emit("select", "tech:chiaroscuro");
+    fake.emit("select", "ref:chiaroscuro:a");
+    src.set({ ...snap(seed, refs), version: 1, inScope: (id) => id !== "a" }); // a board without a
+    expect(fake.lastSel()).toBeNull();
+    expect(crumb("ref")).toBe("");
+  });
+
+  it("arrow keys step over an out-of-scope reference to the next in-scope one (T6 M3)", () => {
+    const more = [...refs, refOf("d", [tagOf(seed, { tech: "chiaroscuro" })])];
+    src.set({ ...snap(seed, more), version: 1, inScope: (id) => id !== "b" });
+    fake.emit("select", "tech:chiaroscuro");
+    fake.emit("select", "ref:chiaroscuro:a");
+    key("ArrowRight"); // past b
+    expect(fake.lastSel()).toBe("ref:chiaroscuro:d");
+    key("ArrowLeft"); // past b again
+    expect(fake.lastSel()).toBe("ref:chiaroscuro:a");
+    src.set({ ...snap(seed, more), version: 2, inScope: (id) => id !== "a" });
+    fake.emit("select", "tech:chiaroscuro");
+    key("ArrowDown"); // the first child is out of scope: on to the next one
+    expect(fake.lastSel()).toBe("ref:chiaroscuro:b");
+  });
+
   it("arrow_up_goes_to_parent", () => {
     fake.emit("select", "tech:face-schema");
     key("ArrowUp");

@@ -198,6 +198,27 @@ describe("Radial view", () => {
     expect(host.querySelector(".insp")!.textContent).not.toContain("undefined");
   });
 
+  // ---------- Plan 4 T5b follow-up: board scope in the Radial ----------
+  it("a selected reference that falls out of scope is deselected", () => {
+    fake.emit("select", "tech:forced-perspective");
+    fake.emit("select", "ref:forced-perspective:i2");
+    expect(fake.lastSel()).toBe("ref:forced-perspective:i2");
+    src.set({ ...snap(seed, refs), version: 1, inScope: (id) => id !== "i2" });
+    expect(fake.lastSel()).toBeNull();
+  });
+
+  it("arrow keys step over an out-of-scope reference to the next in-scope one", async () => {
+    view.destroy();
+    const fp = (id: string) => refOf(id, [tagOf(seed, { tech: "forced-perspective" })]);
+    await mount({ ...snap(seed, [...refs, fp("i3"), fp("i4")]), inScope: (id) => id !== "i3" });
+    fake.emit("select", "tech:forced-perspective");
+    fake.emit("select", "ref:forced-perspective:i2");
+    key("ArrowRight"); // past i3
+    expect(fake.lastSel()).toBe("ref:forced-perspective:i4");
+    key("ArrowLeft"); // past i3 again
+    expect(fake.lastSel()).toBe("ref:forced-perspective:i2");
+  });
+
   it("activate opens a reference; Enter is the scene's; arrows move the selection", () => {
     fake.emit("select", "tech:forced-perspective");
     key("ArrowDown");
