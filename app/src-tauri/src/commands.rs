@@ -8,7 +8,7 @@ use crate::history::History;
 use crate::hooks;
 use crate::import::{self, ImportReport};
 use crate::library::{Library, LibraryError, SUBFOLDER, thumb_path_in};
-use crate::model::{LibraryData, Link, Reference, Region, Tag};
+use crate::model::{Board, LibraryData, Link, Reference, Region, Tag};
 use crate::saver::{self, Debounce, SAVE_DEBOUNCE_MS};
 use crate::search::{self, Hit};
 use crate::settings::{self, Settings, SettingsPatch};
@@ -122,6 +122,9 @@ pub struct Change {
     /// was already missing (dangling ids, R16): they became partial tags in the same undo step.
     /// 0 for every other command.
     pub made_partial: usize,
+    /// Plan 4: the full lists, only when a link or a board changed. Both stay small.
+    pub links: Option<Vec<Link>>,
+    pub boards: Option<Vec<Board>>,
     pub can_undo: bool,
     pub can_redo: bool,
 }
@@ -594,6 +597,8 @@ fn change(o: &Open, touched: &Touched, created: Option<String>) -> Change {
         taxonomy: touched.taxonomy.then(|| o.tax.clone()),
         created,
         made_partial: 0,
+        links: touched.links.then(|| o.lib.data.links.clone()),
+        boards: touched.boards.then(|| o.lib.data.boards.clone()),
         can_undo: o.history.can_undo(),
         can_redo: o.history.can_redo(),
     }
@@ -609,7 +614,11 @@ fn reindex(o: &mut Open, touched: &Touched) {
 /// After an edit, undo or redo: reindex, mark what to save, and build the `Change`.
 fn settle(o: &mut Open, touched: &Touched, created: Option<String>) -> Change {
     reindex(o, touched);
-    let library = !touched.ref_ids.is_empty() || !touched.removed_ref_ids.is_empty();
+    // B2: links and boards live in library.json too; without them no save is due.
+    let library = !touched.ref_ids.is_empty()
+        || !touched.removed_ref_ids.is_empty()
+        || touched.links
+        || touched.boards;
     o.debounce.touch(Instant::now(), library, touched.taxonomy);
     change(o, touched, created)
 }
@@ -624,6 +633,8 @@ fn is_noop(e: &Edit) -> bool {
         Edit::UpdateTechnique { before, after } => before == after,
         Edit::UpdateDomain { before, after } => before == after,
         Edit::UpdateOperation { before, after } => before == after,
+        Edit::ReplaceLink { before, after } => before == after,
+        Edit::ReplaceBoard { before, after } => before == after,
         Edit::Batch(parts) => parts.iter().all(is_noop),
         _ => false,
     }
@@ -2137,10 +2148,69 @@ mod tests {
             ref_ids: vec![id.clone()],
             removed_ref_ids: vec![id.clone()],
             taxonomy: false,
+            links: false,
+            boards: false,
         };
         let c = change(open.as_ref().unwrap(), &touched, None);
         assert!(c.references.is_empty());
         assert_eq!(c.removed, [id]);
+    }
+
+    // ---------- Plan 4 Task 1: link and board edits save (B2) ----------
+
+    /// Two references and a link between them, added through the private recipe (no link
+    /// command exists before Task 3).
+    fn with_link() -> (Env, Link) {
+        let e = created();
+        let a = e.import("small.jpg").unwrap().added[0].clone();
+        let b = e.import("rotated.jpg").unwrap().added[0].clone();
+        let link = Link {
+            id: new_id("link"),
+            from_ref: a,
+            to_ref: b,
+            why: "Same silhouette.".into(),
+        };
+        let l = link.clone();
+        let c = commit(&e.handle(), |_| Ok((Edit::AddLink { link: l }, None))).unwrap();
+        assert_eq!(c.links.as_deref(), Some(std::slice::from_ref(&link)));
+        assert!(c.boards.is_none());
+        (e, link)
+    }
+
+    #[test]
+    fn link_edit_marks_library_dirty() {
+        let (e, _) = with_link();
+        let state = st(&e);
+        let open = lock(&state.open);
+        let o = open.as_ref().unwrap();
+        assert!(o.debounce.library_dirty());
+        assert!(o.debounce.deadline().is_some());
+    }
+
+    #[test]
+    fn link_edit_survives_flush() {
+        let (e, link) = with_link();
+        assert_eq!(close_decision(&st(&e)), CloseDecision::Close);
+        let links: Vec<Link> = serde_json::from_value(saved(&e)["links"].clone()).unwrap();
+        assert_eq!(links, [link]);
+    }
+
+    #[test]
+    fn noop_replace_link_is_noop() {
+        let (e, link) = with_link();
+        let (before, after) = (link.clone(), link);
+        commit(&e.handle(), |_| {
+            Ok((Edit::ReplaceLink { before, after }, None))
+        })
+        .unwrap();
+        undo(e.handle()).unwrap();
+        let state = st(&e);
+        let open = lock(&state.open);
+        let links = &open.as_ref().unwrap().lib.data.links;
+        assert!(
+            links.is_empty(),
+            "one undo took the add: the no-op made no step"
+        );
     }
 
     #[test]
