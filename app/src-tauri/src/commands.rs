@@ -2687,7 +2687,10 @@ mod tests {
         assert_eq!(close_decision(&st(&e)), CloseDecision::Close);
         let boards: Vec<Board> = serde_json::from_value(saved(&e)["boards"].clone()).unwrap();
         assert_eq!(boards.len(), 1);
-        assert_eq!((boards[0].id.as_str(), boards[0].name.as_str()), (id.as_str(), "Harbour"));
+        assert_eq!(
+            (boards[0].id.as_str(), boards[0].name.as_str()),
+            (id.as_str(), "Harbour")
+        );
     }
 
     #[test]
