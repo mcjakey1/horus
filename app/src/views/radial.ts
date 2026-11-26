@@ -167,7 +167,7 @@ export function mountRadial(
     }
     const l = layout();
     if (sel && l.rep.has(sel)) sel = l.rep.get(sel)!; // a change can make another node the drawn one
-    if (sel && !l.placed.has(sel)) sel = null; // gone since the change (Review Focus 3)
+    if (sel && (!l.placed.has(sel) || refused(sel))) sel = null; // gone since the change (Review Focus 3), or out of the board scope (Plan 4)
     syncOps();
     renderInspector(insp, s, selectionOf(sel), {
       editable: false,
@@ -211,6 +211,12 @@ export function mountRadial(
     render(true);
   }
 
+  /** A reference outside the board scope: dimmed, never selected (audit row 10). */
+  function refused(id: string) {
+    const n = layout().g.nodes.get(id);
+    return n?.kind === "ref" && !data.get().inScope(n.refId);
+  }
+
   function select(id: string | null) {
     const l = layout();
     const n = id ? l.g.nodes.get(id) : undefined;
@@ -232,7 +238,11 @@ export function mountRadial(
   stage.addEventListener("keydown", (e) => {
     const handled = canvasKeys(e, {
       move: (dir) => {
-        const next = sel === null ? (dir === "parent" ? null : `op:${op}`) : move(layout().ring, sel, dir);
+        let next = sel === null ? (dir === "parent" ? null : `op:${op}`) : move(layout().ring, sel, dir);
+        // Out-of-scope references are stepped over in the same direction (Plan 4, as in the Tree); a
+        // refused first child walks on to its next sibling. The loop is bounded by the ring's size.
+        const step = dir === "child" ? "next" : dir;
+        for (let n = layout().ring.nodes.size; next && refused(next) && n > 0; n--) next = move(layout().ring, next, step);
         if (next) select(next);
       },
       // With a selection, Enter is the scene's: it emits `activate`. With none, Enter selects the

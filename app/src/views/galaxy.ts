@@ -156,7 +156,7 @@ export function mountGalaxy(
       centredOnce = false;
       hovered = null;
       if (selected) void select(null);
-    } else if (selected && !s.refs.has(selected)) void select(null); // a deleted selection clears
+    } else if (selected && (!s.refs.has(selected) || !s.inScope(selected))) void select(null); // a deleted or out-of-scope selection clears
     if (!s.refs.size) {
       post({ type: "stop" });
       fitOnEnd = true; // a refilled library fits again (M5)

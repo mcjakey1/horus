@@ -223,6 +223,20 @@ describe("Galaxy", () => {
     expect(lastEdges(t.sc).length).toBeGreaterThan(0); // and the selection
   });
 
+  it("a selection that falls out of the board scope clears (Plan 4 T5b follow-up)", async () => {
+    const t = setup();
+    await settle();
+    t.wk.finish();
+    t.sc.fire("select", "a");
+    await settle();
+    expect(t.host.querySelector(".gx-title")!.textContent).toBe("Plate a");
+    t.change(snapOf(["a", "b", "c"], 2, (id) => id !== "a")); // a board without a
+    await settle();
+    t.wk.finish();
+    expect(t.host.querySelector(".gx-title")).toBeNull();
+    expect(last(t.sc.calls.select)).toBeNull();
+  });
+
   it("deleted_selection_clears", async () => {
     const t = setup();
     await settle();
