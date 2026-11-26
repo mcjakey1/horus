@@ -2607,6 +2607,30 @@ mod tests {
         assert_eq!(mtime(), first, "the cache hit is not decoded again");
     }
 
+    /// Review I1: an original over `LIGHTBOX_MAX_SIDE` is downscaled into a preview, and the
+    /// webview may load it although `lightbox/` was made after the scope grant (a first run).
+    #[test]
+    fn lightbox_source_downscales_oversized_png() {
+        let e = created();
+        assert!(!cache_of(&e).exists(), "the grant came before the folder");
+        let outside = tempfile::tempdir().unwrap();
+        let wide = outside.path().join("wide.png");
+        image::RgbImage::from_pixel(9000, 2, image::Rgb([10, 120, 200]))
+            .save(&wide)
+            .unwrap();
+        let p = wide.to_string_lossy().into_owned();
+        let res = tauri::async_runtime::block_on(import_paths(e.handle(), vec![p], None, None));
+        let id = res.unwrap().report.added[0].clone();
+
+        let got = lightbox_source(e.handle(), id).unwrap();
+        assert!(!got.full, "a PNG over 8192 px gets a preview");
+        assert_eq!((got.width, got.height), (LIGHTBOX_MAX_SIDE, 2));
+        let png = PathBuf::from(&got.path);
+        assert!(png.starts_with(cache_of(&e)) && png.is_file());
+        assert_eq!(image::image_dimensions(&png).unwrap(), (8192, 2));
+        assert!(e.app.asset_protocol_scope().is_allowed(&png));
+    }
+
     #[test]
     fn lightbox_cache_in_asset_scope() {
         let e = env();
