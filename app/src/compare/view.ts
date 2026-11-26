@@ -1,7 +1,9 @@
 // Compare (SPEC §6.5; Plan 4 Task 7): two references side by side, A on the left and B on the
 // right, with what they share in the middle and what each has alone under it. A modal dialog,
 // like the lightbox. The score comes from `scorePair` only: a link shows ("Linked by you") but
-// never changes it. Keys: v value view, x swap, L lightbox on the side under the pointer, Esc back.
+// never changes it. Keys: v value view, x swap, L lightbox on the side under the pointer, Esc closes.
+// Esc never navigates: from the Reference view it only closes and gives focus back to the opener
+// (the view underneath keeps its filter and pins); a caller's onClose (the Galaxy's) goes back.
 import type { Api, Reference, Scored, Tag } from "../api";
 import { esc } from "../esc";
 import { openLightboxWithPicker } from "../lightbox/dock";
@@ -24,13 +26,15 @@ export function mountCompare(
   store: Store,
   a: string,
   b: string,
-  deps: { showReference(id: string): void; onClose?(a: string): void },
+  deps: { onClose?(a: string): void } = {},
 ): { swap(): void; close(): void } {
   const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const life = new AbortController();
   const signal = life.signal;
   let [A, B] = [a, b];
   let scored: Scored | null = null;
+  let pending = true; // a scorePair request is out: the lists use the local intersection meanwhile
+  let req = 0; // the latest request wins
   let value = false;
   let pointerSide: "a" | "b" = "a";
   let closed = false;
@@ -62,7 +66,11 @@ export function mountCompare(
   function render() {
     const ra = ref(A), rb = ref(B);
     if (!ra || !rb) return close(); // one of them was deleted
-    const shared = scored?.sharedTechniques ?? [];
+    // scorePair's list once it has answered for the current tags; until then (or after a refusal)
+    // the local intersection, so a technique never vanishes from both sides (review I1).
+    const techs = (r: Reference) => new Set(r.tags.flatMap((t) => (t.techniqueId ? [t.techniqueId] : [])));
+    const tb = techs(rb);
+    const shared = !pending && scored ? scored.sharedTechniques : [...techs(ra)].filter((t) => tb.has(t));
     const s = sides(ra, rb, shared, store.tax);
     const sharedSet = new Set(shared);
     // Branches both use, where no shared technique already says so.
@@ -113,6 +121,28 @@ export function mountCompare(
     }
   }
 
+  /** Asks for the score of the current tags; a store change asks again (the IDF is library-wide). */
+  function rescore() {
+    const n = ++req;
+    pending = true;
+    api.scorePair(A, B).then(
+      (s) => {
+        if (closed || n !== req) return; // closed, or a newer request is out
+        scored = s;
+        pending = false;
+        render();
+      },
+      () => {
+        if (closed || n !== req) return;
+        scored = null; // no score (a hidden reference): the local intersection stands
+        pending = false;
+        render();
+      },
+    );
+  }
+
+  /** The score is symmetric, so a swap asks nothing. The Reference view's focus does not follow a
+   * swap: Compare is a modal over it, and closing leaves the view as it was (review I2). */
   function swap() {
     [A, B] = [B, A];
     render();
@@ -131,12 +161,11 @@ export function mountCompare(
     const link = store.links.find((l) => (l.fromRef === A && l.toRef === B) || (l.fromRef === B && l.toRef === A));
     editor = mountLinkEditor(dock, api, store, { fromRef: A, toRef: B, ...(link ? { linkId: link.id } : {}) });
   }
-  /** Esc: back where Compare came from. */
+  /** Esc or Close: close, then the caller's onClose if it gave one (the Galaxy's goes back to it). */
   function exit() {
     const back = A;
     close();
-    if (deps.onClose) deps.onClose(back);
-    else deps.showReference(back);
+    deps.onClose?.(back);
   }
 
   function trap(e: KeyboardEvent) {
@@ -180,7 +209,13 @@ export function mountCompare(
     if (!el.contains(t) && !t.closest?.('.lightbox, [role="alertdialog"], .notice')) el.focus();
   }, { signal });
 
-  const unsubscribe = store.subscribe((c) => (c.reset ? close() : render()));
+  const unsubscribe = store.subscribe((c) => {
+    if (c.reset) return close();
+    const tags = c.references.length > 0 || c.removed.length > 0 || !!c.taxonomy;
+    if (tags) pending = true; // the old reply no longer matches the tags
+    render();
+    if (tags && !closed) rescore();
+  });
 
   function close() {
     if (closed) return;
@@ -196,15 +231,7 @@ export function mountCompare(
   root.append(el);
   render();
   el.focus();
-  api.scorePair(A, B).then(
-    (s) => {
-      if (closed) return; // the score is symmetric: a swap meanwhile changes nothing
-
-      scored = s;
-      render();
-    },
-    () => {}, // no score (a hidden reference): the lists still show, with no Shared column filled
-  );
+  rescore();
   return { swap, close };
 }
 
@@ -213,11 +240,10 @@ export function makeOpenCompare(
   root: HTMLElement,
   api: Api,
   store: Store,
-  deps: { showReference(id: string): void },
 ): (a: string, b: string, opts?: { onClose?(a: string): void }) => void {
   let cur: { close(): void } | null = null;
   return (a, b, opts = {}) => {
     cur?.close();
-    cur = mountCompare(root, api, store, a, b, { showReference: deps.showReference, onClose: opts.onClose });
+    cur = mountCompare(root, api, store, a, b, { onClose: opts.onClose });
   };
 }

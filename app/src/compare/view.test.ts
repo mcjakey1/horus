@@ -20,7 +20,7 @@ const A = ref("a", [tag("a1", "t1"), tag("a2", "t2", { x: 0.1, y: 0.1, w: 0.2, h
 const B = ref("b", [tag("b1", "t2"), tag("b2", "t3")]);
 const scored = (score: number): Scored => ({ id: "b", score, sharedTechniques: score ? ["t2"] : [], sharedBranches: score ? ["pulse.feature"] : [] });
 
-let store: Store, api: Api, showReference: ReturnType<typeof vi.fn<(id: string) => void>>;
+let store: Store, api: Api;
 let open: ReturnType<typeof makeOpenCompare>;
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s)!;
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -31,8 +31,7 @@ beforeEach(() => {
   document.body.innerHTML = `<main id="app"></main>`;
   store = createStore({ root: "C:\\lib", references: [A, B], links: [], boards: [], warning: null, taxonomyReadOnly: false }, tax);
   api = { scorePair: vi.fn(async () => scored(0.42)), assetUrl: (p: string) => `asset://${p}` } as unknown as Api;
-  showReference = vi.fn<(id: string) => void>();
-  open = makeOpenCompare($("#app"), api, store, { showReference });
+  open = makeOpenCompare($("#app"), api, store);
 });
 afterEach(() => {
   document.body.innerHTML = "";
@@ -78,18 +77,43 @@ describe("Compare", () => {
     expect([...document.querySelectorAll(".cmp-tile")].map((t) => t.classList.contains("is-value"))).toEqual([true, true]);
   });
 
-  it("Esc returns through the call's onClose, else to the Reference view", async () => {
+  it("Esc closes and returns focus to the opener; a call's onClose runs after", async () => {
+    document.body.insertAdjacentHTML("beforeend", `<button id="opener">open</button>`);
+    $("#opener").focus();
     open("a", "b");
     await tick();
     key("Escape");
     expect(document.querySelector(".compare")).toBeNull();
-    expect(showReference).toHaveBeenCalledWith("a");
+    expect(document.activeElement).toBe($("#opener"));
     const onClose = vi.fn();
     open("a", "b", { onClose });
     await tick();
     key("Escape");
     expect(onClose).toHaveBeenCalledWith("a");
-    expect(showReference).toHaveBeenCalledTimes(1);
+  });
+
+  it("a tag change asks for the score again and the latest reply wins (review I1)", async () => {
+    open("a", "b");
+    await tick();
+    const shared = () => [...document.querySelectorAll<HTMLElement>(".cmp-shared li")].map((l) => l.dataset.tech);
+    expect(shared()).toEqual(["t2"]);
+    // A gains t3 (say, tagged in the lightbox); the second reply differs from the first.
+    let late!: (s: Scored) => void;
+    vi.mocked(api.scorePair)
+      .mockImplementationOnce(() => new Promise<Scored>((r) => (late = r))) // slow, and then superseded
+      .mockResolvedValueOnce({ id: "b", score: 0.9, sharedTechniques: ["t2", "t3"], sharedBranches: [] });
+    const A2 = { ...A, tags: [...A.tags, tag("a3", "t3")] };
+    store.apply({ references: [A2], removed: [], canUndo: true, canRedo: false });
+    expect(shared()).toEqual(["t2", "t3"]); // the local intersection while the reply is out: nothing vanishes
+    expect($('.cmp-side[data-side="b"] .cmp-only').textContent).toBe("");
+    store.apply({ references: [A2], removed: [], canUndo: true, canRedo: false }); // a second change
+    await tick();
+    expect(api.scorePair).toHaveBeenCalledTimes(3);
+    expect(shared()).toEqual(["t2", "t3"]);
+    expect($(".cmp-score").textContent).toBe("0.90 · related by technique");
+    late(scored(0.1)); // the superseded reply lands last: ignored
+    await tick();
+    expect($(".cmp-score").textContent).toBe("0.90 · related by technique");
   });
 
   it("is a modal dialog that keeps Tab inside", async () => {
@@ -98,14 +122,17 @@ describe("Compare", () => {
     const dlg = $(".compare");
     expect([dlg.getAttribute("role"), dlg.getAttribute("aria-modal")]).toEqual(["dialog", "true"]);
     const close = $<HTMLButtonElement>(".cmp-close");
-    close.focus();
     const first = dlg.querySelector<HTMLElement>("button")!;
+    expect(first).not.toBe(close);
     first.focus();
-    key("Tab", first, { shiftKey: true });
-    expect(dlg.contains(document.activeElement)).toBe(true);
-    close.focus();
-    key("Tab", close);
-    expect(dlg.contains(document.activeElement)).toBe(true);
+    const back = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true });
+    first.dispatchEvent(back);
+    expect(back.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(close); // wrapped to the last control
+    const on = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    close.dispatchEvent(on);
+    expect(on.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(first); // and round to the first
   });
 
   it("a link between them shows its why above Shared; a 0 score is not related", async () => {

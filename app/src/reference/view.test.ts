@@ -151,13 +151,11 @@ describe("Reference view", () => {
   // ---------- Plan 4 Task 7: Compare from the Reference view (C23, R24) ----------
   async function withCompare() {
     vi.mocked(api.scorePair).mockResolvedValue({ id: "b", score: 0.5, sharedTechniques: [], sharedBranches: [] });
-    const showReference = vi.fn();
     view.destroy();
-    view = mountReference(document.body, api, store, { openCompare: makeOpenCompare(document.body, api, store, { showReference }) });
+    view = mountReference(document.body, api, store, { openCompare: makeOpenCompare(document.body, api, store) });
     await view.ready;
     view.show("a");
     await settle();
-    return showReference;
   }
 
   it("shift_click_opens_compare_on_the_focus_and_that_reference", async () => {
@@ -171,7 +169,7 @@ describe("Reference view", () => {
   });
 
   it("with_compare_open_v_and_esc_reach_compare_only", async () => {
-    const showReference = await withCompare();
+    await withCompare();
     document.querySelector<HTMLButtonElement>('#pane-callouts .thumb[data-go="b"]')!
       .dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
     await settle();
@@ -186,7 +184,7 @@ describe("Reference view", () => {
     expect(value.checked).toBe(before);
     cmp.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     expect(document.querySelector(".compare")).toBeNull();
-    expect(showReference).toHaveBeenCalledWith("a");
+    expect(document.querySelector("#ref-id")?.textContent).toBe("a"); // Esc closes; it never navigates
   });
 
   it("renders one callout per tag", () => {
@@ -594,6 +592,27 @@ describe("Reference view", () => {
     expect(vi.mocked(api.related).mock.calls.length).toBe(calls);
     expect($("#pane-callouts .call").dataset.mark).toBe("kept");
     expect(api.undo).not.toHaveBeenCalled();
+  });
+
+  it("compare_from_a_filtered_ranked_row_closes_back_to_it (Task 7 review I2)", async () => {
+    vi.mocked(api.scorePair).mockResolvedValue({ id: "b", score: 0.5, sharedTechniques: [], sharedBranches: [] });
+    view.destroy();
+    view = mountReference(document.body, api, store, { openCompare: makeOpenCompare(document.body, api, store) });
+    await view.ready;
+    view.show("a");
+    await settle();
+    byCallout("silhouette");
+    expect(chips()).toEqual(["Silhouette"]);
+    const row = $<HTMLButtonElement>('#pane-ranked .row[data-go="b"]');
+    row.focus();
+    row.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true })); // Shift+Enter arrives so
+    await settle();
+    const cmp = $(".compare");
+    cmp.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(document.querySelector(".compare")).toBeNull();
+    expect(chips()).toEqual(["Silhouette"]); // the filter is kept
+    expect($("#ref-id").textContent).toBe("a"); // no navigation
+    expect(document.activeElement).toBe(row); // focus is back on the row
   });
 
   it("filter_show_clears_chips", async () => {
