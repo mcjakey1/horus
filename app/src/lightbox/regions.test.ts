@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Region } from "../api";
 import { MIN_REGION, normRect } from "./regions";
+import { plateOf } from "./zoom";
 
 const plate = { left: 100, top: 50, width: 400, height: 300 };
 const close = (r: Region | null, want: Region) => {
@@ -33,5 +34,22 @@ describe("normRect", () => {
   it("rejects NaN points and a zero-size plate", () => {
     expect(normRect({ x: NaN, y: 125 }, { x: 300, y: 200 }, plate)).toBeNull();
     expect(normRect({ x: 0, y: 0 }, { x: 300, y: 200 }, { left: 0, top: 0, width: 0, height: 0 })).toBeNull();
+  });
+});
+
+describe("a region drawn under zoom (Plan 4 Task 6, R20)", () => {
+  // A 1000×750 image in an 800×800 stage at client (0, 0): stage px are client px.
+  const img = { w: 1000, h: 750 };
+  const want: Region = { x: 0.25, y: 1 / 3, w: 0.2, h: 0.2 };
+  const exact = (r: Region | null) => {
+    for (const k of ["x", "y", "w", "h"] as const) expect(Math.abs(r![k] - want[k])).toBeLessThan(1e-9);
+  };
+
+  it("zoomed in, the drag maps to the literal region", () => {
+    exact(normRect({ x: 200, y: 250 }, { x: 520, y: 490 }, plateOf({ scale: 1.6, tx: -200, ty: -150 }, img)));
+  });
+
+  it("at fit, the same image rectangle gives the same region", () => {
+    exact(normRect({ x: 200, y: 300 }, { x: 360, y: 420 }, plateOf({ scale: 0.8, tx: 0, ty: 100 }, img)));
   });
 });

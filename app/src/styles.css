@@ -464,3 +464,20 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 
 /* Task 11's speed check: dev or VITE_PERF builds only (scene.ts perfOverlay). */
 .perf-overlay { position: absolute; left: 8px; bottom: 8px; z-index: 5; padding: 2px 6px; font: 11px/1.4 var(--mono, monospace); background: var(--ink); color: var(--panel); cursor: pointer; white-space: pre; }
+
+/* ---------- Plan 4 Task 6: the full lightbox (zoom, pan, region overlays, preview note) ---------- */
+/* The plate's left/top/width/height come from the zoom View through the CSSOM. */
+/* clip, not hidden: a clip box is not a scroll container, so focusing a region box can't scroll the plate (review I1) */
+.lb-stage { overflow: clip; }
+.lightbox.is-pan .lb-stage { cursor: grab; }
+.lb-boxes[hidden] { display: none; }
+/* A region overlay stays dotted in its operation ink (--c); hover or Tab raises it and names it. */
+.lb-box:focus { outline: none; }
+.lb-box.is-hot, .lb-box:focus-visible { border-width: 3px; box-shadow: 0 0 0 1px rgb(0 0 0 / .45), 0 0 0 3px rgb(255 255 255 / .35); }
+.lb-tag { display: none; position: absolute; left: -3px; bottom: 100%; margin-bottom: 4px; padding: 2px 6px; background: var(--panel); color: var(--ink); border: 1px solid var(--line-2); font-size: 12px; white-space: nowrap; }
+.lb-tag .text { color: var(--t, var(--ink)); font-weight: 500; }
+.lb-box.is-hot .lb-tag, .lb-box:focus-visible .lb-tag { display: block; }
+.lb-note { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 4px 8px; background: var(--panel); color: var(--ink-2); font-size: 12px; pointer-events: none; }
+.lb-note[hidden] { display: none; }
+.lb-zoom, .lb-size { color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lb-bar .lb-hint { flex: 1 1 auto; min-width: 0; } /* the zoom and size readouts keep their room */
