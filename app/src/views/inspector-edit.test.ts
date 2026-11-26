@@ -84,6 +84,30 @@ describe("inspector editing", () => {
     expect(api.updateTechnique).toHaveBeenCalledTimes(1);
   });
 
+  it("a blur cancels in place: the control being clicked is not replaced (advisor)", () => {
+    render(tech("rim-light"));
+    const del = button(el, "Delete technique…")!;
+    const f = nameField();
+    f.dispatchEvent(new FocusEvent("blur"));
+    expect(button(el, "Delete technique…")).toBe(del);
+    expect(el.querySelector('input[data-field="name"]')).toBeNull();
+    expect(el.querySelector(".insp-title")!.textContent).toBe("Rim light");
+  });
+
+  it("an empty plain label can still be edited", async () => {
+    const t: Taxonomy = { ...mine, operations: mine.operations.map((o) => (o.id === "group" ? { ...o, plainLabel: "" } : o)) };
+    render({ kind: "op", id: "op:group" }, snap(t, refs));
+    const b = el.querySelector<HTMLElement>('.insp-edit[data-edit="plainLabel"]')!;
+    expect(b.textContent).toBe("Add plain label");
+    b.click();
+    const f = el.querySelector<HTMLInputElement>('input[data-field="plainLabel"]')!;
+    expect(f.value).toBe("");
+    type(f, "Bind");
+    key(f, "Enter");
+    await flush();
+    expect(api.updateOperation).toHaveBeenCalledWith("group", { plainLabel: "Bind" });
+  });
+
   it("name_taken_message", async () => {
     api.updateTechnique.mockRejectedValueOnce("NameTaken:pop-out");
     render(tech("rim-light"));

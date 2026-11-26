@@ -109,7 +109,8 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
 
   // E: the editing controls (Task 10). Without them the markup is exactly Task 6's.
   const E = opts.editable && !!opts.api && !!opts.apply;
-  const edit = (field: string, v: string) => `<button class="insp-edit" data-edit="${field}" title="Edit">${esc(v)}</button>`;
+  const edit = (field: string, v: string) =>
+    `<button class="insp-edit" data-edit="${field}" data-old="${esc(v)}" title="Edit">${v ? esc(v) : `<span class="insp-ph">Add ${FIELD_LABEL[field].toLowerCase()}</span>`}</button>`;
   const area = (label: string, v: string) =>
     `<textarea class="insp-field insp-area" data-field="description" aria-label="${label}" rows="3">${esc(v)}</textarea>`;
   const act = (a: string, label: string, extra = "") => `<button class="text-btn insp-act" data-act="${a}"${extra}>${esc(label)}</button>`;
@@ -167,7 +168,7 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     body = E
       ? `<h2 class="insp-title" tabindex="-1">${edit("name", t.name)}</h2>${area("Definition", t.description)}
       <div class="insp-syns" role="group" aria-label="Synonyms">${t.synonyms
-        .map((x, i) => `<span class="chip">${esc(x)}<button class="insp-x" data-syn-del="${i}" aria-label="Remove synonym ${esc(x)}">×</button></span>`)
+        .map((x, i) => `<span class="insp-chip">${esc(x)}<button class="insp-x" data-syn-del="${i}" aria-label="Remove synonym ${esc(x)}">×</button></span>`)
         .join("")}<button class="text-btn insp-add" data-syn-add>+ synonym</button></div>
       <h3 class="insp-h">Used under</h3><div class="insp-list insp-used">${node.parents
         .map((b) => `<div class="insp-pair">${selBtn(`br:${b}`, N.branchLabel(b))}<button class="insp-x" data-unlink="${esc(b)}" aria-label="Stop using under ${esc(N.branchLabel(b))}"${
@@ -275,25 +276,32 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     input.focus();
     input.select();
     let busy = false; // Enter saved or cancelled: the blur that follows does nothing
+    // Cancel puts the button back in place. A full re-render here would detach whatever the
+    // artist is clicking, mid-click, when the blur comes from that click.
+    const cancel = (refocus: boolean) => {
+      busy = true;
+      input.replaceWith(anchor);
+      err.remove();
+      if (refocus) anchor.focus();
+    };
     input.onkeydown = (e) => {
       if (e.isComposing || busy) return;
       if (e.key === "Escape") {
         e.preventDefault();
-        busy = true;
-        return rerender();
+        return cancel(true);
       }
       if (e.key !== "Enter") return;
       e.preventDefault();
       const p = patch(input.value.trim());
+      if (!p) return cancel(true);
       busy = true;
-      if (!p) return rerender();
       void run(() => update(p), (m) => {
         err.textContent = m;
         busy = false;
         input.focus();
       }).then((ok) => ok && leave());
     };
-    input.onblur = () => void (busy || rerender());
+    input.onblur = () => void (busy || cancel(false));
   }
 
   function editClick(t: Element) {
@@ -303,7 +311,7 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     const techNode = node?.kind === "tech" ? node : null;
     const tech = techNode ? N.tech(techNode.techId)! : null;
     if (d.edit) {
-      const old = b.textContent!;
+      const old = d.old ?? "";
       return inline(b, d.edit, (v) => (v === old ? null : { [d.edit!]: v }), old);
     }
     if (tech && "synAdd" in d) return inline(b, "synonym", (v) => (!v || tech.synonyms.includes(v) ? null : { synonyms: [...tech.synonyms, v] }));

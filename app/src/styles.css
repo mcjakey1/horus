@@ -405,13 +405,14 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .insp-ro { margin: 0; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
 .insp-edit { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: text; }
 .insp-edit:hover { text-decoration: underline dotted var(--line-2); }
+.insp-ph { color: var(--ink-3); }
 .insp-field, .insp-form input, .insp-form textarea, .tx-search { width: 100%; padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--panel); color: var(--ink); font: 14px var(--sans); }
 .insp-title .insp-field { font: 500 21px/1.2 var(--serif); }
 .insp-area, .insp-form textarea { resize: vertical; }
 .insp-err, .insp-msg { display: block; margin: 0; font-size: 13px; color: var(--ink); }
 .insp-err:empty, .insp-msg:empty { display: none; }
 .insp-syns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 8px; border: 1px solid var(--line); background: var(--shell); font-size: 13px; }
+.insp-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 8px; border: 1px solid var(--line); background: var(--shell); font-size: 13px; }
 .insp-x { padding: 2px 6px; border: 0; background: none; color: var(--ink-2); font-size: 15px; line-height: 1; }
 .insp-x:disabled, .insp-act:disabled { color: var(--ink-3); cursor: not-allowed; }
 .insp-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; align-items: center; }
