@@ -5,6 +5,7 @@ import type { Api, Hit, ImportReport, ImportResult, LibraryView, Reference, Scor
 import { summaryHTML } from "../importer";
 import { createStore, type Store } from "../store";
 import { mountReference } from "./view";
+import { makeOpenCompare } from "../compare/view";
 
 const tag = (id: string, operationId: string, techniqueId?: string, branchId?: string): Tag => ({
   id,
@@ -146,6 +147,47 @@ describe("Reference view", () => {
     await settle();
   });
   afterEach(() => view.destroy());
+
+  // ---------- Plan 4 Task 7: Compare from the Reference view (C23, R24) ----------
+  async function withCompare() {
+    vi.mocked(api.scorePair).mockResolvedValue({ id: "b", score: 0.5, sharedTechniques: [], sharedBranches: [] });
+    const showReference = vi.fn();
+    view.destroy();
+    view = mountReference(document.body, api, store, { openCompare: makeOpenCompare(document.body, api, store, { showReference }) });
+    await view.ready;
+    view.show("a");
+    await settle();
+    return showReference;
+  }
+
+  it("shift_click_opens_compare_on_the_focus_and_that_reference", async () => {
+    await withCompare();
+    const thumb = document.querySelector<HTMLButtonElement>('#pane-callouts .thumb[data-go="b"]')!;
+    thumb.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
+    await settle();
+    expect(api.scorePair).toHaveBeenCalledWith("a", "b");
+    expect(document.querySelectorAll(".compare .cmp-side, .compare .cmp-mid")).toHaveLength(3);
+    expect(document.querySelector("#ref-id")?.textContent).toBe("a"); // no navigation
+  });
+
+  it("with_compare_open_v_and_esc_reach_compare_only", async () => {
+    const showReference = await withCompare();
+    document.querySelector<HTMLButtonElement>('#pane-callouts .thumb[data-go="b"]')!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
+    await settle();
+    const value = document.querySelector<HTMLInputElement>("#value")!;
+    const before = value.checked;
+    const cmp = document.querySelector<HTMLElement>(".compare")!;
+    cmp.dispatchEvent(new KeyboardEvent("keydown", { key: "v", bubbles: true, cancelable: true }));
+    expect(value.checked).toBe(before); // the Reference view's v did not fire
+    expect(cmp.querySelector(".cmp-tile")!.classList.contains("is-value")).toBe(true);
+    // a key that lands on <body> under the modal is not the Reference view's either
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "v", bubbles: true, cancelable: true }));
+    expect(value.checked).toBe(before);
+    cmp.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(document.querySelector(".compare")).toBeNull();
+    expect(showReference).toHaveBeenCalledWith("a");
+  });
 
   it("renders one callout per tag", () => {
     expect(document.querySelectorAll("#pane-callouts .call")).toHaveLength(2);

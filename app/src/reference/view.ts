@@ -5,7 +5,7 @@ import type { Api, Reference, Scored, Settings, Tag } from "../api";
 import { esc } from "../esc";
 import { mountImport, warningHTML } from "../importer";
 import { digitOf } from "../keys";
-import { openLightbox } from "../lightbox/view";
+import { openLightboxWithPicker } from "../lightbox/dock";
 import { linkedFirst, linkErrorCopy, mountLinkEditor } from "../links/editor";
 import { mountBoardMenu } from "../boards/menu";
 import { opInk, opLabel } from "../ops";
@@ -27,7 +27,8 @@ export function mountReference(
   root: HTMLElement,
   api: Api,
   store: Store,
-  opts: { onNavigate?(): void } = {},
+  /** `openCompare`: boot()'s one Compare opener (Plan 4 Task 7); Shift-click and Shift+Enter call it. */
+  opts: { onNavigate?(): void; openCompare?(a: string, b: string): void } = {},
 ): { show(id: string): void; ready: Promise<void>; destroy(): void } {
   const life = new AbortController();
   const signal = life.signal;
@@ -439,6 +440,8 @@ export function mountReference(
   root.addEventListener("click", (e) => {
     const target = e.target as Element;
     const go = target.closest<HTMLElement>("[data-go]");
+    // Shift-click (or Shift+Enter, which arrives as a shifted click) compares it with the focus (C23).
+    if (go && e.shiftKey && opts.openCompare && S.focus && go.dataset.go !== S.focus) return opts.openCompare(S.focus, go.dataset.go!);
     if (go) return show(go.dataset.go!, { via: go.dataset.via ?? null });
     if (target.closest("[data-link-new]")) return openLinkEditor();
     const edit = target.closest<HTMLElement>("[data-link-edit]");
@@ -528,6 +531,7 @@ export function mountReference(
     if (e.ctrlKey || e.metaKey || (e.altKey && e.key !== "ArrowLeft")) return;
     if ((document.body.dataset.view ?? "reference") !== "reference") return; // another view is showing
     if (lightbox) return; // the lightbox is modal: a key in a notice or dialog over it never acts behind it
+    if (document.querySelector('.compare[aria-modal="true"]')) return; // so is Compare (R24)
     // The picker, the lightbox and text fields own their keys (Plan 2 Global Constraints).
     if ((e.target as Element).closest?.(".picker, .lightbox, .link-editor, .board-menu, input, textarea, [contenteditable]")) return;
     if (e.key === "/") {
@@ -718,24 +722,10 @@ export function mountReference(
     const ref = focusRef();
     if (!ref || document.querySelector(".lightbox")) return;
     closePicker(); // a margin picker would sit behind the modal
-    lightbox = openLightbox(api, store, ref.id, {
-      openPicker: (opts) => {
-        closePicker();
-        // Docked inside the modal so it can be reached and focus stays trapped.
-        // ponytail: found by class; Plan 4's lightbox chrome owns this slot.
-        const slot = document.querySelector<HTMLElement>(".lightbox .lb-side") ?? $(".margin")!;
-        const mine = mountPicker(slot, api, store, {
-          ...opts,
-          onDone: closePicker,
-          onClose: () => void (picker === mine && (picker = null)), // never null a newer picker
-        });
-        picker = mine;
-      },
-      // A picker docked inside left with the lightbox's DOM: close it so it unsubscribes.
-      onClose: () => {
-        lightbox = null;
-        if (picker && !picker.el.isConnected) closePicker();
-      },
+    // The docking helper (Plan 4 Task 7, R23) owns the docked picker; the margin one closes first.
+    lightbox = openLightboxWithPicker(api, store, ref.id, {
+      beforePicker: closePicker,
+      onClose: () => void (lightbox = null),
     });
   }
   $("#lab")!.insertAdjacentHTML("beforeend", `<button type="button" class="lb-open" aria-keyshortcuts="l">Open lightbox</button>`);
