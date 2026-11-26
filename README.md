@@ -54,6 +54,26 @@ Horus is for illustrators, concept artists, photographers, and designers who kee
       <br><sub><strong>Callouts.</strong> Each numbered callout names a technique and shows related references with a score.</sub>
     </td>
   </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/tree-view.png" alt="The Tree view with operations, domains, techniques, and references in bands, and the inspector on the right">
+      <br><sub><strong>Tree view.</strong> The taxonomy in four bands, from operations at the top to references at the bottom.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/images/tree-edit.png" alt="The Tree inspector with fields to edit the name, definition, and synonyms of a technique">
+      <br><sub><strong>Taxonomy editing.</strong> Change names, definitions, and synonyms in the inspector.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/galaxy-view.png" alt="The Galaxy with references as points and edges from the selected reference to its neighbors">
+      <br><sub><strong>Galaxy.</strong> Related references stay near each other. Edges show for the selected reference.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/images/radial-view.png" alt="The Radial view with one operation at the center and rings of domains, techniques, and references">
+      <br><sub><strong>Radial.</strong> One operation at the center, with its domains, techniques, and references on rings.</sub>
+    </td>
+  </tr>
 </table>
 
 ## Features
@@ -62,6 +82,15 @@ Horus is for illustrators, concept artists, photographers, and designers who kee
 - **Region tags.** You can tag one part of an image. The callout box shows the region on the image.
 - **Related references with a score.** Horus compares the tags of two references. Rare techniques count more than common techniques. The score uses cosine similarity with IDF weights.
 - **Search by idea.** Type a plain word, for example "moody" or "backlit". Horus finds the techniques that match, through their names, synonyms, and descriptions.
+- **Tree view.** The Tree shows the taxonomy in four bands, from top to bottom: operations, domains, techniques, and references. The inspector on the right shows the selected item. A breadcrumb at the top of the inspector shows its path.
+- **Taxonomy editing.** In the Tree inspector, you can rename an item, write its definition, and add or remove synonyms. Each edit is one undo step. Press `Ctrl+Z` to undo it.
+- **Safe delete.** When you delete a technique, Horus shows how many references use it. You move its tags to a different technique, or you keep them as partial tags (operation only).
+- **Operations and domains.** A library can have 1 to 9 operations. Each operation has its own ink color. Each domain has an icon.
+- **Drag to link.** Drag a technique onto a different branch in the Tree. The technique then also occurs under that branch. Without a mouse, use **Also use under…** in the inspector.
+- **Galaxy.** The Galaxy shows all references as points. A force layout puts references with high correlation scores near each other. The layout runs in a Web Worker.
+- **Galaxy edges.** The Galaxy draws edges only for the hovered or selected reference. Each edge goes to one of its 8 strongest neighbors.
+- **Radial view.** The Radial shows one operation at a time. The operation is at the center. Its domains, techniques, and references are on three rings. Press `1` to `9` to show a different operation.
+- **Keyboard control.** In the graph views, `+` and `-` zoom, `0` fits the full graph, and the arrow keys pan. With a selection, the arrow keys move the selection. `Enter` opens the selected reference in the Reference view.
 - **Value view.** Press `v` to show all images in grayscale.
 - **Safe import.** Horus copies each image into the library and does not change the original. It finds duplicates through a BLAKE3 hash. It makes 256 px and 1024 px thumbnails.
 - **Correct color and orientation.** Horus converts embedded color profiles to sRGB for thumbnails. It applies the EXIF orientation of phone photos.
@@ -85,7 +114,7 @@ flowchart LR
 1. **Import.** Select images or a folder. Horus copies each file into `images/` and gives it a hash name.
 2. **Prepare.** Horus makes two thumbnails for each image. It converts the color to sRGB.
 3. **Save.** Horus records each reference in `library.json`. It writes a backup before each save.
-4. **Tag.** Each reference gets technique tags. In this version, only the demo set has tags.
+4. **Tag.** You tag each reference with techniques in the Inbox or in the Reference view. The demo set comes with suggested tags.
 5. **Index.** Horus counts how often each technique occurs. Rare techniques get a higher weight.
 6. **Relate.** Horus compares the tag sets of two references. It shows the strongest matches first.
 
@@ -176,7 +205,7 @@ Horus is an early beta. The project has six plans in [`docs/superpowers/plans/`]
 |---|---|---|
 | 1 | Foundation: library, import, related references, search, first run, Windows build | Done |
 | 2 | Tagging, Inbox, undo and redo, drag and drop, library menu | Done |
-| 3 | Tree, Galaxy, and Radial views; taxonomy editing | Planned |
+| 3 | Tree, Galaxy, and Radial views; taxonomy editing | Done |
 | 4 | Boards, Lightbox, Compare, and links between references | Planned |
 | 5 | Find similar (local SigLIP image model) and Settings | Planned |
 | 6 | Intro card, macOS and Linux builds, release checks | Planned |
@@ -188,20 +217,26 @@ Horus is an early beta. The project has six plans in [`docs/superpowers/plans/`]
 | `app/src-tauri/src/library.rs` | Library folder, safe save, and backup recovery |
 | `app/src-tauri/src/import.rs` | Copy, hash, thumbnails, color conversion, and duplicate check |
 | `app/src-tauri/src/taxonomy.rs` | Load and validate the taxonomy |
-| `app/src-tauri/src/correlate.rs` | Related-reference scores |
+| `app/src-tauri/src/correlate.rs` | Related-reference scores and the Galaxy edges (`graph_edges`) |
 | `app/src-tauri/src/search.rs` | Search by idea |
+| `app/src-tauri/src/edit.rs`, `history.rs` | Validated edits to tags and the taxonomy, with undo and redo |
 | `app/src-tauri/src/commands.rs` | Tauri commands that the UI calls |
 | `app/src-tauri/src/demo.rs` | Demo set seed |
 | `app/src/` | TypeScript UI: Reference view, first run, and import |
+| `app/src/graph/` | Graph engine: camera, culling, level of detail, texture cache, layouts, PixiJS scene, and the force-layout worker |
+| `app/src/views/` | Tree, Galaxy, and Radial views, the inspector, the move-tags dialogs, and the technique form |
 | `taxonomy/` | Seed taxonomy and its check script |
 | `demo/` | Demo images, manifest, and rights record |
 | `prototype/` | HTML prototype of the Reference view |
+| `scripts/make_perf_library.py` | Synthetic 2,500-reference library for the [performance check](app/README.md#performance-check) |
 
 For the product design, read [`SPEC.md`](SPEC.md), [`PRODUCT.md`](PRODUCT.md), and [`DESIGN.md`](DESIGN.md).
 
 ## Limits
 
-- The Tree, Galaxy, Radial, and Boards tabs are not active yet.
+- The Boards tab is not active yet. Plan 4 adds Boards.
+- At the zoom that fits the full graph, the Tree and the Radial hide the names of items. Zoom in to read them. Plan 6 adds a minimum name size.
+- In the Tree, **Show all references** draws the references of each technique as one thin column.
 - A long import shows "Importing…" only. It does not show a count or a Cancel button yet.
 - Only Windows builds are available. Plan 6 adds macOS and Linux builds.
 - Nobody has tested the installers on a computer without a network connection yet.
