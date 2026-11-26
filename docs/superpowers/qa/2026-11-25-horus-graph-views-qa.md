@@ -36,6 +36,7 @@
 | Phase 2 follow-ups | `EXTRA=1 mara-plan3.js` | **18 pass, 1 fail (F1, reproduced)** |
 | 2,500 references | `BIG=1 mara-plan3.js` + perf exe | **9 pass, 1 note** |
 | Boot hang check | 32 cold launches | first run appeared 32/32 |
+| Create, then Begin | 10 instrumented launches | 10/10 enabled within 78 ms (1 earlier unexplained miss; see the stalls section) |
 
 Two expectations in the pre-QA harness were out of date after the fix wave, and I updated them:
 - it now clears the selection after the Enter test;
@@ -58,7 +59,10 @@ The pre-QA harness's screenshot-based reduced-motion check also failed once. The
 - Esc then no longer closes the dialog, because its key handler sits on the dialog.
 - The dialog stays open until Cancel is clicked. Nothing is saved.
 
-**Reproduced:** 3 of 3 times when the dialog's own search box had no edit history: twice in `mara-plan3.js` and once in the EXTRA run. In the EXTRA run, a dialog whose search had been typed in kept focus inside (2 of 2).
+**Reproduced:** 4 of 4 times: twice in `mara-plan3.js` and twice in the EXTRA run.
+- Two conditions must both hold: some earlier text edit elsewhere on the page, and no edit history in the dialog's own search box.
+- A scratch repro with no earlier edit passed 6 of 6. That is why I first, wrongly, called it a harness artifact.
+- In the EXTRA run, a dialog whose own search had been typed in kept focus inside, 2 of 2.
 
 **Why it matters:** Mara undoes by reflex. She ends up with a dialog that won't close by keyboard and a search box she didn't touch. This is close to T10 concern 11, "dialogs don't trap Tab". A fix probably belongs with that Plan 6 focus-trap work: the dialog would swallow Ctrl+Z or Ctrl+Y, or keep focus inside.
 
@@ -67,7 +71,7 @@ The pre-QA harness's screenshot-based reduced-motion check also failed once. The
 - After an import, the "Added 1 to the Inbox · Save note · Dismiss" toast sits over the inspector's lower right. With a technique selected, "Delete technique…" is underneath it: `elementFromPoint` at the button's centre returns `#import-notice`.
 - Undo the import with Ctrl+Z: the count goes back to 50, but the toast still says "Added 1 to the Inbox".
 - **Workaround:** Dismiss.
-- **Context:** T10 ruling 2 already routes taxonomy toasts through the same box (`#import-notice`). Placing it so it doesn't cover the inspector, or clearing it when its import is undone, would fix both problems.
+- **Context:** this is the same box as Plan 2 QA's N2 ("the notice box overlaps the bottom-right Inbox tiles and the docked picker until it is dismissed", rated cosmetic). It now also covers T10's controls, and it goes stale after an undo. T10 ruling 2 already routes taxonomy toasts through it (`#import-notice`). Placing it so it doesn't cover the inspector, or clearing it when its import is undone, would fix both problems.
 - **Screenshot:** `a05b-toast-covers-inspector`.
 
 ### Judgment calls, for the controller
@@ -85,18 +89,38 @@ The pre-QA harness's screenshot-based reduced-motion check also failed once. The
 - **J5:** at the threshold, names first appear at about 8 px on screen (13 world px × 0.615). That is legible only up close (`a12-radial-diff-zoom`). It is a matter for the Plan 6 label-floor work.
 - **J6:** at fit, the 1-world-unit outline of off-path squares draws at about 0.25 px. They therefore look paler than their `--ink-3` contrast of 4.6:1 suggests. This is close to J2.
 - **J7:** the inspector crumb clips long names with "…" ("Complementar…", "Rim light from …"). The full name is in the title right below it.
-- **J8:** a technique whose name sits on stagger row 2 or 3 has it crossed by its own down-connector once the technique is expanded.
-  - The selected path's inked vertical runs from the node to its reference block, straight through "Rim light". See the README shot `tree-view.png`.
+- **J8:** in the Tree, every node with children has its own down-connector running through the middle of its name. Labels sit centred under the node, on the line's path.
+  - This happens at rest, in grey, as with "Feature" and "Grouping", and on the selected path, in ink, as with "Rim light" over its reference block. See the README shot `tree-view.png` and the zoomed dark shot `dark-tree-zoom`.
+  - The text draws above the line (the node layer is over the edge layer), so names stay legible in both themes. The line just runs behind the letters.
   - The label oracle checks label against label, not label against connector.
-  - A gap in the line behind the label, or routing the line beside it, would fix it.
+  - **Cosmetic.** A gap in the line behind each label, or a label offset beside the line, would fix it.
 
-### Boot hang (-59's 1-in-4): not reproduced
+### First-run stalls: not reproduced on demand, 1 unexplained miss
 
-- 32 cold launches, each with a fresh `%APPDATA%`:
-  - release exe: 6 plain (CDP observe-only), 6 with the harness's `page.route`, and 12 more with one reused WebView2 profile;
-  - perf exe: 8 plain.
-- First run appeared every time, in 0.5–3.2 s.
-- I can't make it happen plain. My route is set after the page exists, while -59's was set during boot.
+- **-59's boot hang** (the bare shell, no first-run screen; 1 in 4): not seen in 32 cold launches, each with a fresh `%APPDATA%`.
+  - Release exe: 6 plain (CDP observe-only), 6 with the harness's `page.route`, and 12 more with one reused WebView2 profile.
+  - Perf exe: 8 plain.
+  - First run appeared every time, in 0.5–3.2 s.
+- **Create, then Begin:** 10 instrumented launches went through "Create a new library" and Begin. Each time the path showed after one click, and Begin enabled within 25–78 ms.
+- **The one miss:** across about 30 first runs today, the first README-shots run timed out after 8 s waiting for Begin to enable.
+  - That script did not log whether the path had shown, so I can't tell a lost dialog answer from a stuck Begin.
+  - The pre-QA run had the same symptom, once.
+- **Limit of the method:** creating a library needs the native folder dialog, which the harness answers through `page.route`. So this step can't be driven without the route, and an app cause can't be fully ruled out.
+- **Rating:** unconfirmed. It is not counted in the verdict. If an artist ever reports Begin staying disabled after choosing a folder, this is the lead.
+
+## SPEC coverage
+
+| SPEC | Requirement | Where checked | Result |
+|---|---|---|---|
+| §1 | Full taxonomy editing in v1: add, rename, delete, re-link, define, synonyms; done in the Tree inspector | T10 section, RF4 | Pass |
+| §5 Tree | Bands op → domain → technique → references; breadcrumb docked in the inspector | Labels, crumb, 2,500 block | Pass |
+| §5 Tree | Select a node to rename, define, add synonyms or delete; drag a technique onto a domain to re-link; "+" on any band; deleting a node in use asks where its tags go | T10 section, RF4 | Pass. "+" is a DOM button keyed by the selection (T10 ruling 4). Drag adds a link (spec reading S3). |
+| §5 Galaxy | Force layout from the scores; edges only on hover or selection | `galaxy-view.png`; pre-QA T7 | Pass. Tile overlap at 2,500 is J4. |
+| §5 Radial | A thin layout mode over the same graph, one operation | Radial checks, M3, 2,500 ring 3 | Pass |
+| §5 | Light and dark throughout; pan and zoom on canvas views | Pre-QA theme check; `dark-tree-zoom` and `dark-radial-zoom` (names legible, dark); P3-4 | Pass |
+| §9 | Never lose data: undo and redo | RF4 byte-equal undo; redo one step; undo after every edit | Pass |
+| §9 | Speed at 2,000+: the canvas draws only what is on screen; originals not decoded | 2,500 checks (Tree, Radial and Galaxy all draw and fit) | Fit and layout pass. Frame rates are -59's re-measure, not covered here. |
+| §10 | PixiJS WebGL canvas plus HTML panels; d3-force in a Web Worker; culling, with dots at far zoom | Probe reads the Pixi scene; worker `end` seen; dots at fit | Pass |
 
 ## Re-test queue
 
@@ -109,7 +133,7 @@ The pre-QA harness's screenshot-based reduced-motion check also failed once. The
 | **P3-3:** Radial label collisions | **Fixed.** 0 overlaps when zoomed past the threshold, for all four operations (25, 23, 13 and 16 names). |
 | **P3-4:** fast +/- presses | **Fixed.** Six `+` at a 0 ms gap give 0.250 to 0.953 = 1.25⁶. Six fast → pans give exactly 360 px. A wheel mid-tween keeps the wheel result; a drag mid-tween keeps the drag. |
 | **P3-5:** Galaxy tiles overlap | **Fixed on the demo** (0 pairs). See J4 for 2,500 references. |
-| **P3-6:** camera follows the selection | **Fixed in all three views.** Each view walked past the edge with the selection ring on screen after every step: Tree 14/14 (2 pans), Radial 10/10 (8 pans), Galaxy 10/10 (7 pans). An inspector pick off screen is brought on screen (706 px). A click never pans (0.0 px). A store change with the same selection never pans (0.0 px). With reduced motion it jumps. |
+| **P3-6:** camera follows the selection | **Fixed.** In all three views, a walk past the edge kept the selection ring on screen after every step: Tree 14/14 (2 pans), Radial 10/10 (8 pans), Galaxy 10/10 (7 pans). **Tree only:** an inspector pick off screen is brought on screen (706 px); a click never pans (0.0 px); a store change with the same selection never pans (0.0 px); with reduced motion it jumps. |
 | **J1:** off-path contrast | **Fixed for nodes:** `--ink-3` is 4.6:1 in light and 6.48:1 in dark. Connectors stay `--line-2` (1.57:1 and 1.61:1) by the I7 ruling. See also J6. |
 | **J2 and J3** | Deferred to Plan 6, as expected. See the J2 note. |
 
@@ -192,7 +216,7 @@ The pre-QA harness's screenshot-based reduced-motion check also failed once. The
 - **Frame rate and settle times:** -59 re-measures these on the same build.
 - **Tree block at rest:** the single joint stub and the selected reference's inked elbow were seen in screenshots but not measured.
 - **Keyboard walk through the Tree block, and Tab trapping in dialogs:** both are Plan 6 accessibility items.
-- **Dark theme of the 5 extra inks:** unit-tested (`inks.test.ts`), not checked by eye.
+- **Dark theme of the 5 extra inks:** unit-tested (`inks.test.ts`), not checked by eye. The seed inks and the zoomed names were checked in dark: `dark-tree-zoom` and `dark-radial-zoom` in `shots-begin/`.
 
 - **Unit tests only, not clicked on the real app:**
   - delete an unused technique (`confirmDelete`);
@@ -217,10 +241,22 @@ Its summary, verbatim: "Yes. `PASS` (0 critical, 0 important, 2 minor) is justif
   - the second-Enter check only shows the selection is kept.
 - **One over-claim**, about the single-file backup: corrected above.
 
+**Changes after AGY's pass**
+
+These made no change to the verdict or the findings:
+- the F1 count is corrected to 4 of 4, with its trigger condition;
+- J8 is widened to every parent node and rated cosmetic;
+- the P3-6 row now says which checks were Tree only;
+- added the SPEC coverage table;
+- added the first-run stalls section and the Begin check;
+- added the dark-theme zoomed shots;
+- F2 now cites Plan 2 N2.
+
 ## Screenshots
 
 These are in the QA scratch folder, which is not committed:
 - `shots-p2/` (`a01` to `a14`);
 - `shots-extra/` (`x02` to `x05`);
-- `shots-big/` (`b00` to `b05`).
+- `shots-big/` (`b00` to `b05`);
+- `shots-begin/` (`dark-tree-zoom`, `dark-radial-zoom`).
 - `readme-shots/` for the root README (tree-view, tree-edit, galaxy-view, radial-view): saved in the plan3-graph sdd folder at -55's request.
