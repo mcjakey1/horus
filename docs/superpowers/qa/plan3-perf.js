@@ -9,7 +9,7 @@ const { spawn, execSync } = require("child_process");
 const fs = require("fs"), path = require("path");
 
 const REPO = path.resolve(__dirname, "../../..");
-const EXE = path.join(REPO, "app/src-tauri/target/release/horus.exe");
+const EXE = process.env.HORUS_EXE || path.join(REPO, "app/src-tauri/target/release/horus.exe"); // HORUS_EXE: a build in another CARGO_TARGET_DIR
 const W = process.argv[2];
 const DEMO = path.join(W, "perf2500"), LIB = path.join(W, "perf-lib"), SHOTS = path.join(W, "shots");
 const CONFIG = path.join(process.env.APPDATA, "art.horus.app");
@@ -179,6 +179,8 @@ async function farZoom(page, v, pt, label) {
     await fit(page, "tree");
     await zoomIn(page, "tree", T);
     await measurePan(page, "tree", "Tree busiest technique pan zoomed", T);
+    await fit(page, "tree");
+    await farZoom(page, "tree", T, "Tree busiest technique far zoom");
     await page.click('[data-view-host="tree"] .tree-all'); await sleep(2000);
     log("Show all pressed", await page.locator('[data-view-host="tree"] .tree-all').getAttribute("aria-pressed"));
     await fit(page, "tree"); await shot(page, "t1-tree-all");
@@ -199,8 +201,9 @@ async function farZoom(page, v, pt, label) {
     const R = [470, 428]; // the wheel (fitted screenshot)
     await measurePan(page, "radial", "Radial busiest operation pan fitted", R);
     await fit(page, "radial");
-    await zoomIn(page, "radial", R);
-    await measurePan(page, "radial", "Radial busiest operation pan zoomed", R);
+    const RZ = [470, 170]; // the top of ring 3's rows (fitted screenshot)
+    await zoomIn(page, "radial", RZ);
+    await measurePan(page, "radial", "Radial busiest operation pan zoomed", RZ);
   } catch (e) {
     log("ERROR", String(e && e.stack || e));
     await shot(page, "error");
