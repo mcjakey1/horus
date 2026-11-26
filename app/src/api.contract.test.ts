@@ -12,7 +12,7 @@ vi.mock("@tauri-apps/api/core", async (orig) => {
 });
 
 /** Not commands of ours: the asset URL, event listeners, the raw-body paste and the plugin pickers. */
-const NON_IPC_KEYS = ["assetUrl", "onSaveStatus", "onSaveFailed", "onCloseWaiting", "importBytes", "pickFolder", "pickImages"];
+const NON_IPC_KEYS = ["assetUrl", "onSaveStatus", "onSaveFailed", "onCloseWaiting", "importBytes", "pickFolder", "pickImages", "revealFolder"];
 
 const tag = { operationId: "op" };
 const rows: [keyof Api, string, string[], (a: Api) => Promise<unknown>][] = [

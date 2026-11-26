@@ -16,6 +16,8 @@ import { mountViews } from "./views";
 import { mountTree } from "./views/tree";
 import { mountRadial } from "./views/radial";
 import { mountGalaxy } from "./views/galaxy";
+import { mountBoards } from "./boards/view";
+import { mountScopeStatus } from "./boards/status";
 
 /** SPEC §5a, verbatim. */
 export const FIND_SIMILAR_COPY =
@@ -72,6 +74,10 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   // Plan 3 Task 8: the Radial view, one operation at a time.
   shell.register("radial", () =>
     mountRadial(root.querySelector<HTMLElement>('[data-view-host="radial"]')!, source, { api, openReference: shell.openReference }));
+  // Plan 4 Task 5: Boards, and the board scope in the footer.
+  shell.register("boards", () =>
+    mountBoards(root.querySelector<HTMLElement>('[data-view-host="boards"]')!, api, store, { openReference: shell.openReference }));
+  const unScope = mountScopeStatus(root.querySelector<HTMLElement>("#board-scope")!, store);
   const unIntake = wireIntake(win ?? null, document, {
     api,
     store,
@@ -93,7 +99,7 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
     store,
     source,
     destroy: () =>
-      (unwire(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
+      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
   };
 }
 

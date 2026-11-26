@@ -509,3 +509,47 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .links-msg:empty { display: none; }
 .link-actions { display: flex; gap: 12px; margin-top: 6px; }
 .link + .link { margin-top: 10px; }
+
+/* ---------- Plan 4 Task 5: boards ---------- */
+body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
+.bd { display: grid; grid-template-columns: 220px 1fr; min-height: 0; height: 100%; }
+.bd-list { border-right: 1px solid var(--line); background: var(--panel); padding: 16px 12px; overflow: auto; }
+.bd-list ul { list-style: none; margin: 0; padding: 0; }
+.bd-pick { display: flex; justify-content: space-between; gap: 8px; width: 100%; padding: 8px 6px; text-align: left; font: 500 15px/1.3 var(--serif); color: var(--ink); }
+.bd-pick:hover, .bd-pick[aria-current="true"] { background: var(--shell); }
+.bd-pick .count, .board-menu .count { font: 12px var(--mono); color: var(--ink-2); }
+.bd-main { display: flex; flex-direction: column; min-height: 0; padding: 16px 20px 0; }
+.bd-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 20px; }
+.bd-name { margin: 0; font: 400 24px/1.2 var(--serif); }
+.bd-rename { font: 400 22px/1.2 var(--serif); padding: 2px 6px; border: 1px solid var(--line-2); background: var(--shell); color: var(--ink); }
+.bd-actions { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.bd-actions [aria-pressed="true"] { text-decoration-color: currentColor; }
+.bd-msg { margin: 8px 0; min-height: 1.2em; font-size: 13px; color: var(--ink); }
+.bd-grid { flex: 1; min-height: 0; overflow: auto; padding-bottom: 24px; }
+.bd-tile { position: relative; width: 160px; height: 160px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2); touch-action: none; cursor: grab; }
+.bd-plate, .bd-plate img { display: block; width: 100%; height: 100%; }
+.bd-plate img { object-fit: contain; } /* the true aspect ratio, letterboxed on the N5 card */
+.bd-title { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 6px; background: var(--panel); font: 12px/1.4 var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-tools { position: absolute; top: 4px; right: 4px; display: none; gap: 6px; padding: 0 4px; background: var(--panel); }
+.bd-tile:hover .bd-tools, .bd-tile:focus-within .bd-tools { display: flex; }
+.bd-ghost { position: fixed; left: var(--x); top: var(--y); width: 96px; height: 96px; transform: translate(-50%, -50%); opacity: .8; pointer-events: none; z-index: 50; background: var(--card); box-shadow: 0 0 0 1px var(--line-2); }
+.board-menu { padding: 14px 16px 16px; border-bottom: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; gap: 8px; }
+.bm-head { margin: 0; font: 400 17px/1.3 var(--serif); }
+.bm-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
+.bm-list label { display: flex; align-items: center; gap: 8px; padding: 4px 0; font: 15px/1.3 var(--serif); }
+.bm-create-row { display: flex; gap: 8px; }
+.bm-create-row[hidden] { display: none; }
+.bm-name { flex: 1; padding: 5px 8px; border: 1px solid var(--line-2); background: var(--shell); color: var(--ink); }
+.bm-create { padding: 5px 12px; border: 1px solid var(--line-2); color: var(--ink); font-weight: 500; }
+.bm-msg { margin: 0; min-height: 1.2em; font-size: 13px; color: var(--ink); }
+.bm-actions { display: flex; justify-content: space-between; }
+.boards-open { position: absolute; bottom: 14px; left: 16px; padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
+.off-board { position: absolute; top: 50px; left: 16px; padding: 3px 8px; background: var(--ink); color: var(--panel); font: 500 12px var(--mono); }
+.off-board[hidden] { display: none; }
+.off-board-note { color: var(--ink-2); font-style: italic; }
+.board-scope b { font-weight: 600; }
+/* Plan 4 Task 5, fix round 1: no native image drag on board tiles (I1); the focus's boards (S1). */
+.bd-tile img { -webkit-user-drag: none; }
+.ref-boards { margin: 0; padding: 10px 16px 0; font-size: 13px; color: var(--ink); }
+.ref-boards .k { font: 500 12px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
+.ref-boards[hidden] { display: none; }

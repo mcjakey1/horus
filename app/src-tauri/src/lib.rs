@@ -21,6 +21,8 @@ use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Plan 4 Task 5: "Open folder" after an export; the capability grants reveal-item-in-dir only.
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let config_dir = app.path().app_config_dir()?;
             let cache_dir = app.path().app_cache_dir()?;
@@ -139,6 +141,25 @@ mod tests {
                 .lines()
                 .any(|l| l.replace(' ', "") == "panic=\"abort\"")
         );
+    }
+
+    /// B3: the opener plugin is back for "Open folder" only; no open-url or open-path grant.
+    #[test]
+    fn capability_grants_opener_reveal_only() {
+        let cap: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        let perms: Vec<&str> = cap["permissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p.as_str())
+            .collect();
+        let opener: Vec<&str> = perms
+            .iter()
+            .copied()
+            .filter(|p| p.starts_with("opener:"))
+            .collect();
+        assert_eq!(opener, ["opener:allow-reveal-item-in-dir"]);
     }
 
     #[test]
