@@ -159,6 +159,7 @@ async function farZoom(page, v, pt, label) {
     log("galaxy canvas", await box(page, "galaxy"));
     const G = [400, 400]; // the main cluster (fitted screenshot)
     await fit(page, "galaxy");
+    log("Galaxy fitted (min fps since the tab click)", await perf(page, "galaxy"));
     await measurePan(page, "galaxy", "Galaxy pan fitted", G);
     // Notch 6: past the cap (600 thumbnails, the rest dots). Notch 13: zoomed in.
     for (let i = 1; i <= 13; i++) { await notch(page, "galaxy", G); if (i === 6) await measurePan(page, "galaxy", "Galaxy pan at notch 6", G); }

@@ -54,8 +54,9 @@ Plan 3 Task 11: the graph views at 2,500 references.
 | Check | Target | Measured | Runs | Verdict |
 |---|---|---|---|---|
 | "Start with the demo set" on 2,500 images | — | 86–110 s | 3 | — |
-| Galaxy first layout (from the tab click to the layout worker's first position message) | ≤ 3 s | 960–967 ms (settled 5.04–5.10 s) | 3 | Pass, if "first layout" means the first positions. The settle is over 3 s. |
-| UI responsive during that layout | responsive | 1–3 long tasks, longest 162–187 ms; worst frame gap 161–186 ms; lowest 500 ms fps window 38–41 | 3 | Pass: no main-thread stall reached 0.2 s |
+| Galaxy first layout (from the tab click to the layout worker's first position message) | ≤ 3 s | 960–967 ms (settled 5.04–5.10 s) | 3 | Pass: "first layout" means the first streamed positions (controller ruling, 2026-11-26). The settle takes longer than 3 s. |
+| UI responsive during that layout | responsive | 1–3 long tasks, longest 162–187 ms; worst frame gap 161–186 ms | 3 | Pass: no main-thread stall reached 0.2 s |
+| Lowest 500 ms fps window, from the tab click to the fitted view (Pixi start-up, the layout, the fit) | — | 38–41 | 2 | — |
 | Galaxy pan, fitted | ≥ 55 fps | min 116–130 | 3 | Pass |
 | Galaxy pan where more than 600 references would be thumbnails (600 thumbnails, the rest dots) | ≥ 55 fps | min 76–90; worst frame gap 22–32 ms | 2 | Pass |
 | Galaxy pan, zoomed in (thumbnails) | ≥ 55 fps | min 118 | 1 | Pass |
