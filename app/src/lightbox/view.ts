@@ -344,13 +344,16 @@ export function openLightbox(
     .then(() => api.lightboxSource(refId))
     .then((s) => {
       if (closed) return;
-      note.hidden = s.full;
+      // A missing or malformed reply is a refusal too: never a throw, never a blank pane.
+      if (!s || typeof s.path !== "string" || !s.path) return sayPreview();
+      note.hidden = s.full === true;
       const url = api.assetUrl(s.path);
       const pre = new Image();
       pre.addEventListener("load", () => void (!closed && img.setAttribute("src", url)), { once: true });
       pre.addEventListener("error", sayPreview, { once: true }); // e.g. the original gone from disk
       pre.src = url;
-    }, sayPreview); // refused (an unknown or hidden reference, an undecodable file): the thumbnail stays
+    })
+    .catch(sayPreview); // refused (an unknown or hidden reference, an undecodable file): the thumbnail stays
   document.body.append(el);
   renderBoxes();
   layout();

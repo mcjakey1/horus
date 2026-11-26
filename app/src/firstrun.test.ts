@@ -68,7 +68,7 @@ function fakeApi(lastLibrary: string | null): Api {
     deleteBoard: vi.fn(),
     exportBoard: vi.fn(),
     scorePair: vi.fn(),
-    lightboxSource: vi.fn(),
+    lightboxSource: vi.fn(async (id: string) => ({ path: `C:\\lib\\images\\${id}.jpg`, full: true, width: 1, height: 1 })),
     intakeBusy: vi.fn(async () => {}),
     retrySave: vi.fn(async () => {}),
     exitWithoutSaving: vi.fn(async () => {}),

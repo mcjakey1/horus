@@ -347,6 +347,18 @@ describe("openLightbox", () => {
 
   // ---------- Plan 4 Task 6: zoom, pan, overlays, preview ----------
 
+  it("a_missing_or_invalid_source_reply_is_a_refusal", async () => {
+    const src = () => $<HTMLImageElement>(".lb-plate img").getAttribute("src");
+    for (const bad of [undefined, null, {}, { path: "", full: true }]) {
+      vi.mocked(api.lightboxSource).mockResolvedValueOnce(bad as never);
+      lb.close();
+      lb = openLightbox(api, store, "r", { openPicker });
+      await tick();
+      expect(src()).toBe(api.assetUrl(R.thumb1024)); // the thumbnail stays
+      expect($(".lb-note").hidden).toBe(false); // and says why
+    }
+  });
+
   it("preview_note_for_a_preview_source", async () => {
     vi.mocked(api.lightboxSource).mockResolvedValueOnce({ path: "C:\\cache\\r.png", full: false, width: 300, height: 400 });
     lb.close();
