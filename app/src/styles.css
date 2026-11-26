@@ -6,6 +6,12 @@
   --diff: #B87F00; --group: #1E8E5A; --seq: #2563D0; --infer: #D2462A;
   --diff-text: #7D5600; --group-text: #156B43; --seq-text: #1D4FA8; --infer-text: #A8341C;
   --diff-on: #161616; --group-on: #161616; --seq-on: #FFFFFF; --infer-on: #FFFFFF;
+  /* Extra operation inks (DESIGN.md): only ever an added operation's ink. */
+  --x-teal: #089B9B; --x-teal-text: #066B6B; --x-teal-on: #161616;
+  --x-olive: #6A7A1A; --x-olive-text: #455011; --x-olive-on: #FFFFFF;
+  --x-rose: #BC4E7B; --x-rose-text: #9B3B63; --x-rose-on: #FFFFFF;
+  --x-indigo: #8C84DB; --x-indigo-text: #675DD0; --x-indigo-on: #161616;
+  --x-umber: #815637; --x-umber-text: #5D3E28; --x-umber-on: #FFFFFF;
   --focus: #2563D0;
   --serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
   --mono: "Red Hat Mono", ui-monospace, "Cascadia Mono", monospace;
@@ -19,6 +25,11 @@
   --diff: #E0A42A; --group: #3DB07A; --seq: #5B8DEB; --infer: #EC6A4E;
   --diff-text: #E8B54A; --group-text: #5CC592; --seq-text: #8AAEF2; --infer-text: #F28A72;
   --diff-on: #161616; --group-on: #161616; --seq-on: #161616; --infer-on: #161616;
+  --x-teal: #0ABDBD; --x-teal-text: #0BDADA; --x-teal-on: #161616;
+  --x-olive: #9AA951; --x-olive-text: #A7B464; --x-olive-on: #161616;
+  --x-rose: #ED7EAC; --x-rose-text: #F098BD; --x-rose-on: #161616;
+  --x-indigo: #B7A4EF; --x-indigo-text: #CBBEF4; --x-indigo-on: #161616;
+  --x-umber: #A67E59; --x-umber-text: #B08E6D; --x-umber-on: #161616;
   --focus: #8AAEF2;
   color-scheme: dark;
 }
