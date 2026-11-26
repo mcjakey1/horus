@@ -21,8 +21,12 @@ const FIXED: Record<string, string> = {
   UnknownIcon: "That icon isn't available.",
 };
 
+/** A refusal already put into words (a caller without the taxonomy shows its message as is). */
+export class Said extends Error {}
+
 /** An edit command's error string as a sentence for the artist; the raw text is never shown. */
 export function sayError(err: unknown, tax?: Taxonomy): string {
+  if (err instanceof Said) return err.message;
   const raw = typeof err === "string" ? err : "";
   if (FIXED[raw]) return FIXED[raw];
   const named = (id: string) =>
@@ -89,10 +93,17 @@ function sheet(host: HTMLElement, p: { title: string; options?: { value: string;
       if (opener?.isConnected) opener.focus();
       resolve(v);
     };
-    d.addEventListener("change", () => (okBtn.disabled = !d.querySelector("input[type=radio]:checked")));
+    const sync = () => (okBtn.disabled = !d.querySelector("input[type=radio]:checked"));
+    d.addEventListener("change", sync);
     d.addEventListener("input", (e) => {
       const q = (e.target as HTMLInputElement).matches(".tx-search") ? (e.target as HTMLInputElement).value.trim().toLowerCase() : null;
-      if (q !== null) d.querySelectorAll<HTMLElement>(".tx-list li").forEach((li) => (li.hidden = !li.textContent!.toLowerCase().includes(q)));
+      if (q === null) return;
+      d.querySelectorAll<HTMLElement>(".tx-list li").forEach((li) => {
+        li.hidden = !li.textContent!.toLowerCase().includes(q);
+        const r = li.querySelector("input")!;
+        if (li.hidden) r.checked = false; // a hidden choice is never the one confirmed
+      });
+      sync();
     });
     d.addEventListener("keydown", (e) => {
       if (e.key !== "Escape") return;

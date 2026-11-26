@@ -68,6 +68,19 @@ describe("move-tags dialog", () => {
     expect(await p).toEqual({ kind: "partial" });
   });
 
+  it("a search that hides the chosen target unchooses it (AGY)", async () => {
+    const p = openMoveTags(host, { s, techId: "rim-light" });
+    radios().find((r) => r.value === "silhouette|differentiate.feature")!.click();
+    expect(ok().disabled).toBe(false);
+    const q = dlg().querySelector<HTMLInputElement>(".tx-search")!;
+    q.value = "closure";
+    q.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(radios().some((r) => r.checked)).toBe(false);
+    expect(ok().disabled).toBe(true);
+    dlg().querySelector<HTMLButtonElement>(".tx-cancel")!.click();
+    expect(await p).toBeNull();
+  });
+
   it("Escape cancels", async () => {
     const p = openMoveTags(host, { s, techId: "rim-light" });
     dlg().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));

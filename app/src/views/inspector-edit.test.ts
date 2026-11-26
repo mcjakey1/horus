@@ -297,6 +297,35 @@ describe("inspector editing", () => {
     expect(opts.apply).toHaveBeenCalledTimes(1);
   });
 
+  it("a second click while a command is in flight sends nothing (one click, one undo step)", async () => {
+    let finish!: (c: Change) => void;
+    api.updateOperation.mockImplementationOnce(() => new Promise<Change>((r) => (finish = r)));
+    render({ kind: "op", id: "op:group" });
+    const rose = el.querySelector<HTMLButtonElement>('.insp-ink[data-ink="rose"]')!;
+    rose.click();
+    rose.click();
+    finish(done());
+    await flush();
+    expect(api.updateOperation).toHaveBeenCalledTimes(1);
+    expect(opts.apply).toHaveBeenCalledTimes(1);
+  });
+
+  it("the technique form says a taken name with its owner, and a read-only refusal reverts (AGY)", async () => {
+    api.addTechnique.mockRejectedValueOnce("NameTaken:pop-out").mockRejectedValueOnce("TaxonomyReadOnly");
+    render({ kind: "branch", id: "br:group.social" });
+    button(el, "+ Technique…")!.click();
+    const form = el.querySelector<HTMLFormElement>("form.tx-tech")!;
+    type(form.querySelector<HTMLInputElement>('[name="name"]')!, "Pop-out");
+    form.requestSubmit();
+    await flush();
+    expect(form.querySelector(".insp-err")!.textContent).toBe("That name is taken by Pop-out.");
+    form.requestSubmit();
+    await flush();
+    expect(opts.notice).toHaveBeenCalledWith(expect.stringContaining(READ_ONLY));
+    expect(el.querySelector("form.tx-tech")).toBeNull();
+    expect(opts.apply).not.toHaveBeenCalled();
+  });
+
   it("read_only_error_toast", async () => {
     api.updateTechnique.mockRejectedValueOnce("TaxonomyReadOnly");
     render(tech("rim-light"));

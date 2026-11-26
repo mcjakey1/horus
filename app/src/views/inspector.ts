@@ -9,7 +9,7 @@ import { MAX_OPS } from "../graph/constants";
 import { buildTaxGraph, type TaxNode } from "../graph/taxgraph";
 import { EXTRA_INKS, opInk, opLabel, SEED_INK } from "../ops";
 import { tileBox, type Box } from "../reference/tile";
-import { branchLabel, confirmDelete, openMoveBranches, openMoveTags, READ_ONLY, refsUsing, sayError } from "./move-tags";
+import { branchLabel, confirmDelete, openMoveBranches, openMoveTags, READ_ONLY, refsUsing, Said, sayError } from "./move-tags";
 import { mountTechniqueForm } from "./technique-form";
 
 export { READ_ONLY, sayError } from "./move-tags";
@@ -75,6 +75,9 @@ function names(tax: Taxonomy) {
   const tech = (id: string) => tax.techniques.find((t) => t.id === id);
   return { domain, branch, tech, branchLabel: (id: string) => branchLabel(tax, id) };
 }
+
+/** Inspectors with an edit command in flight: a second click waits, so one click is one undo step. */
+const inFlight = new WeakSet<HTMLElement>();
 
 function roNote(): HTMLElement {
   const p = document.createElement("p");
@@ -220,11 +223,13 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
   const rerender = () => renderInspector(el, s, sel, opts);
   const say = (text: string) => {
     if (opts.notice) opts.notice(`<p>${esc(text)}</p>`);
-    else el.querySelector(".insp-msg")!.textContent = text;
+    else if (el.querySelector(".insp-msg")) el.querySelector(".insp-msg")!.textContent = text;
   };
   /** Applies a command's Change, or says why it was refused. A read-only refusal reverts the UI. */
-  const run = (p: Promise<Change>, fieldErr?: (msg: string) => void): Promise<boolean> =>
-    p.then(
+  const run = (call: () => Promise<Change>, fieldErr?: (msg: string) => void): Promise<boolean> => {
+    if (inFlight.has(el)) return Promise.resolve(false);
+    inFlight.add(el);
+    return call().then(
       (c) => {
         opts.apply!(c);
         if (c.madePartial) say(partialCopy(c.madePartial));
@@ -239,7 +244,8 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
         else say(msg);
         return false;
       },
-    );
+    ).finally(() => inFlight.delete(el));
+  };
   // What the name, description and icon fields edit.
   const target =
     node?.kind === "tech" ? { kind: "tech", id: node.techId } : node?.kind === "branch" ? { kind: "domain", id: node.domainId } : node?.kind === "op" ? { kind: "op", id: node.opId } : null;
@@ -281,7 +287,7 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
       const p = patch(input.value.trim());
       busy = true;
       if (!p) return rerender();
-      void run(update(p), (m) => {
+      void run(() => update(p), (m) => {
         err.textContent = m;
         busy = false;
         input.focus();
@@ -301,17 +307,17 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
       return inline(b, d.edit, (v) => (v === old ? null : { [d.edit!]: v }), old);
     }
     if (tech && "synAdd" in d) return inline(b, "synonym", (v) => (!v || tech.synonyms.includes(v) ? null : { synonyms: [...tech.synonyms, v] }));
-    if (tech && d.synDel) return void run(update({ synonyms: tech.synonyms.filter((_, i) => i !== +d.synDel!) }));
+    if (tech && d.synDel) return void run(() => update({ synonyms: tech.synonyms.filter((_, i) => i !== +d.synDel!) }));
     if (tech && d.unlink) {
       const br = d.unlink;
       // R20: no tag uses the pair, so nothing to move.
-      if (!refsUsing(s, tech.id, br)) return void run(api.unlinkTechnique(tech.id, br, undefined));
-      return void openMoveTags(dialogHost(), { s, techId: tech.id, branchId: br }).then((m) => m && run(api.unlinkTechnique(tech.id, br, m)));
+      if (!refsUsing(s, tech.id, br)) return void run(() => api.unlinkTechnique(tech.id, br, undefined));
+      return void openMoveTags(dialogHost(), { s, techId: tech.id, branchId: br }).then((m) => m && run(() => api.unlinkTechnique(tech.id, br, m)));
     }
-    if (tech && d.link) return void run(api.linkTechnique(tech.id, d.link));
-    if (d.ink && node?.kind === "op") return void run(api.updateOperation(node.opId, { color: d.ink }));
-    if (d.icon && node?.kind === "branch" && d.icon !== N.domain(node.domainId)?.icon) return void run(api.updateDomain(node.domainId, { icon: d.icon }));
-    if (d.addBranch && node?.kind === "op") return void run(api.addBranch(node.opId, d.addBranch));
+    if (tech && d.link) return void run(() => api.linkTechnique(tech.id, d.link!));
+    if (d.ink && node?.kind === "op") return void run(() => api.updateOperation(node.opId, { color: d.ink }));
+    if (d.icon && node?.kind === "branch" && d.icon !== N.domain(node.domainId)?.icon) return void run(() => api.updateDomain(node.domainId, { icon: d.icon }));
+    if (d.addBranch && node?.kind === "op") return void run(() => api.addBranch(node.opId, d.addBranch!));
     if ("cancel" in d) return slot().replaceChildren();
     const pickList = (label: string, items: string) => {
       slot().innerHTML = `<div class="insp-list insp-pick" role="group" aria-label="${label}">${items}<button class="text-btn" data-cancel>Cancel</button></div>`;
@@ -327,15 +333,25 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
           .join(""));
       }
       case "del-tech":
-        if (refsUsing(s, tech!.id)) return void openMoveTags(dialogHost(), { s, techId: tech!.id }).then((m) => m && run(api.deleteTechnique(tech!.id, m)));
-        return void confirmDelete(dialogHost(), `Delete ${tech!.name}?`, "Delete technique").then((yes) => yes && run(api.deleteTechnique(tech!.id, undefined)));
+        if (refsUsing(s, tech!.id)) return void openMoveTags(dialogHost(), { s, techId: tech!.id }).then((m) => m && run(() => api.deleteTechnique(tech!.id, m)));
+        return void confirmDelete(dialogHost(), `Delete ${tech!.name}?`, "Delete technique").then((yes) => yes && run(() => api.deleteTechnique(tech!.id, undefined)));
       case "del-op":
-        return void openMoveBranches(dialogHost(), { s, kind: "op", id: target!.id }).then((m) => m && run(api.deleteOperation(target!.id, m as OpMove)));
+        return void openMoveBranches(dialogHost(), { s, kind: "op", id: target!.id }).then((m) => m && run(() => api.deleteOperation(target!.id, m as OpMove)));
       case "del-domain":
-        return void openMoveBranches(dialogHost(), { s, kind: "domain", id: target!.id }).then((m) => m && run(api.deleteDomain(target!.id, m as DomainMove)));
+        return void openMoveBranches(dialogHost(), { s, kind: "domain", id: target!.id }).then((m) => m && run(() => api.deleteDomain(target!.id, m as DomainMove)));
       case "add-tech":
         // The form's api applies its Change; one argument (C17).
-        return mountTechniqueForm(slot(), { ...api, addTechnique: (x) => api.addTechnique(x).then((c) => (opts.apply!(c), c)) }, (node as { branchId: string }).branchId);
+        return mountTechniqueForm(slot(), {
+          ...api,
+          addTechnique: (x) => api.addTechnique(x).then((c) => (opts.apply!(c), c), (err) => {
+            const msg = sayError(err, tax);
+            if (msg === READ_ONLY) {
+              say(msg);
+              rerender();
+            }
+            throw new Said(msg); // the form shows it as is, names resolved
+          }),
+        }, (node as { branchId: string }).branchId);
       case "add-dom": {
         const used = new Set(tax.branches.filter((x) => x.operationId === target!.id).map((x) => x.domainId));
         return pickList("Add a domain", tax.domains
@@ -364,7 +380,7 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     if (submitting) return;
     const v = (n: string) => f.querySelector<HTMLInputElement>(`[name="${n}"]`)?.value.trim() ?? "";
     submitting = true;
-    const p = f.dataset.form === "op"
+    const p = () => f.dataset.form === "op"
       ? api.addOperation(v("name"), v("plainLabel"), v("description")) // no color: the first free ink
       : api.addDomain(v("name"), v("description"), undefined, target!.id); // one call, one undo step
     void run(p, (m) => void (f.querySelector(".insp-err")!.textContent = m)).finally(() => (submitting = false));
@@ -375,6 +391,6 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     if (!a.matches("textarea[data-field=description]") || !target) return;
     const old = target.kind === "tech" ? N.tech(target.id)?.description : target.kind === "domain" ? N.domain(target.id)?.description : tax.operations.find((o) => o.id === target.id)?.description;
     const v = a.value.trim();
-    if (v !== (old ?? "")) void run(update({ description: v }));
+    if (v !== (old ?? "")) void run(() => update({ description: v }));
   };
 }
