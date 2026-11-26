@@ -540,6 +540,84 @@ mod tests {
         assert!(edges(&d, 8).is_empty());
     }
 
+    /// A synthetic 2,500-reference library shaped like `scripts/make_perf_library.py`'s:
+    /// 55 (technique, branch) links like the seed's branchTechniques (48 techniques, 18 branches),
+    /// 1-4 distinct links per reference drawn Zipf (weight 1/rank). With `head`, link 0 is also
+    /// put on ~85% of the references (the carry-in's head-heavy case).
+    fn perf_lib(head: bool) -> LibraryData {
+        const LINKS: usize = 55;
+        let link = |i: usize| tech(&format!("t{}", i % 48), &format!("b{}", i % 18));
+        let cum: Vec<f64> = (1..=LINKS)
+            .scan(0.0, |s, r| {
+                *s += 1.0 / r as f64;
+                Some(*s)
+            })
+            .collect();
+        let mut rng = Rng(0x2545_F491_4F6C_DD1D);
+        let refs = (0..2500)
+            .map(|i| {
+                let mut picked = BTreeSet::new();
+                if head && rng.next(100) < 85 {
+                    picked.insert(0);
+                }
+                let want = picked.len() + 1 + rng.next(4) as usize;
+                while picked.len() < want.min(4) {
+                    let u = rng.next(1_000_000) as f64 / 1e6 * cum[LINKS - 1];
+                    picked.insert(cum.iter().position(|&c| u < c).unwrap_or(LINKS - 1));
+                }
+                r(&format!("p{i:04}"), picked.into_iter().map(link).collect())
+            })
+            .collect();
+        lib(refs)
+    }
+
+    /// Release only, one test at a time for a clean number:
+    /// `cargo test --release -- --ignored graph_edges_2500 --nocapture --test-threads=1`.
+    /// Both tests in parallel measured ~1.37 s head-heavy (one sample) against ~1.1 s alone.
+    fn under_budget(d: &LibraryData, label: &str) {
+        if cfg!(debug_assertions) {
+            panic!("run with --release");
+        }
+        let t0 = std::time::Instant::now();
+        let idx = Index::build(d);
+        let built = t0.elapsed();
+        let t1 = std::time::Instant::now();
+        let got = idx.graph_edges(d, 8);
+        let took = t1.elapsed();
+        println!(
+            "{label}: Index::build {built:?}, graph_edges {took:?}, {} edges",
+            got.len()
+        );
+        assert!(!got.is_empty());
+        assert!(
+            took.as_secs_f64() < 1.5,
+            "{label}: graph_edges took {took:?}"
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn graph_edges_2500_under_budget() {
+        under_budget(&perf_lib(false), "zipf");
+    }
+
+    #[test]
+    #[ignore]
+    fn graph_edges_2500_head_heavy_under_budget() {
+        let d = perf_lib(true);
+        let on_head = d
+            .references
+            .iter()
+            .filter(|r| {
+                r.tags
+                    .iter()
+                    .any(|t| t.technique_id.as_deref() == Some("t0"))
+            })
+            .count();
+        assert!(on_head >= 2000, "head technique on only {on_head} of 2,500");
+        under_budget(&d, "head-heavy");
+    }
+
     #[test]
     fn graph_edges_skip_branch_only() {
         let d = lib(vec![

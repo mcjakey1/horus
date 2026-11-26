@@ -20,6 +20,69 @@ Tauri v2 desktop app (Rust core, TypeScript UI).
 - **CSP in dev:** on Windows, `tauri dev` serves the page straight from Vite, so the CSP is only enforced in the release build.
 - **Fonts:** licences ship in the app's `licenses/` folder (`OFL-SourceSerif4.txt`, `OFL-RedHatMono.txt`).
 
+## Performance check
+
+Plan 3 Task 11: the graph views at 2,500 references.
+
+**Commands:**
+- Budget test (release, one test at a time): `cargo test --release -- --ignored graph_edges_2500 --nocapture --test-threads=1` in `src-tauri`.
+- Synthetic library: `python -I scripts/make_perf_library.py OUT_DIR --n 2500 --seed 7` (needs Pillow 10.1 or later).
+  - 2,500 numbered 600×800 colour fields.
+  - Each one gets 1–4 seed techniques, drawn Zipf.
+- Perf build: `VITE_PERF=1 npm run tauri build -- --features perf --no-bundle`.
+- Run: start `src-tauri/target/release/horus.exe` with `HORUS_DEMO_DIR=OUT_DIR`. On first run, create a new library with "Start with the demo set".
+  - The `perf` feature is what lets `HORUS_DEMO_DIR` replace the bundled demo set.
+  - The overlay (bottom left of each graph view) shows the Pixi ticker's fps, the minimum since reset, and live textures. Click it to reset.
+- Harness: `docs/superpowers/qa/plan3-perf.js` drives the build over WebView2 CDP. It is a tidied copy of the script that produced these numbers: the same steps and the same zoom notches. The copy was syntax-checked but not re-run.
+  - It reads the same numbers from `window.__horusPerf.<view>`.
+  - It records long tasks and the worst gap between animation frames.
+
+**Budget test** (`graph_edges(&d, 8)` on 2,500 references, budget 1.5 s), run 2026-11-26:
+- Zipf: 491–525 ms.
+- Head-heavy (one technique on at least 80% of references): 1,074–1,201 ms. Running both tests in parallel gave 1,372 ms (one sample).
+
+**Manual check,** run 2026-11-26 on the release perf build of `p3-t11` (Plan 3 Tasks 1–10 merged, plus Task 11).
+- **Runs:** three, each on a fresh library. The "runs" column counts only the runs whose screenshots show the measured content on screen. Run 1's zoomed pans landed on empty canvas, and so did run 2's zoomed Galaxy pan; those are left out.
+- **Machine:** Ryzen 5 3600, RTX 2060, 16 GB RAM.
+- **Window:** 1280×800 at DPR 1, so the canvas was 940×712.
+- **Frame rate:** at rest the ticker reported about 130 fps. WMI reported the display's current refresh rate as 60 Hz. So the fps figures are frames the Pixi ticker ran, not frames on screen.
+- **Data:**
+  - 2,500 references and 6,238 tags.
+  - Busiest technique: Complementary pairing, on 1,158 references.
+  - Busiest operation: Differentiate, on 2,190 references.
+
+| Check | Target | Measured | Runs | Verdict |
+|---|---|---|---|---|
+| "Start with the demo set" on 2,500 images | — | 86–110 s | 3 | — |
+| Galaxy first layout (from the tab click to the layout worker's first position message) | ≤ 3 s | 960–967 ms (settled 5.04–5.10 s) | 3 | Pass: "first layout" means the first streamed positions (controller ruling, 2026-11-26). The settle takes longer than 3 s. |
+| UI responsive during that layout | responsive | 1–3 long tasks, longest 162–187 ms; worst frame gap 161–186 ms | 3 | Pass: no main-thread stall reached 0.2 s |
+| Lowest 500 ms fps window, from the tab click to the fitted view (Pixi start-up, the layout, the fit) | — | 38–41 | 2 | — |
+| Galaxy pan, fitted | ≥ 55 fps | min 116–130 | 3 | Pass |
+| Galaxy pan where more than 600 references would be thumbnails (600 thumbnails, the rest dots) | ≥ 55 fps | min 76–90; worst frame gap 22–32 ms | 2 | Pass |
+| Galaxy pan, zoomed in (thumbnails) | ≥ 55 fps | min 118 | 1 | Pass |
+| Zooming | ≥ 55 fps | Zoom-in fps: not measured. Lowest fps across a zoomed pan, a fit and 30 notches out to far zoom: Galaxy 98–105, Tree 87–89 | 2 | Pass for zooming out; zoom-in not measured |
+| Peak live textures (any view, any run) | ≤ 600 | 600 (Galaxy); 154 (Tree); 0 (Radial) | 3 | Pass |
+| Far zoom shows only dots (Galaxy, Tree) | all dots | all dots, judged from screenshots | 2 (Galaxy) / 1 (Tree) | Pass |
+| Tree, Complementary pairing expanded: pan fitted / zoomed | ≥ 55 fps | min 130–131 / 130 | 3 / 1 | Pass |
+| Tree, "Show all references" on: pan fitted / zoomed | ≥ 55 fps | min 129–130 / 125–130 | 3 / 2 | Pass |
+| Radial, Differentiate: pan fitted / zoomed | ≥ 55 fps | min 130–131 / 130–131 | 3 / 2 | Pass. Only the taxonomy wheel is drawn here: no references, 0 textures. |
+
+**Carry-ins:**
+- **The ~110 empty `PIXI.Text` joint nodes in the Tree:** not measured. The release build exposes no scene-graph hook.
+- **Galaxy cold settle:**
+  - 898 ms on the 50-image demo (Task 7).
+  - At 2,500 references: first positions in about 0.96 s, settled in 5.04–5.10 s.
+  - The 2,500 settle was not measured with forceCollide removed.
+- **More than `TEX_CAP` thumbnails visible:**
+  - The cap holds: 600 thumbnails, the rest dots, and live textures never above 600.
+  - Panning there was the slowest case measured, at a minimum of 76 fps, but showed no stall below 55 fps.
+
+**Seen, not measured:**
+- In the Galaxy's densest cluster, zoomed in, many 48-unit tiles overlap. The layout does not separate them fully at 2,500 references.
+- With one technique expanded, the Tree draws its 1,158 references as one column, so the fitted Tree is a thin line of dots.
+
+The test libraries were deleted afterwards, and so was `%APPDATA%\art.horus.app`, which was absent before the runs.
+
 ## Plan 2 end-to-end check
 
 Run on 2026-11-25 at `5552f2d` (branch `p2-t12-e2e`), with the harness `docs/superpowers/qa/plan2-e2e.js`. It drives the release `horus.exe` over WebView2 CDP.
