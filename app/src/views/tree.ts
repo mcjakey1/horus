@@ -192,7 +192,11 @@ export function mountTree(
         const next = move(g, sel, dir);
         if (next) select(next);
       },
-      activate: () => {}, // Enter is the scene's: it emits `activate` (carry-in 1)
+      // With a selection, Enter is the scene's: it emits `activate` (carry-in 1). With none, Enter
+      // starts one on the first operation (final review I3: every canvas action from the keyboard).
+      activate: () => {
+        if (!sel) select(move(g, null, "child"));
+      },
       clear: () => select(null),
     });
     if (handled) e.preventDefault();

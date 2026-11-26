@@ -198,6 +198,16 @@ describe("Tree view", () => {
     expect(openReference).toHaveBeenCalledTimes(1);
   });
 
+  it("Enter with nothing selected selects the first operation (final review I3)", () => {
+    expect(fake.lastSel()).toBeNull();
+    key("Enter");
+    expect(fake.lastSel()).toBe("op:differentiate");
+    expect(crumb("op")).toBe("Differentiate");
+    key("Enter"); // now selected: Enter is the scene's again
+    expect(fake.lastSel()).toBe("op:differentiate");
+    expect(openReference).not.toHaveBeenCalled();
+  });
+
   it("data_change_keeps_selection_or_clears", () => {
     fake.emit("select", "tech:chiaroscuro");
     fake.emit("select", "ref:chiaroscuro:a");

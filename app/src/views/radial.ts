@@ -228,7 +228,11 @@ export function mountRadial(
         const next = sel === null ? (dir === "parent" ? null : `op:${op}`) : move(layout().ring, sel, dir);
         if (next) select(next);
       },
-      activate: () => {}, // Enter is the scene's: it emits `activate`
+      // With a selection, Enter is the scene's: it emits `activate`. With none, Enter selects the
+      // centre (final review I3).
+      activate: () => {
+        if (!sel) select(`op:${op}`);
+      },
       clear: () => select(null),
       digit: (k) => {
         const ops = data.get().tax.operations;

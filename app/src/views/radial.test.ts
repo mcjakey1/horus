@@ -210,6 +210,13 @@ describe("Radial view", () => {
     expect(fake.lastSel()).toBeNull();
   });
 
+  it("Enter with nothing selected selects the centre (final review I3)", () => {
+    expect(fake.lastSel()).toBeNull();
+    key("Enter");
+    expect(fake.lastSel()).toBe("op:infer");
+    expect(host.querySelector('.insp-crumb .cell[data-level="op"] .v')!.textContent).toBe("Infer");
+  });
+
   it("remembers the operation for the session; a reset clears and fits", async () => {
     button("Lead the eye").click();
     fake.emit("select", "op:sequence");
