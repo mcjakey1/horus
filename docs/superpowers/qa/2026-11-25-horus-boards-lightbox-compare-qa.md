@@ -68,7 +68,7 @@
 - **What I can't tell:** whether the app or the harness is at fault. Every launch answers the folder dialog through a CDP route (`page.route` on the dialog IPC), because a real native dialog can't be driven here.
   - One explanation is that the route sometimes isn't active yet when the first request goes out. A real native folder dialog would then open, possibly behind the window, and hold every later click.
   - I added a window listing for the app's process on a miss, but the launch that carried it picked first time, so this is not confirmed.
-- **Suggestion:** a 2-minute hand check. Delete `%APPDATA%rt.horus.app`, launch `horus.exe` 5 times, and click "Create a new library…" each time. If the native dialog always appears, H1 is a harness artifact.
+- **Suggestion:** a 2-minute hand check. Delete `%APPDATA%\art.horus.app`, launch `horus.exe` 5 times, and click "Create a new library…" each time. If the native dialog always appears, H1 is a harness artifact.
 
 ## Fix-wave QA focus (`fix-wave-rereview.md`)
 
@@ -137,11 +137,40 @@
 - **A 2,000-member board on the 2,500 set.** -59's Task 8 Run B covered it on 6e07004 (windowed grid, drag while scrolled). I did not re-run it at 836d276, to save the weekly budget.
 - **Opening `credits.txt` in Notepad, TextEdit or PureRef** (see Task 8 gaps).
 - **Board creation as its own undo step,** outside the menu's Ctrl+Z / Ctrl+Y check.
+- **Light theme only** for the Plan 4 views; dark theme not driven (AGY note).
+- **Dragging the Link… handle onto an already-linked row.** The combobox exclusion of linked references was tested; the drag path to a linked row was not (AGY note).
+- **The lightbox `o` overlay toggle** (AGY note).
 - **Compare from the Galaxy.** It is the only other entry point, and it was not driven. Compare from the Tree and the Radial is deferred (C26).
 
 ## AGY #3 cross-check (conversation 9639ac0d, `--mode plan`, read-only)
 
-AGY_RESULT
+Verdict: **PASS**. Asked to check each PASS claim against the logs, the F1/F2 severities and the F1 cause reading, the "Not covered" list, and the overall verdict. Its answer, verbatim:
+
+> PASS
+>
+> ### 1. Claims vs logs
+> Every PASS claim in [2026-11-25-horus-boards-lightbox-compare-qa.md](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/p4-qa/docs/superpowers/qa/2026-11-25-horus-boards-lightbox-compare-qa.md) matches `run4.log` (50 pass, 3 fail, 1 note), `run2.log` / `run3.log`, `p4-reg2.log` (51/51), and `p4-reg3b.log` / `p4-reg3c.log` (87/3 -> 88/2 after the one-line wait fix in `887aa71` for [mara-plan3.js:471](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/p4-qa/docs/superpowers/qa/mara-plan3.js#L471)). No over-claims; J3 (partial hover label) and Notepad are called out honestly. *(Tiny typo at [report:71](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/p4-qa/docs/superpowers/qa/2026-11-25-horus-boards-lightbox-compare-qa.md#L71): `%APPDATA% rt.horus.app` missing `\a`.)*
+>
+> ### 2. F1 & F2 severities and F1 cause reading
+> - **F1 (Minor, pre-existing) — cause reading exact, severity fair:**
+>   - [tagging/picker.ts:294-297,339-346](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/p4-qa/app/src/tagging/picker.ts#L339-L346): `Escape` calls `closeForm()` (`slot.innerHTML = ""`), detaching the focused input, and never calls `stopPropagation()`.
+>   - [lightbox/view.ts:226-233](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/p4-qa/app/src/lightbox/view.ts#L226-L233): `t.closest(".picker")` returns `null` on the detached target; with `!from && !draft` (cleared by `commit()`), `:230` calls `close()`.
+>   - Either `stopPropagation()` in picker's Esc branch or `defaultPrevented` / `composedPath()` in lightbox fixes it. `Minor` is fair (pre-existing, narrow flow, no saved data lost).
+> - **F2 (Minor) — verified in [styles.css:528-534](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/p4-qa/app/src/styles.css#L528-L534), severity fair:**
+>   - `.bd-tile` is `160px`; `.bd-tools` (`right: 4px`) with `"Open"` + `"Remove from board"` overflows left (`btnLeft 217` vs `gridLeft 240`) and clips in `.bd-grid { overflow: auto }`. `Minor` is fair (no data loss, column 1 only, other paths work).
+>
+> ### 3. Scope & "Not covered" check
+> - "Not covered" accurately lists RF1 hard names, RF2 missing/unwritable export, 2,000-member board re-run, Notepad/PureRef, board-create undo outside menu, and Compare from Galaxy.
+> - Three minor items not listed in "Not covered" (none verdict-changing, all unit-tested): dark theme check (`mara-plan4.js` ran light only), dragging the Link handle onto an already-linked Ranked row (combobox exclusion was tested), and lightbox `o` overlay toggle.
+> - Note: [2026-11-25-horus-boards-lightbox-compare.md:63-70](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/docs/superpowers/plans/2026-11-25-horus-boards-lightbox-compare.md#L63-L70) has Review Focus 1–5; "RF6" in the report/prompt is the quick-quit flush check (good extra coverage, just not numbered RF6 in the plan).
+>
+> ### 4. Overall verdict justified?
+> Yes. `PASS` (0 critical, 0 important, 2 minor) is justified: fix-wave items 1–8 and Task 8's F1–F4 are proven on the real release exe at `836d276`, item 9 answered F1, Plan 2 and Plan 3 regressions are clean, and both findings are fair Minors with no data loss.
+
+**Changes made after AGY:**
+- I fixed the `%APPDATA%\art.horus.app` typo in H1.
+- I added AGY's three not-driven items (dark theme, the Link handle dragged onto an already-linked row, and `o`) to "Not covered".
+- **Review Focus 6:** AGY read the plan in the main checkout, which lists Review Focus 1–5. The plan at `836d276`, the build under test, has Review Focus 6 ("A link or board edit followed by a quit"), so the report keeps RF6.
 
 ## Screenshots
 
