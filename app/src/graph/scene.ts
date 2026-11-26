@@ -5,12 +5,13 @@ import type * as PixiNS from "pixi.js";
 import type { Api } from "../api";
 import { isTextEntry } from "../keys";
 import { tileBox } from "../reference/tile";
-import { fit, pan, zoomAt, type Camera, type Rect } from "./camera";
-import { TEX_CAP } from "./constants";
+import { fit, pan, reveal, zoomAt, type Camera, type Rect } from "./camera";
+import { LABEL_FONT, TEX_CAP } from "./constants";
 import {
   buildGrids,
   classifyDrag,
   EdgeGate,
+  labelShown,
   sameLook,
   nodeRect,
   planFrame,
@@ -89,7 +90,7 @@ type Obj = {
   body?: PixiNS.Container; // the tile or shape drawn in "thumb" LOD
   sprite?: PixiNS.Sprite;
   outline?: PixiNS.Graphics;
-  label?: PixiNS.Text;
+  label?: PixiNS.Text; // a label node's text, or a taxonomy node's name (hidden when tiny)
 };
 
 // ---------- the scene ----------
@@ -247,10 +248,11 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         if (n.kind === "op") g.fill(ink);
         else g.fill(resolveColor("var(--panel)")).stroke({ width: 1, color: ink });
         body.addChild(g);
-        const t = new PIXI.Text({ text: n.label, style: { fontFamily: "Source Serif 4, Georgia, serif", fontSize: 13, fill: resolveColor("var(--ink)") } });
+        const t = new PIXI.Text({ text: n.label, style: { fontFamily: "Source Serif 4, Georgia, serif", fontSize: LABEL_FONT, fill: resolveColor("var(--ink)") } });
         t.anchor.set(0.5, 0);
-        t.position.set(0, half + 4);
+        t.position.set(0, half + 4 + (n.labelDy ?? 0));
         body.addChild(t);
+        o.label = t;
       }
       o.body = body;
       root.addChild(dot, body);
@@ -321,6 +323,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       o.dot.visible = !thumb;
       o.dot.scale.set(1 / cam.scale); // a 3 px dot at every zoom
       o.body.visible = thumb;
+      if (o.label) o.label.visible = labelShown(cam.scale); // a taxonomy name (I1)
       if (n.kind === "ref" && o.sprite) {
         if (!thumb) {
           o.sprite.texture = PIXI.Texture.EMPTY;
@@ -475,16 +478,17 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   const onKey = (e: KeyboardEvent) => {
     if (isTextEntry(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
     const { w, h } = view();
+    const base = tween?.to ?? cam; // fast presses compound: each starts where the last one is going (M1)
     const zero = e.key === "0" || (!e.shiftKey && e.code === "Digit0"); // AZERTY's unshifted "à"
-    if (e.key === "+" || e.key === "=") setCamera(zoomAt(cam, w / 2, h / 2, 1.25), true);
-    else if (e.key === "-") setCamera(zoomAt(cam, w / 2, h / 2, 0.8), true);
+    if (e.key === "+" || e.key === "=") setCamera(zoomAt(base, w / 2, h / 2, 1.25), true);
+    else if (e.key === "-") setCamera(zoomAt(base, w / 2, h / 2, 0.8), true);
     else if (zero) fitAll();
     else if (e.key === "Enter" && selected) emit("activate", selected, { shift: e.shiftKey });
     else if (e.key.startsWith("Arrow") && selected === null) {
       // With a selection, the view moves it (navigate.ts); without one, the arrows pan.
       const d = 60;
       const [dx, dy] = { ArrowLeft: [d, 0], ArrowRight: [-d, 0], ArrowUp: [0, d], ArrowDown: [0, -d] }[e.key] ?? [0, 0];
-      setCamera(pan(cam, dx, dy), true);
+      setCamera(pan(base, dx, dy), true);
     } else return;
     e.preventDefault();
   };
@@ -571,7 +575,15 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     },
     setDropHint: setHint,
     select(id) {
-      selected = id && nodes.has(id) ? id : null;
+      const next = id && nodes.has(id) ? id : null;
+      // A new selection (keyboard or inspector) is brought on screen; the same one re-sent by a
+      // render never pans, and a click has already set `selected` before it emits (I6).
+      if (next && next !== selected) {
+        const base = tween?.to ?? cam;
+        const c = reveal(base, view(), nodeRect(nodes.get(next)!));
+        if (c !== base) setCamera(c, true);
+      }
+      selected = next;
       dirty = true;
     },
     destroy() {

@@ -139,9 +139,9 @@ describe("Tree view", () => {
     expect(color("op:differentiate")).toBe("var(--diff)");
     expect(color("br:differentiate.feature")).toBe("var(--diff)");
     expect(color("tech:chiaroscuro")).toBe("var(--diff)");
-    expect(color("op:group")).toBe("var(--line-2)");
-    expect(color("br:sequence.feature")).toBe("var(--line-2)");
-    expect(color("tech:silhouette")).toBe("var(--line-2)");
+    expect(color("op:group")).toBe("var(--group)"); // an operation square always takes its ink (I7)
+    expect(color("br:sequence.feature")).toBe("var(--ink-3)");
+    expect(color("tech:silhouette")).toBe("var(--ink-3)");
     const es = fake.edges[fake.edges.length - 1];
     const inked = es.filter((e) => e.color === "var(--diff)");
     expect(inked.length).toBeGreaterThan(0);
@@ -158,6 +158,52 @@ describe("Tree view", () => {
     }
     // the inked segments are drawn last, over the hairlines
     expect(es.slice(es.length - inked.length).every((e) => e.color === "var(--diff)")).toBe(true);
+  });
+
+  it("labels are cut at 24 characters and staggered over 3 rows (final review I1)", () => {
+    const tax = { ...seed, techniques: seed.techniques.map((t) => (t.id === "chiaroscuro" ? { ...t, name: "Chiaroscuro with a very long name" } : t)) };
+    src.set({ ...snap(tax, refs), version: 1 });
+    const ns = fake.last();
+    const chi = ns.find((n) => n.id === "tech:chiaroscuro") as { label: string };
+    expect(chi.label).toBe("Chiaroscuro with a very …");
+    const dy = (kind: string) => ns.filter((n) => n.kind === kind).map((n) => (n as { labelDy?: number }).labelDy);
+    expect(new Set(dy("tech"))).toEqual(new Set([0, 18, 36]));
+    expect(new Set(dy("branch"))).toEqual(new Set([0, 18, 36]));
+    expect(new Set(dy("op"))).toEqual(new Set([0, 18, 36]));
+  });
+
+  it("an expanded technique hangs its references from one joint; only the selected one gets a connector (final review I5)", () => {
+    fake.emit("select", "tech:chiaroscuro");
+    const toRef = (es: SceneEdge[]) => es.filter((e) => e.to.startsWith("ref:"));
+    let es = fake.edges[fake.edges.length - 1];
+    expect(es.filter((e) => e.from === "tech:chiaroscuro" && e.to === "j:rf:tech:chiaroscuro")).toHaveLength(1);
+    expect(es.filter((e) => e.from === "tech:chiaroscuro")).toHaveLength(1); // no per-reference segments
+    expect(toRef(es)).toEqual([]);
+    fake.emit("select", "ref:chiaroscuro:b");
+    es = fake.edges[fake.edges.length - 1];
+    expect(toRef(es).map((e) => [e.from, e.to])).toEqual([["j:rs:ref:chiaroscuro:b", "ref:chiaroscuro:b"]]);
+    expect(es.find((e) => e.from === "j:rf:tech:chiaroscuro")).toMatchObject({ to: "j:rs:ref:chiaroscuro:b", color: "var(--diff)" });
+    // Show all keeps one column per technique, each reference on its own segment (deferred to Plan 6)
+    host.querySelector<HTMLButtonElement>(".tree-all")!.click();
+    expect(toRef(fake.edges[fake.edges.length - 1]).length).toBe(4);
+    host.querySelector<HTMLButtonElement>(".tree-all")!.click(); // the toggle is remembered for the session
+  });
+
+  it("at rest, operation squares take their ink and other outlines --ink-3 (final review I7)", () => {
+    const ns = new Map(fake.last().map((n) => [n.id, n]));
+    const color = (id: string) => (ns.get(id) as { color: string }).color;
+    expect(["differentiate", "group", "sequence", "infer"].map((o) => color(`op:${o}`))).toEqual(["var(--diff)", "var(--group)", "var(--seq)", "var(--infer)"]);
+    expect(color("br:differentiate.feature")).toBe("var(--ink-3)");
+    expect(color("tech:chiaroscuro")).toBe("var(--ink-3)");
+    for (const e of fake.edges[fake.edges.length - 1]) expect(e.color).toBe("var(--line-2)"); // connectors stay hairlines
+  });
+
+  it("a selected technique with no branch keeps its at-rest outline (final review I7)", () => {
+    const tax = { ...seed, techniques: [...seed.techniques, { id: "orphan", name: "Orphan", icon: "", description: "", synonyms: [], examples: [], custom: true }] };
+    src.set({ ...snap(tax, refs), version: 1 });
+    fake.emit("select", "tech:orphan");
+    expect(fake.lastSel()).toBe("tech:orphan");
+    expect(fake.last().find((n) => n.id === "tech:orphan")).toMatchObject({ color: "var(--ink-3)" });
   });
 
   it("arrow_up_goes_to_parent", () => {
@@ -184,6 +230,16 @@ describe("Tree view", () => {
     expect(openReference).toHaveBeenCalledWith("b");
     fake.emit("activate", "tech:chiaroscuro");
     expect(openReference).toHaveBeenCalledTimes(1);
+  });
+
+  it("Enter with nothing selected selects the first operation (final review I3)", () => {
+    expect(fake.lastSel()).toBeNull();
+    key("Enter");
+    expect(fake.lastSel()).toBe("op:differentiate");
+    expect(crumb("op")).toBe("Differentiate");
+    key("Enter"); // now selected: Enter is the scene's again
+    expect(fake.lastSel()).toBe("op:differentiate");
+    expect(openReference).not.toHaveBeenCalled();
   });
 
   it("data_change_keeps_selection_or_clears", () => {

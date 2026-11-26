@@ -104,7 +104,7 @@ export type TagMove = { kind: "technique"; techniqueId: string; branchId: string
 export type OpMove = { kind: "operation"; operationId: string } | { kind: "delete" };
 export type DomainMove = { kind: "domain"; domainId: string } | { kind: "delete" };
 
-export type Scored ={ id: string; score: number; sharedTechniques: string[]; sharedBranches: string[] };
+export type Scored = { id: string; score: number; sharedTechniques: string[]; sharedBranches: string[] };
 /** A Galaxy edge: one per pair, `a < b`. */
 export type Edge = { a: string; b: string; score: number };
 

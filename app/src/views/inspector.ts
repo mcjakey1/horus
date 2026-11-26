@@ -292,9 +292,11 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
   };
   /**
    * Queues a command behind any in flight, applies its Change, or says why it was refused. A
-   * read-only refusal reverts the UI. `key` names it: a repeat while it is pending is dropped.
+   * read-only refusal reverts the UI. `key` names it, with its value where it has one; prefixed
+   * with what it edits, so only an identical command still pending is dropped (M6).
    */
-  const run = (key: string, call: () => Promise<Change>, fieldErr?: (msg: string) => void): Promise<boolean> => {
+  const run = (name: string, call: () => Promise<Change>, fieldErr?: (msg: string) => void): Promise<boolean> => {
+    const key = `${target?.kind}:${target?.id}:${name}`;
     const q = queues.get(el) ?? { tail: Promise.resolve(), keys: new Set<string>() };
     queues.set(el, q);
     if (q.keys.has(key)) return Promise.resolve(false);
@@ -375,16 +377,26 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     // T10 fix I2: clicking away saves a changed value, as the definition does.
     input.onblur = () => void (busy || rewriting.has(el) || commit(false));
     function commit(enter: boolean) {
-      const call = save(input.value.trim());
+      const v = input.value.trim();
+      const call = save(v);
       if (!call) return cancel(enter);
       busy = true;
       input.dataset.saving = ""; // a re-render while it saves doesn't reopen it
-      void run(`field:${field}`, call, (m) => {
+      let refused = false;
+      void run(`field:${field}:${v}`, call, (m) => {
+        refused = true;
         err.textContent = m;
         busy = false;
         delete input.dataset.saving;
         if (enter) input.focus();
-      }).then((ok) => ok && enter && leave());
+      }).then((ok) => {
+        if (!ok && !refused) {
+          // The same save was already queued (or the library went read-only): the field stays usable (M6).
+          busy = false;
+          delete input.dataset.saving;
+        }
+        if (ok && enter) leave();
+      });
     }
   }
 
@@ -512,7 +524,7 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     if (!target || rewriting.has(el)) return;
     const old = target.kind === "tech" ? N.tech(target.id)?.description : target.kind === "domain" ? N.domain(target.id)?.description : tax.operations.find((o) => o.id === target.id)?.description;
     const v = a.value.trim();
-    if (v !== (old ?? "")) void run("description", () => update({ description: v }));
+    if (v !== (old ?? "")) void run(`description:${v}`, () => update({ description: v }));
   };
   el.onchange = (e) => {
     if ((e.target as Element).matches("textarea[data-field=description]")) saveArea(e.target as HTMLTextAreaElement);

@@ -2,7 +2,7 @@
 // fallback. Views and their tests import this; only scene.ts loads pixi.js.
 import type { Region } from "../api";
 import { viewRect, type Camera, type Rect } from "./camera";
-import { NODE, TEX_CAP } from "./constants";
+import { LABEL_CHARS, LABEL_FONT, LABEL_MIN_PX, NODE, TEX_CAP } from "./constants";
 import { lodFor, type Lod } from "./lod";
 import { SpatialGrid } from "./spatial";
 
@@ -13,7 +13,10 @@ export type SceneNode =
       outline?: { region: Region; color: string; state: "full" | "partial" | "region" };
     }
   | { id: string; kind: "label"; x: number; y: number; text: string; font: "serif" | "mono"; color: string }
-  | { id: string; kind: "op" | "branch" | "tech"; x: number; y: number; size: number; color: string; label: string };
+  | {
+      id: string; kind: "op" | "branch" | "tech"; x: number; y: number; size: number; color: string; label: string;
+      labelDy?: number; // world units added to the label's y (the Tree's 3-row stagger)
+    };
 export type SceneEdge = { from: string; to: string; width: number; color: string; curve?: boolean };
 /** `visible` is in draw order (the order of `setNodes`), never `SpatialGrid.query` order. */
 export type FramePlan = { visible: string[]; lod: Map<string, Lod> };
@@ -52,6 +55,12 @@ function fallbackParagraph(): HTMLParagraphElement {
   return p;
 }
 
+/** A taxonomy node's label shows only while it is at least LABEL_MIN_PX tall on screen (final review I1). */
+export const labelShown = (scale: number) => LABEL_FONT * scale >= LABEL_MIN_PX;
+
+/** A canvas label: at most LABEL_CHARS characters plus "…". The inspector and crumb show the full name. */
+export const clipLabel = (s: string) => (s.length > LABEL_CHARS ? `${s.slice(0, LABEL_CHARS)}…` : s);
+
 /** A node's world rect: shapes are centred on (x, y); a label is a point. */
 export function nodeRect(n: SceneNode): Rect {
   if (n.kind === "label") return { x: n.x - 0.5, y: n.y - 0.5, w: 1, h: 1 };
@@ -88,12 +97,14 @@ export function planFrame(
   const thumbs: SceneNode[] = [];
   for (const id of visible) {
     const n = nodes.get(id)!;
-    if (n.kind === "label") lod.set(id, "thumb");
-    else if (n.kind === "ref" && n.dim) lod.set(id, "dot");
+    // Only a reference becomes a dot (Global Constraint: "A reference node smaller than DOT_PX");
+    // taxonomy squares stay drawn at every zoom (final review I1).
+    if (n.kind !== "ref") lod.set(id, "thumb");
+    else if (n.dim) lod.set(id, "dot");
     else {
       const l = lodFor(n.size, cam.scale);
       lod.set(id, l);
-      if (n.kind === "ref" && l === "thumb") thumbs.push(n);
+      if (l === "thumb") thumbs.push(n);
     }
   }
   if (thumbs.length > TEX_CAP) {

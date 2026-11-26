@@ -2,7 +2,7 @@
 // force.worker.ts (never on the UI thread, SPEC §10). Scores pull references together (SPEC §4).
 import { forceCenter, forceCollide, forceLink, forceManyBody, forceRadial, forceSimulation, type SimulationNodeDatum } from "d3-force";
 import type { Edge } from "../api";
-import { NODE } from "./constants";
+import { COLLIDE_R, NODE } from "./constants";
 
 export type XY = { x: number; y: number };
 export type ForceIn = { ids: string[]; edges: Edge[]; seed: number; prev?: Record<string, XY> };
@@ -81,8 +81,9 @@ export function createForce(input: ForceIn): {
     )
     .force("charge", forceManyBody<N>().strength(-30))
     .force("center", forceCenter<N>(0, 0))
-    // I3 (controller ruling): tiles inside a cluster stay legible instead of stacking.
-    .force("collide", forceCollide<N>(NODE / 2 + 4))
+    // I3 (controller ruling): tiles inside a cluster stay legible instead of stacking. The radius
+    // covers a square card's corners (final review M2).
+    .force("collide", forceCollide<N>(COLLIDE_R).iterations(2))
     .stop(); // d3-force otherwise starts its own timer
   if (warm) sim.alpha(0.1); // already settled: nudge, don't rebuild
   let ticks = 0;

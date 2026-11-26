@@ -76,7 +76,7 @@ const EDGES: Edge[] = [
   { a: "b", b: "c", score: 0.5 },
 ];
 
-function setup(opts: { ids?: string[]; edges?: Edge[]; inScope?: (id: string) => boolean; related?: Scored[] } = {}) {
+function setup(opts: { ids?: string[]; edges?: Edge[]; inScope?: (id: string) => boolean; related?: Scored[]; failEdgesOnce?: boolean } = {}) {
   const ids = opts.ids ?? ["a", "b", "c"];
   const { source, change } = fakeSource(snapOf(ids, 1, opts.inScope));
   const sc = fakeScene();
@@ -86,6 +86,7 @@ function setup(opts: { ids?: string[]; edges?: Edge[]; inScope?: (id: string) =>
     related: vi.fn(async () => opts.related ?? []),
     assetUrl: (p: string) => p,
   } as unknown as Api;
+  if (opts.failEdgesOnce) vi.mocked(api.graphEdges).mockRejectedValueOnce(new Error("IPC down"));
   const openReference = vi.fn();
   const openCompare = vi.fn();
   const host = document.createElement("section");
@@ -215,6 +216,40 @@ describe("Galaxy", () => {
     t.wk.finish();
     expect(lastEdges(t.sc)).toEqual([]);
     expect(t.host.querySelector(".gx-neighbours")).toBeNull();
+    // "a" comes back (an undo): a kept selection would show it again; a cleared one does not (M7)
+    t.change(snapOf(["a", "b", "c"], 3));
+    await settle();
+    t.wk.finish();
+    expect(t.host.querySelector(".gx-title")).toBeNull();
+    expect(last(t.sc.calls.select)).toBeNull();
+    expect(lastEdges(t.sc)).toEqual([]);
+  });
+
+  it("a failed graph_edges is not cached as no edges (final review M4)", async () => {
+    const t = setup({ failEdgesOnce: true });
+    await settle();
+    t.wk.finish();
+    expect(t.api.graphEdges).toHaveBeenCalledTimes(1);
+    expect(t.host.textContent).not.toContain("Tag references to see them cluster.");
+    t.change(snapOf(["a", "b", "c"], 1)); // same version: only a failed fetch asks again
+    await settle();
+    expect(t.api.graphEdges).toHaveBeenCalledTimes(2);
+    t.wk.finish();
+    t.sc.fire("hover", "a");
+    expect(lastEdges(t.sc).length).toBeGreaterThan(0); // the retry's edges are in use
+  });
+
+  it("an emptied library fits again when it refills (final review M5)", async () => {
+    const t = setup();
+    await settle();
+    t.wk.finish();
+    expect(t.sc.calls.fit).toBe(1);
+    t.change(snapOf([], 2));
+    await settle();
+    t.change(snapOf(["a", "b", "c"], 3));
+    await settle();
+    t.wk.finish();
+    expect(t.sc.calls.fit).toBe(2);
   });
 
   it("reset_cold_starts", async () => {
@@ -327,7 +362,7 @@ describe("Galaxy", () => {
     const t = setup();
     await settle(); // first start posted, its layout still running
     const old = t.wk.lastStart();
-    t.change(snapOf(["x", "y"], 2), true);
+    t.change(snapOf(["a", "b", "x"], 2), true); // shares ids with the old library, so a warm start would show (M7)
     expect(last(t.wk.posted).type).toBe("stop"); // the old run is stopped before graph_edges returns
     // The worker had already posted a batch of the old run before it read the stop: it arrives late.
     t.wk.deliver({ type: "tick", run: old.run, ids: old.input.ids, xy: new Float32Array([0, 0, 1, 1, 2, 2]), alpha: 0.005 });

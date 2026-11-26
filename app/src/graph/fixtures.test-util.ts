@@ -44,3 +44,27 @@ export function synth(ops: number): Taxonomy {
   }
   return t;
 }
+
+/** The review's label-box oracle (final review I1): a 13 px serif label ≈ 7 world units a
+ * character, 18 tall, centred under a node of `size` at (x, y), `row` rows down. */
+export function labelBox(x: number, y: number, size: number, text: string, row = 0) {
+  const w = 7 * Math.min(text.length, 25);
+  return { x: x - w / 2, y: y + size / 2 + 4 + row * 18, w, h: 18 };
+}
+type Box = ReturnType<typeof labelBox>;
+/** Every pair of boxes that intersect (touching edges do not). */
+export function clashes(boxes: { id: string; box: Box }[]): string[] {
+  const out: string[] = [];
+  const hit = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  for (let i = 0; i < boxes.length; i++)
+    for (let j = i + 1; j < boxes.length; j++) if (hit(boxes[i].box, boxes[j].box)) out.push(`${boxes[i].id} × ${boxes[j].id}`);
+  return out;
+}
+/** A node's canvas label, as the Tree and Radial name it. */
+export function nameOf(tax: Taxonomy, id: string): string {
+  if (id.startsWith("br:")) {
+    const b = tax.branches.find((x) => `br:${x.id}` === id)!;
+    return tax.domains.find((d) => d.id === b.domainId)!.name;
+  }
+  return tax.techniques.find((t) => `tech:${t.id}` === id)!.name;
+}

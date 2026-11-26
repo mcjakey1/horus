@@ -157,6 +157,8 @@ export function mountGalaxy(
     } else if (selected && !s.refs.has(selected)) void select(null); // a deleted selection clears
     if (!s.refs.size) {
       post({ type: "stop" });
+      fitOnEnd = true; // a refilled library fits again (M5)
+      centredOnce = false;
       positions = {};
       byRef = new Map();
       scene?.setNodes([]);
@@ -165,12 +167,16 @@ export function mountGalaxy(
       return;
     }
     if (edgesVersion !== s.version) {
-      const edges = await deps.api.graphEdges(K_EDGES).catch(() => [] as Edge[]);
+      const edges = await deps.api.graphEdges(K_EDGES).catch(() => null);
       if (mine !== gen || destroyed) return; // a newer change is already on its way
-      edgesVersion = s.version;
-      edgesFetched = true;
-      byRef = topK(edges);
-      allEdges = edges;
+      // A failed fetch is not "no edges": keep the last ones, show no "Tag references" note, and
+      // ask again on the next change (M4).
+      if (edges) {
+        edgesVersion = s.version;
+        edgesFetched = true;
+        byRef = topK(edges);
+        allEdges = edges;
+      }
     }
     const ids = [...s.refs.keys()];
     const prev: Record<string, XY> = {};

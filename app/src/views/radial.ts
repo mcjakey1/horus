@@ -6,7 +6,7 @@ import type { Api, Region } from "../api";
 import type { DataSource, Snapshot } from "../data";
 import { esc } from "../esc";
 import { MAX_OPS, NODE } from "../graph/constants";
-import { mountCanvasOrFallback, type Scene, type SceneEdge, type SceneNode } from "../graph/frame";
+import { clipLabel, mountCanvasOrFallback, type Scene, type SceneEdge, type SceneNode } from "../graph/frame";
 import { layoutRadial } from "../graph/layout-radial";
 import type { Placed } from "../graph/layout-tree";
 import { canvasKeys, move } from "../graph/navigate";
@@ -20,7 +20,9 @@ import { renderInspector, selectionOf } from "./inspector";
 let opSession: string | null = null;
 
 const SIZE = { op: 32, branch: 20, tech: 20 } as const;
-const HAIR = "var(--line-2)";
+const HAIR = "var(--line-2)"; // connectors (DESIGN's structural rule)
+/** Off-path branch and technique outlines (final review I7); the centre always takes its ink. */
+const OFF = "var(--ink-3)";
 const WHOLE: Region = { x: 0, y: 0, w: 1, h: 1 };
 
 type Layout = {
@@ -157,7 +159,12 @@ export function mountRadial(
 
   function render(fit = false) {
     const s = data.get();
-    if (!exists(op)) op = busiest(s);
+    if (!exists(op)) {
+      // The active operation was deleted: the busiest takes over, remembered, and fitted (M3).
+      op = opSession = busiest(s);
+      hovered = null;
+      fit = true;
+    }
     const l = layout();
     if (sel && l.rep.has(sel)) sel = l.rep.get(sel)!; // a change can make another node the drawn one
     if (sel && !l.placed.has(sel)) sel = null; // gone since the change (Review Focus 3)
@@ -188,7 +195,7 @@ export function mountRadial(
         const label = n.kind === "op" ? opLabel(s.tax, n.opId).name
           : n.kind === "branch" ? (s.tax.domains.find((d) => d.id === n.domainId)?.name ?? n.domainId)
           : (s.tax.techniques.find((t) => t.id === n.techId)?.name ?? n.techId);
-        nodes.push({ id, kind: n.kind, x, y, size: SIZE[n.kind], color: path.has(id) ? ink : HAIR, label });
+        nodes.push({ id, kind: n.kind, x, y, size: SIZE[n.kind], color: n.kind === "op" || path.has(id) ? ink : OFF, label: clipLabel(label) });
       }
     }
     scene.setNodes(nodes);
@@ -228,7 +235,11 @@ export function mountRadial(
         const next = sel === null ? (dir === "parent" ? null : `op:${op}`) : move(layout().ring, sel, dir);
         if (next) select(next);
       },
-      activate: () => {}, // Enter is the scene's: it emits `activate`
+      // With a selection, Enter is the scene's: it emits `activate`. With none, Enter selects the
+      // centre (final review I3).
+      activate: () => {
+        if (!sel) select(`op:${op}`);
+      },
       clear: () => select(null),
       digit: (k) => {
         const ops = data.get().tax.operations;
