@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { clipLabel } from "./frame";
-import { BAND_GAP, GAP, NODE } from "./constants";
+import { BAND_GAP, GAP, NODE, ROW } from "./constants";
 import { clashes, labelBox, nameOf, refOf, seed, snap, synth, tagOf } from "./fixtures.test-util";
 import { labelRows, layoutTree } from "./layout-tree";
 import { buildTaxGraph, type TaxGraph } from "./taxgraph";
@@ -77,6 +77,24 @@ describe("layoutTree", () => {
         expect(p.get(id)!.y).toBe(3 * BAND_GAP + k * (NODE + 8));
       });
     }
+  });
+
+  it("single_expanded_refs_form_a_block (final review I5)", () => {
+    const many = Array.from({ length: 1158 }, (_, i) => refOf(`r${i}`, [tagOf(seed, { tech: "chiaroscuro" })]));
+    const g = buildTaxGraph(snap(seed, many), new Set(["tech:chiaroscuro"]));
+    const p = layoutTree(g);
+    const pts = g.children.get("tech:chiaroscuro")!.map((id) => p.get(id)!);
+    expect(pts).toHaveLength(1158);
+    const ys = pts.map((q) => q.y);
+    const xs = pts.map((q) => q.x);
+    expect(Math.min(...ys)).toBe(3 * BAND_GAP);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThanOrEqual(Math.ceil(Math.sqrt(1158)) * ROW);
+    const tx = p.get("tech:chiaroscuro")!.x;
+    expect(Math.min(...xs) + Math.max(...xs)).toBeCloseTo(2 * tx, 6); // centred under its technique
+    let closest = Infinity;
+    for (let i = 0; i < pts.length; i++)
+      for (let j = i + 1; j < pts.length; j++) closest = Math.min(closest, Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y));
+    expect(closest).toBeGreaterThanOrEqual(ROW - 1e-9);
   });
 
   it("dynamic_operation_count", () => {

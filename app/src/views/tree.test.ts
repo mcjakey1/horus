@@ -172,6 +172,23 @@ describe("Tree view", () => {
     expect(dy("op").every((d) => d === undefined)).toBe(true);
   });
 
+  it("an expanded technique hangs its references from one joint; only the selected one gets a connector (final review I5)", () => {
+    fake.emit("select", "tech:chiaroscuro");
+    const toRef = (es: SceneEdge[]) => es.filter((e) => e.to.startsWith("ref:"));
+    let es = fake.edges[fake.edges.length - 1];
+    expect(es.filter((e) => e.from === "tech:chiaroscuro" && e.to === "j:rf:tech:chiaroscuro")).toHaveLength(1);
+    expect(es.filter((e) => e.from === "tech:chiaroscuro")).toHaveLength(1); // no per-reference segments
+    expect(toRef(es)).toEqual([]);
+    fake.emit("select", "ref:chiaroscuro:b");
+    es = fake.edges[fake.edges.length - 1];
+    expect(toRef(es).map((e) => [e.from, e.to])).toEqual([["j:rs:ref:chiaroscuro:b", "ref:chiaroscuro:b"]]);
+    expect(es.find((e) => e.from === "j:rf:tech:chiaroscuro")).toMatchObject({ to: "j:rs:ref:chiaroscuro:b", color: "var(--diff)" });
+    // Show all keeps one column per technique, each reference on its own segment (deferred to Plan 6)
+    host.querySelector<HTMLButtonElement>(".tree-all")!.click();
+    expect(toRef(fake.edges[fake.edges.length - 1]).length).toBe(4);
+    host.querySelector<HTMLButtonElement>(".tree-all")!.click(); // the toggle is remembered for the session
+  });
+
   it("arrow_up_goes_to_parent", () => {
     fake.emit("select", "tech:face-schema");
     key("ArrowUp");

@@ -4,9 +4,9 @@
 import type { Api, Change, Region } from "../api";
 import type { DataSource } from "../data";
 import { esc } from "../esc";
-import { LABEL_ROW, NODE } from "../graph/constants";
+import { BAND_GAP, LABEL_ROW, NODE } from "../graph/constants";
 import { clipLabel, mountCanvasOrFallback, type Scene, type SceneEdge, type SceneNode } from "../graph/frame";
-import { labelRows, layoutTree } from "../graph/layout-tree";
+import { blockTech, labelRows, layoutTree } from "../graph/layout-tree";
 import { canvasKeys, move } from "../graph/navigate";
 import { createScene } from "../graph/scene";
 import { buildTaxGraph, type TaxGraph } from "../graph/taxgraph";
@@ -146,13 +146,28 @@ export function mountTree(
         nodes.push({ id, kind: "label", x, y, text: "", font: "mono", color: HAIR });
       }
     };
+    // One expanded technique's block hangs from one joint above it; only the selected reference
+    // gets its own connector, an elbow from that joint, so 1,000 references draw no fan (I5).
+    const block = blockTech(g);
+    const top = 3 * BAND_GAP - NODE; // above the block's first row, below the label rows
     for (const [parent, kids] of g.children) {
       const a = placed.get(parent)!;
+      if (parent === block) {
+        joint(`j:rf:${parent}`, a.x, top);
+        seg(parent, `j:rf:${parent}`, path.ids.has(parent));
+        const r = kids.find((k) => k === sel);
+        if (r) {
+          joint(`j:rs:${r}`, placed.get(r)!.x, top);
+          seg(`j:rf:${parent}`, `j:rs:${r}`, true);
+          seg(`j:rs:${r}`, r, true);
+        }
+        continue;
+      }
       for (const child of kids) {
         const b = placed.get(child)!;
         const inked = path.ids.has(parent) && path.ids.has(child);
         if (child.startsWith("ref:")) {
-          seg(parent, child, inked); // a reference column shares its technique's x
+          seg(parent, child, inked); // Show all: a reference column shares its technique's x
           continue;
         }
         const mid = (a.y + b.y) / 2;

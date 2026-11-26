@@ -43,6 +43,12 @@ export function labelRows(g: TaxGraph, p: Placed): Map<string, number> {
   return rows;
 }
 
+/** The one technique whose references are shown, or null when none or several are (Show all). */
+export function blockTech(g: TaxGraph): string | null {
+  const open = [...g.children].filter(([id, kids]) => id.startsWith("tech:") && kids.length);
+  return open.length === 1 ? open[0][0] : null;
+}
+
 export function layoutTree(g: TaxGraph): Placed {
   const p: Placed = new Map();
   const kids = (id: string) => g.children.get(id) ?? [];
@@ -70,7 +76,18 @@ export function layoutTree(g: TaxGraph): Placed {
   const order = techs.map((_, i) => i).sort((a, b) => want[a] - want[b]); // stable: taxonomy order breaks ties
   const xs = spread(order.map((i) => want[i]), GAP);
   order.forEach((i, k) => p.set(techs[i].id, { x: xs[k], y: 2 * BAND_GAP }));
-  // References: a column under each expanded technique.
+  // References. One technique expanded (the default, decision 3): a square block centred under
+  // it, so 1,000+ references stay fittable (final review I5; a plan delta to Tasks 5 and 6, which
+  // drew one column). Show all: a column under each technique, as there is no room between slots
+  // (deferred to Plan 6).
+  const one = blockTech(g);
+  if (one) {
+    const refs = kids(one);
+    const tx = p.get(one)!.x;
+    const cols = Math.ceil(Math.sqrt(refs.length));
+    refs.forEach((r, k) => p.set(r, { x: tx + (k % cols - (cols - 1) / 2) * ROW, y: 3 * BAND_GAP + Math.floor(k / cols) * ROW }));
+    return p;
+  }
   for (const t of techs) {
     const x = p.get(t.id)!.x;
     kids(t.id).forEach((r, k) => p.set(r, { x, y: 3 * BAND_GAP + k * ROW }));
