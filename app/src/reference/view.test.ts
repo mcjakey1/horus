@@ -476,6 +476,25 @@ describe("Reference view", () => {
     expect(document.activeElement).toBe(btn); // focus returns to the opener
   });
 
+  it("tagging a region drawn while zoomed in keeps the zoom (Task 8 F2)", async () => {
+    $<HTMLButtonElement>("#lab .lb-open").click();
+    const stage = $(".lb-stage");
+    stage.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect;
+    keyOn("0", stage);
+    for (let i = 0; i < 5; i++) keyOn("+", stage); // 150% to about 458%
+    const zoom = $(".lb-zoom").textContent;
+    expect(zoom).toBe("458%");
+    for (const [type, x, y] of [["pointerdown", 300, 200], ["pointermove", 420, 320], ["pointerup", 420, 320]] as const)
+      stage.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true }));
+    expect($(".lightbox .lb-side .picker")).not.toBeNull();
+    keyOn("1"); // the first operation, in the picker
+    keyOn("Enter"); // a partial tag for the region
+    await settle();
+    expect(api.addTags).toHaveBeenCalled();
+    expect($(".lb-zoom").textContent).toBe(zoom); // the View survives the save and the re-render
+  });
+
   it("region_drag_docks_the_picker_inside_the_lightbox", async () => {
     keyOn("t", document.body); // a margin picker is open first
     $<HTMLButtonElement>("#lab .lb-open").click();

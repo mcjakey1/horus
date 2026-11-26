@@ -173,13 +173,17 @@ describe("Compare", () => {
     }));
     open("a", "b");
     await tick();
-    $<HTMLButtonElement>(".cmp-link-btn").click();
+    const btn = $<HTMLButtonElement>(".cmp-link-btn");
+    btn.focus(); // as a real press: the editor's opener is this button, which the save's re-render replaces
+    btn.click();
     const why = $<HTMLTextAreaElement>(".compare .link-editor .le-why");
     why.value = "Same light";
     why.dispatchEvent(new Event("input", { bubbles: true }));
     $<HTMLButtonElement>(".compare .le-save").click();
     await tick();
     expect(api.addLink).toHaveBeenCalled();
+    await tick(); // the editor closed: focus is back in Compare, on the Link button (Task 8 F4)
+    expect(document.activeElement).toBe($(".compare .cmp-link-btn"));
     const target = document.activeElement && document.activeElement !== document.body ? document.activeElement : document.body;
     target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     expect(document.querySelector(".compare")).toBeNull();

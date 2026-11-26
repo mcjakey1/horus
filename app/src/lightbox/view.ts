@@ -237,11 +237,13 @@ export function openLightbox(
       if (e.key === "o") return void (boxes.hidden = !boxes.hidden);
       const zoom = ZOOM_KEYS[e.key];
       if (zoom) return void zoomBy(zoom);
-      if (e.key === "0" || (!e.shiftKey && e.code === "Digit0")) { // AZERTY's unshifted "à" (M2)
+      // A docked picker's digits pick operations: they never zoom (Task 8 F2: tagging at 416% went to 100%).
+      const picking = !!el.querySelector(".lb-side .picker");
+      if (!picking && (e.key === "0" || (!e.shiftKey && e.code === "Digit0"))) { // AZERTY's unshifted "à" (M2)
         fitted = true;
         return layout();
       }
-      if (digitOf(e) === 1) return void zoomBy(1 / cur().scale); // one image pixel per CSS pixel; AZERTY "&" too (M2)
+      if (!picking && digitOf(e) === 1) return void zoomBy(1 / cur().scale); // one image pixel per CSS pixel; AZERTY "&" too (M2)
     }
     // The stage's keys work from a Tab-focused region box too (review I1).
     if (t !== stage && !t.matches(".lb-box")) return;

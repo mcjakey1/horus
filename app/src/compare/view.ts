@@ -164,6 +164,13 @@ export function mountCompare(
     const link = store.links.find((l) => (l.fromRef === A && l.toRef === B) || (l.fromRef === B && l.toRef === A));
     editor = mountLinkEditor(dock, api, store, { fromRef: A, toRef: B, ...(link ? { linkId: link.id } : {}) });
   }
+  // The editor gives focus back to its opener, the Link button, which a save's re-render has
+  // replaced: focus then sits on <body>. Take it back to the new Link button (Task 8 F4).
+  const docked = new MutationObserver(() => {
+    if (closed || dock.firstElementChild || el.contains(document.activeElement)) return;
+    (body.querySelector<HTMLElement>(".cmp-link-btn") ?? el).focus();
+  });
+  docked.observe(dock, { childList: true });
   /** Esc or Close: close, then the caller's onClose if it gave one (the Galaxy's goes back to it). */
   function exit() {
     const back = A;
@@ -237,6 +244,7 @@ export function mountCompare(
     if (closed) return;
     closed = true;
     life.abort();
+    docked.disconnect();
     unsubscribe();
     lightbox?.close();
     editor?.close();

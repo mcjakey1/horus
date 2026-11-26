@@ -57,6 +57,16 @@ describe("mountBoards", () => {
     expect(tiles()).toEqual(["r1", "r2"]);
   });
 
+  it("after Alt+→ the moved tile keeps focus (Task 8 F3)", async () => {
+    mount();
+    vi.mocked(api.setBoardMembers).mockResolvedValueOnce(change({ boards: [{ id: "h", name: "Harbour", referenceIds: ["r2", "r1", "r3"] }] }));
+    const t = $<HTMLElement>('.bd-tile[data-id="r1"]');
+    t.focus();
+    t.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true }));
+    await flush();
+    expect((document.activeElement as HTMLElement).dataset.id).toBe("r1");
+  });
+
   it("reorder and Remove keep a hidden member in its slot (final review M0a)", async () => {
     mount([{ id: "h", name: "Harbour", referenceIds: ["r1", "ghost", "r2", "r3"] }]);
     $('.bd-tile[data-id="r1"]').dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true }));

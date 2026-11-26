@@ -38,6 +38,8 @@ export function mountWindowedGrid<T>(
     win.style.setProperty("--wg-top", `${first * step}px`);
     win.style.setProperty("--wg-cols", String(c));
     if (!force && from === range[0] && to === range[1]) return;
+    // The index whose tile has focus: if that tile is replaced, its replacement takes focus (F3).
+    const had = [...shown].find(([, el]) => el.contains(document.activeElement))?.[0];
     const next = new Map<number, HTMLElement>();
     for (let i = from; i < to; i++) {
       const el = (!force && shown.get(i)) || opts.render(items[i], i);
@@ -51,6 +53,7 @@ export function mountWindowedGrid<T>(
     });
     shown = next;
     range = [from, to];
+    if (had !== undefined && !win.contains(document.activeElement)) next.get(had)?.focus();
   }
 
   const onScroll = () => {
