@@ -1,0 +1,5 @@
+ipc :: http://ipc.localhost/plugin:dialog|open
+ipc :: http://ipc.localhost/create_library
+first run: seeded s :: 141.2
+library count :: 2500 references
+step9 :: {"top":{"imgs":36,"tiles":36,"first":"0"},"middle":{"imgs":48,"tiles":48,"first":"990"},"reorder":{"from":1002,"to":1004,"ghostShown":true,"landed":true,"scrollTopKept":28056}}

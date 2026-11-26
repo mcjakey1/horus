@@ -2,6 +2,7 @@ pub mod commands;
 pub mod correlate;
 pub mod demo;
 pub mod edit;
+pub mod export;
 pub mod history;
 pub mod hooks;
 pub mod import;
@@ -20,8 +21,11 @@ use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Plan 4 Task 5: "Open folder" after an export; the capability grants reveal-item-in-dir only.
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let config_dir = app.path().app_config_dir()?;
+            let cache_dir = app.path().app_cache_dir()?;
             let seed = app
                 .path()
                 .resolve("resources/taxonomy.json", BaseDirectory::Resource)?;
@@ -36,7 +40,8 @@ pub fn run() {
             // The picker's demo-set examples (SPEC §6.2). The asset protocol only reads.
             app.asset_protocol_scope()
                 .allow_directory(demo.join("images"), false)?;
-            app.manage(commands::AppState::new(config_dir, seed, demo));
+            app.manage(commands::AppState::new(config_dir, cache_dir, seed, demo));
+            commands::allow_lightbox_cache(app.handle())?;
             commands::start_saver(app.handle());
             Ok(())
         })
@@ -78,17 +83,27 @@ pub fn run() {
             commands::remove_tag,
             commands::set_field,
             commands::add_technique,
-            commands::update_technique,
-            commands::delete_technique,
-            commands::link_technique,
-            commands::unlink_technique,
-            commands::add_branch,
-            commands::add_domain,
-            commands::update_domain,
-            commands::delete_domain,
-            commands::add_operation,
-            commands::update_operation,
-            commands::delete_operation,
+            commands::taxonomy_edit::update_technique,
+            commands::taxonomy_edit::delete_technique,
+            commands::taxonomy_edit::link_technique,
+            commands::taxonomy_edit::unlink_technique,
+            commands::taxonomy_edit::add_branch,
+            commands::taxonomy_edit::add_domain,
+            commands::taxonomy_edit::update_domain,
+            commands::taxonomy_edit::delete_domain,
+            commands::taxonomy_edit::add_operation,
+            commands::taxonomy_edit::update_operation,
+            commands::taxonomy_edit::delete_operation,
+            commands::add_link,
+            commands::update_link,
+            commands::remove_link,
+            commands::create_board,
+            commands::rename_board,
+            commands::set_board_members,
+            commands::delete_board,
+            commands::export_board,
+            commands::score_pair,
+            commands::lightbox_source,
             commands::undo,
             commands::redo,
             commands::image_path,
@@ -126,6 +141,25 @@ mod tests {
                 .lines()
                 .any(|l| l.replace(' ', "") == "panic=\"abort\"")
         );
+    }
+
+    /// B3: the opener plugin is back for "Open folder" only; no open-url or open-path grant.
+    #[test]
+    fn capability_grants_opener_reveal_only() {
+        let cap: serde_json::Value =
+            serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        let perms: Vec<&str> = cap["permissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p.as_str())
+            .collect();
+        let opener: Vec<&str> = perms
+            .iter()
+            .copied()
+            .filter(|p| p.starts_with("opener:"))
+            .collect();
+        assert_eq!(opener, ["opener:allow-reveal-item-in-dir"]);
     }
 
     #[test]

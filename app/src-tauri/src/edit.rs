@@ -1,7 +1,7 @@
 //! Validated edits to `library.json` and `taxonomy.json`. `apply` applies an edit whole and
 //! returns its inverse, or changes nothing and returns the error. Undo is applying the inverse.
 
-use crate::model::{LibraryData, Reference, Tag};
+use crate::model::{Board, LibraryData, Link, Reference, Tag};
 use crate::taxonomy::{Branch, BranchTechnique, Domain, Operation, Taxonomy, Technique};
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -102,6 +102,32 @@ pub enum Edit {
         index: usize,
         branch: Branch,
     },
+    /// Plan 4: a link between two references. Appended; `why` is stored trimmed.
+    AddLink {
+        link: Link,
+    },
+    RemoveLink {
+        index: usize,
+        link: Link,
+    },
+    /// Same id and pair; only `why` may differ.
+    ReplaceLink {
+        before: Link,
+        after: Link,
+    },
+    /// Appended; the name is stored trimmed.
+    AddBoard {
+        board: Board,
+    },
+    RemoveBoard {
+        index: usize,
+        board: Board,
+    },
+    /// Same id: a rename, a new `reference_ids` order, or both.
+    ReplaceBoard {
+        before: Board,
+        after: Board,
+    },
     Batch(Vec<Edit>),
     // The inverses of the removes: they put items back at their original positions, which the
     // appending `Add*` variants cannot. They restore a state that existed, so they check
@@ -143,6 +169,17 @@ pub enum Edit {
     InsertBranch {
         index: usize,
         branch: Branch,
+        sealed: Sealed,
+    },
+    /// `RemoveLink`'s inverse (`InsertLink` is the branch-technique one).
+    InsertRefLink {
+        index: usize,
+        link: Link,
+        sealed: Sealed,
+    },
+    InsertBoard {
+        index: usize,
+        board: Board,
         sealed: Sealed,
     },
 }
@@ -187,6 +224,8 @@ pub struct Touched {
     pub ref_ids: Vec<String>,
     pub removed_ref_ids: Vec<String>,
     pub taxonomy: bool,
+    pub links: bool,
+    pub boards: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -207,6 +246,23 @@ pub enum EditError {
     InUse(String),
     #[error("duplicate id: {0}")]
     DuplicateId(String),
+    // Plan 4: wire codes, which the UI matches (R2).
+    #[error("SelfLink")]
+    SelfLink,
+    /// The id of the link that already joins the pair.
+    #[error("DuplicateLink:{0}")]
+    DuplicateLink(String),
+    #[error("EmptyWhy")]
+    EmptyWhy,
+    #[error("EmptyName")]
+    EmptyName,
+    /// The id of the board that has the name.
+    #[error("BoardNameTaken:{0}")]
+    BoardNameTaken(String),
+    #[error("UnknownLink:{0}")]
+    UnknownLink(String),
+    #[error("UnknownBoard:{0}")]
+    UnknownBoard(String),
 }
 
 /// SPEC §3: a partial tag carries the operation only. A technique tag sets technique and
@@ -424,6 +480,16 @@ fn run(
         Edit::RemoveReferences { removed } => {
             check_remove(&data.references, &removed)
                 .map_err(|r| EditError::UnknownReference(r.id.clone()))?;
+            // C31: linear history never removes a reference a link or a board still names; this
+            // only keeps a bug from leaving them dangling.
+            if check {
+                let gone: HashSet<&str> = removed.iter().map(|(_, r)| r.id.as_str()).collect();
+                let links = data.links.iter().flat_map(|l| [&l.from_ref, &l.to_ref]);
+                let mut named = links.chain(data.boards.iter().flat_map(|b| &b.reference_ids));
+                if let Some(id) = named.find(|id| gone.contains(id.as_str())) {
+                    return Err(EditError::InUse(id.clone()));
+                }
+            }
             for (i, _) in removed.iter().rev() {
                 data.references.remove(*i);
             }
@@ -710,6 +776,130 @@ fn run(
                 sealed: Sealed(()),
             }
         }
+        Edit::AddLink { mut link } => {
+            for r in [&link.from_ref, &link.to_ref] {
+                ref_index(data, r)?;
+            }
+            if link.from_ref == link.to_ref {
+                return Err(EditError::SelfLink);
+            }
+            link.why = link.why.trim().to_string();
+            if link.why.is_empty() {
+                return Err(EditError::EmptyWhy);
+            }
+            if data.links.iter().any(|l| l.id == link.id) {
+                return Err(EditError::DuplicateId(link.id));
+            }
+            // Decision 2: one link per unordered pair.
+            let (a, b) = (&link.from_ref, &link.to_ref);
+            let pair = |l: &&Link| {
+                (&l.from_ref, &l.to_ref) == (a, b) || (&l.from_ref, &l.to_ref) == (b, a)
+            };
+            if let Some(l) = data.links.iter().find(pair) {
+                return Err(EditError::DuplicateLink(l.id.clone()));
+            }
+            let index = data.links.len();
+            let insert = Edit::InsertRefLink {
+                index,
+                link,
+                sealed: Sealed(()),
+            };
+            return run(data, tax, insert, check);
+        }
+        Edit::InsertRefLink { index, link, .. } => {
+            if index > data.links.len() {
+                return Err(EditError::UnknownLink(link.id));
+            }
+            data.links.insert(index, link.clone());
+            touched.links = true;
+            Edit::RemoveLink { index, link }
+        }
+        Edit::RemoveLink { index, link } => {
+            if data.links.get(index) != Some(&link) {
+                return Err(EditError::UnknownLink(link.id));
+            }
+            data.links.remove(index);
+            touched.links = true;
+            Edit::InsertRefLink {
+                index,
+                link,
+                sealed: Sealed(()),
+            }
+        }
+        Edit::ReplaceLink { before, mut after } => {
+            let i = data.links.iter().position(|l| l == &before);
+            let i = i.ok_or_else(|| EditError::UnknownLink(before.id.clone()))?;
+            let key = |l: &Link| (l.id.clone(), l.from_ref.clone(), l.to_ref.clone());
+            if key(&after) != key(&before) {
+                // EditError has no variant for this caller bug; like `ReplaceTag`, it is an invalid tag.
+                let why = format!("link {}: a replacement changes `why` only", before.id);
+                return Err(EditError::InvalidTag(why));
+            }
+            if check {
+                after.why = after.why.trim().to_string();
+                if after.why.is_empty() {
+                    return Err(EditError::EmptyWhy);
+                }
+            }
+            data.links[i] = after.clone();
+            touched.links = true;
+            Edit::ReplaceLink {
+                before: after,
+                after: before,
+            }
+        }
+        Edit::AddBoard { mut board } => {
+            board.name = board.name.trim().to_string();
+            check_board(data, &board)?;
+            if data.boards.iter().any(|b| b.id == board.id) {
+                return Err(EditError::DuplicateId(board.id));
+            }
+            let index = data.boards.len();
+            let insert = Edit::InsertBoard {
+                index,
+                board,
+                sealed: Sealed(()),
+            };
+            return run(data, tax, insert, check);
+        }
+        Edit::InsertBoard { index, board, .. } => {
+            if index > data.boards.len() {
+                return Err(EditError::UnknownBoard(board.id));
+            }
+            data.boards.insert(index, board.clone());
+            touched.boards = true;
+            Edit::RemoveBoard { index, board }
+        }
+        Edit::RemoveBoard { index, board } => {
+            if data.boards.get(index) != Some(&board) {
+                return Err(EditError::UnknownBoard(board.id));
+            }
+            data.boards.remove(index);
+            touched.boards = true;
+            Edit::InsertBoard {
+                index,
+                board,
+                sealed: Sealed(()),
+            }
+        }
+        Edit::ReplaceBoard { before, mut after } => {
+            let i = data.boards.iter().position(|b| b == &before);
+            let i = i.ok_or_else(|| EditError::UnknownBoard(before.id.clone()))?;
+            if after.id != before.id {
+                let why = format!("board {}: a replacement keeps the id", before.id);
+                return Err(EditError::InvalidTag(why));
+            }
+            if check {
+                after.name = after.name.trim().to_string();
+                check_board(data, &after)?;
+            }
+            data.boards[i] = after.clone();
+            touched.boards = true;
+            Edit::ReplaceBoard {
+                before: after,
+                after: before,
+            }
+        }
     };
     Ok(Applied { inverse, touched })
 }
@@ -797,6 +987,27 @@ fn check_remove<'a, T: PartialEq>(list: &[T], removed: &'a [(usize, T)]) -> Resu
     Ok(())
 }
 
+/// A board's (trimmed) name is non-empty and no other board has it, ignoring case. Its
+/// references exist, each once; their order is the board's.
+fn check_board(data: &LibraryData, board: &Board) -> Result<(), EditError> {
+    if board.name.is_empty() {
+        return Err(EditError::EmptyName);
+    }
+    let key = board.name.to_lowercase();
+    let taken = |b: &&Board| b.id != board.id && b.name.trim().to_lowercase() == key;
+    if let Some(b) = data.boards.iter().find(taken) {
+        return Err(EditError::BoardNameTaken(b.id.clone()));
+    }
+    let mut seen = HashSet::new();
+    for id in &board.reference_ids {
+        ref_index(data, id)?;
+        if !seen.insert(id) {
+            return Err(EditError::DuplicateId(id.clone()));
+        }
+    }
+    Ok(())
+}
+
 /// Batch parts add up, and an id is listed once.
 fn merge(into: &mut Touched, from: Touched) {
     for (to, ids) in [
@@ -810,12 +1021,14 @@ fn merge(into: &mut Touched, from: Touched) {
         }
     }
     into.taxonomy |= from.taxonomy;
+    into.links |= from.links;
+    into.boards |= from.boards;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{LibraryData, Reference, Region, Tag};
+    use crate::model::{Board, LibraryData, Link, Reference, Region, Tag};
     use crate::taxonomy::{BranchTechnique, Taxonomy, Technique};
     use std::path::PathBuf;
 
@@ -1555,5 +1768,336 @@ mod tests {
             dup
         );
         assert_eq!((data, tax), (data0, tax0));
+    }
+
+    // ---------- Plan 4 Task 1: links and boards ----------
+
+    /// `fixture` plus an untagged `r3`, so three distinct pairs exist.
+    fn fixture3() -> (LibraryData, Taxonomy) {
+        let (mut data, tax) = fixture();
+        data.references.push(reference("r3", vec![]));
+        (data, tax)
+    }
+
+    fn link(id: &str, from: &str, to: &str) -> Link {
+        Link {
+            id: id.into(),
+            from_ref: from.into(),
+            to_ref: to.into(),
+            why: "Same silhouette.".into(),
+        }
+    }
+
+    fn board(id: &str, name: &str, refs: &[&str]) -> Board {
+        Board {
+            id: id.into(),
+            name: name.into(),
+            reference_ids: refs.iter().map(|r| r.to_string()).collect(),
+        }
+    }
+
+    fn add_link(l: Link) -> Edit {
+        Edit::AddLink { link: l }
+    }
+
+    fn add_board(b: Board) -> Edit {
+        Edit::AddBoard { board: b }
+    }
+
+    /// Links l1 (r1-r2), l2 (r1-r3), l3 (r2-r3) and boards b1, b2, b3, added in order.
+    fn with_three() -> (LibraryData, Taxonomy) {
+        let (mut data, mut tax) = fixture3();
+        for e in [
+            add_link(link("l1", "r1", "r2")),
+            add_link(link("l2", "r1", "r3")),
+            add_link(link("l3", "r2", "r3")),
+            add_board(board("b1", "Harbour", &["r1"])),
+            add_board(board("b2", "Night", &["r2"])),
+            add_board(board("b3", "Rain", &[])),
+        ] {
+            apply(&mut data, &mut tax, e).unwrap();
+        }
+        (data, tax)
+    }
+
+    #[test]
+    fn link_add_inverse_restores() {
+        let (mut data, mut tax) = fixture3();
+        let snapshot = data.clone();
+        let mut l = link("l1", "r1", "r2");
+        l.why = "  Same silhouette.  ".into();
+        let applied = apply(&mut data, &mut tax, add_link(l)).unwrap();
+        assert!(applied.touched.links);
+        assert!(!applied.touched.boards && !applied.touched.taxonomy);
+        assert_eq!(
+            data.links,
+            [link("l1", "r1", "r2")],
+            "why is stored trimmed"
+        );
+        let undone = apply(&mut data, &mut tax, applied.inverse).unwrap();
+        assert!(undone.touched.links);
+        assert_eq!(data, snapshot);
+    }
+
+    #[test]
+    fn board_add_inverse_restores() {
+        let (mut data, mut tax) = fixture3();
+        let snapshot = data.clone();
+        let b = board("b1", "  Harbour ", &["r3", "r1"]);
+        let applied = apply(&mut data, &mut tax, add_board(b)).unwrap();
+        assert!(applied.touched.boards);
+        assert!(!applied.touched.links && !applied.touched.taxonomy);
+        let want = board("b1", "Harbour", &["r3", "r1"]);
+        assert_eq!(data.boards, [want], "name trimmed, order kept");
+        apply(&mut data, &mut tax, applied.inverse).unwrap();
+        assert_eq!(data, snapshot);
+    }
+
+    #[test]
+    fn remove_link_inverse_restores_position() {
+        let (mut data, mut tax) = with_three();
+        let snapshot = data.clone();
+        let l2 = data.links[1].clone();
+        let remove = Edit::RemoveLink { index: 1, link: l2 };
+        let applied = apply(&mut data, &mut tax, remove).unwrap();
+        assert!(applied.touched.links);
+        let ids: Vec<&str> = data.links.iter().map(|l| l.id.as_str()).collect();
+        assert_eq!(ids, ["l1", "l3"]);
+        apply(&mut data, &mut tax, applied.inverse).unwrap();
+        assert_eq!(data, snapshot);
+    }
+
+    #[test]
+    fn remove_board_inverse_restores_position() {
+        let (mut data, mut tax) = with_three();
+        let snapshot = data.clone();
+        let b2 = data.boards[1].clone();
+        let remove = Edit::RemoveBoard {
+            index: 1,
+            board: b2,
+        };
+        let applied = apply(&mut data, &mut tax, remove).unwrap();
+        assert!(applied.touched.boards);
+        let ids: Vec<&str> = data.boards.iter().map(|b| b.id.as_str()).collect();
+        assert_eq!(ids, ["b1", "b3"]);
+        apply(&mut data, &mut tax, applied.inverse).unwrap();
+        assert_eq!(data, snapshot);
+    }
+
+    #[test]
+    fn self_link_refused() {
+        let (mut data, mut tax) = fixture3();
+        let snapshot = data.clone();
+        let got = apply(&mut data, &mut tax, add_link(link("l1", "r1", "r1")));
+        assert_eq!(got, Err(EditError::SelfLink));
+        assert_eq!(data, snapshot);
+    }
+
+    #[test]
+    fn empty_why_refused() {
+        let (mut data, mut tax) = fixture3();
+        let mut l = link("l1", "r1", "r2");
+        l.why = "   ".into();
+        let got = apply(&mut data, &mut tax, add_link(l));
+        assert_eq!(got, Err(EditError::EmptyWhy));
+        assert!(data.links.is_empty());
+    }
+
+    #[test]
+    fn link_unknown_ref_refused() {
+        let (mut data, mut tax) = fixture3();
+        let got = apply(&mut data, &mut tax, add_link(link("l1", "r1", "nope")));
+        assert_eq!(got, Err(EditError::UnknownReference("nope".into())));
+        assert!(data.links.is_empty());
+    }
+
+    /// Decision 2: one link per unordered pair.
+    #[test]
+    fn duplicate_pair_refused_either_direction() {
+        let (mut data, mut tax) = fixture3();
+        apply(&mut data, &mut tax, add_link(link("ab", "r1", "r2"))).unwrap();
+        let dup = Err(EditError::DuplicateLink("ab".into()));
+        let got = apply(&mut data, &mut tax, add_link(link("ab2", "r1", "r2")));
+        assert_eq!(got, dup);
+        let got = apply(&mut data, &mut tax, add_link(link("ba", "r2", "r1")));
+        assert_eq!(got, dup);
+        let ab = data.links[0].clone();
+        let remove = Edit::RemoveLink { index: 0, link: ab };
+        apply(&mut data, &mut tax, remove).unwrap();
+        apply(&mut data, &mut tax, add_link(link("ba", "r2", "r1"))).unwrap();
+        assert_eq!(data.links.len(), 1);
+
+        // Both directions in one batch: the second fails and the first rolls back.
+        let (mut data, mut tax) = fixture3();
+        let both = Edit::Batch(vec![
+            add_link(link("ab", "r1", "r2")),
+            add_link(link("ba", "r2", "r1")),
+        ]);
+        assert_eq!(apply(&mut data, &mut tax, both), dup);
+        assert!(data.links.is_empty());
+    }
+
+    #[test]
+    fn replace_link_changes_why_only() {
+        let (mut data, mut tax) = with_three();
+        let before = data.links[0].clone();
+        let mut after = before.clone();
+        after.why = " Both backlit. ".into();
+        let replace = Edit::ReplaceLink {
+            before: before.clone(),
+            after,
+        };
+        let applied = apply(&mut data, &mut tax, replace).unwrap();
+        assert!(applied.touched.links);
+        assert_eq!(data.links[0].why, "Both backlit.");
+        apply(&mut data, &mut tax, applied.inverse).unwrap();
+        assert_eq!(data.links[0], before);
+
+        let snapshot = data.clone();
+        let mut moved = before.clone();
+        moved.to_ref = "r3".into();
+        let replace = Edit::ReplaceLink {
+            before,
+            after: moved,
+        };
+        assert!(apply(&mut data, &mut tax, replace).is_err());
+        assert_eq!(data, snapshot);
+    }
+
+    #[test]
+    fn board_name_unique_case_insensitive() {
+        let (mut data, mut tax) = with_three();
+        let got = apply(
+            &mut data,
+            &mut tax,
+            add_board(board("b4", " harbour ", &[])),
+        );
+        assert_eq!(got, Err(EditError::BoardNameTaken("b1".into())));
+        let got = apply(&mut data, &mut tax, add_board(board("b4", "  ", &[])));
+        assert_eq!(got, Err(EditError::EmptyName));
+        // A rename to another board's name is taken; to its own name in another case is not.
+        let b2 = data.boards[1].clone();
+        let renamed = |name: &str| Edit::ReplaceBoard {
+            before: b2.clone(),
+            after: Board {
+                name: name.into(),
+                ..b2.clone()
+            },
+        };
+        let got = apply(&mut data, &mut tax, renamed("HARBOUR"));
+        assert_eq!(got, Err(EditError::BoardNameTaken("b1".into())));
+        apply(&mut data, &mut tax, renamed("NIGHT")).unwrap();
+        assert_eq!(data.boards[1].name, "NIGHT");
+    }
+
+    #[test]
+    fn board_members_must_exist_and_be_unique() {
+        let (mut data, mut tax) = fixture3();
+        let got = apply(
+            &mut data,
+            &mut tax,
+            add_board(board("b1", "A", &["r1", "nope"])),
+        );
+        assert_eq!(got, Err(EditError::UnknownReference("nope".into())));
+        let got = apply(
+            &mut data,
+            &mut tax,
+            add_board(board("b1", "A", &["r1", "r2", "r1"])),
+        );
+        assert_eq!(got, Err(EditError::DuplicateId("r1".into())));
+        assert!(data.boards.is_empty());
+    }
+
+    #[test]
+    fn unknown_board_refused() {
+        let (mut data, mut tax) = with_three();
+        let snapshot = data.clone();
+        let ghost = board("ghost", "Ghost", &[]);
+        let replace = Edit::ReplaceBoard {
+            before: ghost.clone(),
+            after: board("ghost", "Ghost 2", &[]),
+        };
+        let unknown = Err(EditError::UnknownBoard("ghost".into()));
+        assert_eq!(apply(&mut data, &mut tax, replace), unknown);
+        let remove = Edit::RemoveBoard {
+            index: 0,
+            board: ghost,
+        };
+        assert_eq!(apply(&mut data, &mut tax, remove), unknown);
+        let gone = Edit::RemoveLink {
+            index: 0,
+            link: link("gone", "r1", "r2"),
+        };
+        let got = apply(&mut data, &mut tax, gone);
+        assert_eq!(got, Err(EditError::UnknownLink("gone".into())));
+        assert_eq!(data, snapshot);
+    }
+
+    #[test]
+    fn board_reorder_is_one_edit() {
+        let (mut data, mut tax) = fixture3();
+        let abc = board("b1", "A", &["r1", "r2", "r3"]);
+        apply(&mut data, &mut tax, add_board(abc.clone())).unwrap();
+        let reversed = board("b1", "A", &["r3", "r2", "r1"]);
+        let replace = Edit::ReplaceBoard {
+            before: abc.clone(),
+            after: reversed.clone(),
+        };
+        let applied = apply(&mut data, &mut tax, replace).unwrap();
+        assert_eq!(data.boards[0], reversed);
+        apply(&mut data, &mut tax, applied.inverse).unwrap();
+        assert_eq!(data.boards[0], abc);
+    }
+
+    /// C31: `apply` never leaves a link or a board pointing at a removed reference.
+    #[test]
+    fn remove_refs_in_use_guarded() {
+        let (mut data, mut tax) = fixture3();
+        apply(&mut data, &mut tax, add_board(board("b1", "A", &["r3"]))).unwrap();
+        apply(&mut data, &mut tax, add_link(link("l1", "r1", "r2"))).unwrap();
+        let snapshot = data.clone();
+        let refs = data.references.clone();
+        for (i, r) in refs.iter().enumerate() {
+            let remove = Edit::RemoveReferences {
+                removed: vec![(i, r.clone())],
+            };
+            let got = apply(&mut data, &mut tax, remove);
+            assert_eq!(got, Err(EditError::InUse(r.id.clone())), "{}", r.id);
+        }
+        assert_eq!(data, snapshot);
+    }
+
+    #[test]
+    fn wire_codes() {
+        let id = || "x-1".to_string();
+        for (e, want) in [
+            (EditError::SelfLink, "SelfLink"),
+            (EditError::DuplicateLink(id()), "DuplicateLink:x-1"),
+            (EditError::EmptyWhy, "EmptyWhy"),
+            (EditError::EmptyName, "EmptyName"),
+            (EditError::BoardNameTaken(id()), "BoardNameTaken:x-1"),
+            (EditError::UnknownLink(id()), "UnknownLink:x-1"),
+            (EditError::UnknownBoard(id()), "UnknownBoard:x-1"),
+        ] {
+            assert_eq!(e.to_string(), want);
+        }
+    }
+
+    #[test]
+    fn merge_ors_links_and_boards() {
+        let links = Touched {
+            links: true,
+            ..Default::default()
+        };
+        let boards = Touched {
+            boards: true,
+            ..Default::default()
+        };
+        let mut t = Touched::default();
+        merge(&mut t, links);
+        merge(&mut t, Touched::default());
+        assert!(t.links && !t.boards);
+        merge(&mut t, boards);
+        assert!(t.links && t.boards);
     }
 }

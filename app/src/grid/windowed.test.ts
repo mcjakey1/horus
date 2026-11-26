@@ -46,6 +46,14 @@ describe("windowed grid", () => {
     expect(document.activeElement).toBe(t);
   });
 
+  it("a forced repaint that replaces the focused tile focuses its replacement (Task 8 F3)", () => {
+    const g = box(800, 600);
+    const grid = mountWindowedGrid(g, { items: items(20), tile: 100, gap: 8, render: tile });
+    g.querySelector<HTMLElement>('[data-i="3"]')!.focus();
+    grid.update(items(20)); // e.g. a resize: every tile is rebuilt
+    expect(document.activeElement).toBe(g.querySelector('[data-i="3"]'));
+  });
+
   it("update renders the new items", () => {
     const g = box(800, 600);
     const grid = mountWindowedGrid(g, { items: items(5), tile: 100, gap: 8, render: tile });

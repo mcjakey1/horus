@@ -74,6 +74,16 @@ Horus is for illustrators, concept artists, photographers, and designers who kee
       <br><sub><strong>Radial.</strong> Differentiate ("Stand out") at the center, with its domains and techniques on rings. Use the tabs to change the operation.</sub>
     </td>
   </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/boards-view.png" alt="The Boards view: the board Harbour light with 8 references as tiles, and a line at the bottom that shows the board and Show all">
+      <br><sub><strong>Boards.</strong> The board "Harbour light" has 8 references. Only this board shows in the other views, and the line at the bottom tells you this.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/images/compare-view.png" alt="Compare: Zodiaque (La Plume) and The Great Wave side by side, with a score of 0.49 and two shared techniques in the middle">
+      <br><sub><strong>Compare.</strong> Zodiaque ("La Plume") and The Great Wave, with a score of 0.49. Two shared techniques are in the middle. The unique techniques are on each side.</sub>
+    </td>
+  </tr>
 </table>
 
 ## Features
@@ -91,6 +101,13 @@ Horus is for illustrators, concept artists, photographers, and designers who kee
 - **Galaxy edges.** The Galaxy draws edges only for the hovered or selected reference. Each edge goes to one of its 8 strongest neighbors.
 - **Radial view.** The Radial shows one operation at a time. The operation is at the center. Its domains, techniques, and references are on three rings. Press `1` to `9` to show a different operation.
 - **Keyboard control.** In the graph views, `+` and `-` zoom, `0` fits the full graph, and the arrow keys pan. With a selection, the arrow keys move the selection. `Enter` opens the selected reference in the Reference view.
+- **Boards.** A board is a named group of references for a project. Press `b` on a reference to open the board menu, then tick or clear a board. You can also make a new board there. In the Boards view, drag a tile, or press `Alt+←` and `Alt+→`, to change the order.
+- **Show only this board.** This command limits the Ranked list and the search results to the references on the board. The graph views dim the other references. A line at the bottom shows the board and its count, with a **Show all** command.
+- **Export a board.** Horus copies the original files of a board into a folder that you select, with numbers in board order, for example `1 - Title.jpg` and `2 - Title.jpg`. It also writes `credits.txt`. It never writes over a file: a name that exists gets ` (2)`. **Show in folder** opens the parent folder in the file manager, with the export folder selected.
+- **Links that you draw.** Link two references and write why they are connected. Press `k`, or drag the link handle onto a different reference. Two references can have only one link. Your links show first, under "Linked by you". They never change a score.
+- **Lightbox.** Press `l` to see the image at full size. Zoom with the mouse wheel or `+`, `-`, `0`, and `1` (100%). Pan with `Space`+drag or the middle mouse button. Region tags show as outlines; move the pointer over one, or press `Tab`, to see its name. Press `o` to hide the outlines.
+- **Lightbox preview.** The lightbox shows JPEG, PNG, WebP, and GIF files at full size, up to 8,192 px. For a TIFF file or a larger image, Horus makes a PNG preview one time and keeps it in the app's cache folder. A note tells you that you see a preview.
+- **Compare.** Shift-click a different reference in the Reference view or the Galaxy. Compare shows the two references side by side. The shared techniques are in the middle. The unique techniques are on each side. Press `v` for the value view, `x` to change the sides, and `Esc` to close.
 - **Value view.** Press `v` to show all images in grayscale.
 - **Safe import.** Horus copies each image into the library and does not change the original. It finds duplicates through a BLAKE3 hash. It makes 256 px and 1024 px thumbnails.
 - **Correct color and orientation.** Horus converts embedded color profiles to sRGB for thumbnails. It applies the EXIF orientation of phone photos.
@@ -206,7 +223,7 @@ Horus is an early beta. The project has six plans in [`docs/superpowers/plans/`]
 | 1 | Foundation: library, import, related references, search, first run, Windows build | Done |
 | 2 | Tagging, Inbox, undo and redo, drag and drop, library menu | Done |
 | 3 | Tree, Galaxy, and Radial views; taxonomy editing | Done |
-| 4 | Boards, Lightbox, Compare, and links between references | Planned |
+| 4 | Boards, Lightbox, Compare, and links between references | Done |
 | 5 | Find similar (local SigLIP image model) and Settings | Planned |
 | 6 | Intro card, macOS and Linux builds, release checks | Planned |
 
@@ -221,10 +238,16 @@ Horus is an early beta. The project has six plans in [`docs/superpowers/plans/`]
 | `app/src-tauri/src/search.rs` | Search by idea |
 | `app/src-tauri/src/edit.rs`, `history.rs` | Validated edits to tags and the taxonomy, with undo and redo |
 | `app/src-tauri/src/commands.rs` | Tauri commands that the UI calls |
+| `app/src-tauri/src/commands/taxonomy_edit.rs` | Tauri commands for taxonomy edits |
+| `app/src-tauri/src/export.rs` | Board export to a folder, with `credits.txt` |
 | `app/src-tauri/src/demo.rs` | Demo set seed |
 | `app/src/` | TypeScript UI: Reference view, first run, and import |
 | `app/src/graph/` | Graph engine: camera, culling, level of detail, texture cache, layouts, PixiJS scene, and the force-layout worker |
 | `app/src/views/` | Tree, Galaxy, and Radial views, the inspector, the move-tags dialogs, and the technique form |
+| `app/src/boards/` | Boards view, the board menu, the board scope line, and export |
+| `app/src/links/` | Link editor |
+| `app/src/compare/` | Compare view |
+| `app/src/lightbox/` | Lightbox: zoom and pan (`zoom.ts`), and the tag picker docked in the lightbox (`dock.ts`) |
 | `taxonomy/` | Seed taxonomy and its check script |
 | `demo/` | Demo images, manifest, and rights record |
 | `prototype/` | HTML prototype of the Reference view |
@@ -234,7 +257,10 @@ For the product design, read [`SPEC.md`](SPEC.md), [`PRODUCT.md`](PRODUCT.md), a
 
 ## Limits
 
-- The Boards tab is not active yet. Plan 4 adds Boards.
+- You cannot edit the title, creator, year, or credit of a reference yet.
+- Compare opens from the Reference view and the Galaxy only. It does not open from the Tree or the Radial.
+- **Show in folder** opens the parent folder and selects the export folder in it. It does not open the export folder.
+- Plan 6 fixes two small problems from Plan 4 QA. In the lightbox, `Esc` in the **Add technique** form closes the lightbox. In the Boards view, the first column cuts off the tile tools that show on hover.
 - At the zoom that fits the full graph, the Tree and the Radial hide the names of items. Zoom in to read them. Plan 6 adds a minimum name size.
 - In the Tree, **Show all references** draws the references of each technique as one thin column.
 - A long import shows "Importing…" only. It does not show a count or a Cancel button yet.
@@ -247,6 +273,8 @@ For the product design, read [`SPEC.md`](SPEC.md), [`PRODUCT.md`](PRODUCT.md), a
 - Horus does not send data over the network.
 - Horus does not change your original image files. It copies them into the library folder.
 - All library data stays in the library folder on your computer.
+- Horus uses `tauri-plugin-opener` only to show an export folder in the file manager.
+- Lightbox previews of TIFF files and very large images stay in the app's cache folder on your computer.
 
 ## Credits
 

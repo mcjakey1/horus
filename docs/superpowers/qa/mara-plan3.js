@@ -468,7 +468,8 @@ const taxKey = (T) => JSON.stringify(T);
   await page.click(`${H("tree")} .insp [data-act="del-tech"]`);
   await page.waitForSelector(".tx-dialog", { timeout: 3000 });
   await page.click('.tx-dialog input[value="partial"]'); await page.click(".tx-dialog .tx-ok");
-  const part = await saved(() => !tax().techniques.some((t) => t.id === "rim-light"));
+  // Wait for both files: library.json can land after taxonomy.json (Plan 4 regression run).
+  const part = await saved(() => !tax().techniques.some((t) => t.id === "rim-light") && lib().references.filter((r) => users.some((u) => u.id === r.id)).every((r) => r.tags.some((t) => !t.techniqueId && t.operationId === "differentiate")), 8000);
   const partTags = lib().references.filter((r) => users.some((u) => u.id === r.id)).map((r) => r.tags.filter((t) => !t.techniqueId && t.operationId === "differentiate").length);
   ok("RF4: Keep them as partial tags leaves operation-only tags", !!part.v && partTags.every((n) => n >= 1), JSON.stringify(partTags));
   ok("RF4 partial: the notice the artist sees", null, (await noticeText(page)) || "(none)");

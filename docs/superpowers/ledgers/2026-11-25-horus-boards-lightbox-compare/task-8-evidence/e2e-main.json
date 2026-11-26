@@ -1,0 +1,180 @@
+{
+ "first run: seeded s": "9.1",
+ "library count": "50 references",
+ "window": {
+  "w": 1280,
+  "h": 800,
+  "dpr": 1
+ },
+ "step1": {
+  "members": 10,
+  "boardsLine": "Boards: Harbour"
+ },
+ "step2": {
+  "tiles": 10,
+  "swapped": true,
+  "restored": true,
+  "focusAfterMove": "BODY"
+ },
+ "step3": {
+  "status": "Board: Harbour · 10 references · Show all",
+  "boardTiles": 10,
+  "chosenEqualsTiles": true,
+  "focus": "96e58f654f5e8483c97ba2f6654623bdff683fd4023f2a973c19cc392ea598c0",
+  "scoredRows": 5,
+  "outsideRows": 3,
+  "outsideTitles": [
+   "At the Moulin Rouge",
+   "Breaker Boys",
+   "The Child's Bath"
+  ],
+  "search": "no non-member seen"
+ },
+ "step4": {
+  "toast1": "Exported 10 to E:\\D drive files\\Design Second Brain\\Export testOpen folder",
+  "imageFiles": 10,
+  "names": [
+   "01 - Divan Japonais.jpg",
+   "02 - See America.jpg",
+   "03 - See America.jpg",
+   "…",
+   "10 - A Sunday on La Grande Jatte — 1884.jpg"
+  ],
+  "bom": false,
+  "crlf": false,
+  "blocks": 10,
+  "blocksInBoardOrder": true,
+  "secondExport": {
+   "total": 22,
+   "suffixed": 11,
+   "credits2": true,
+   "firstFilesUnchanged": true
+  },
+  "openFolder": {
+   "newExplorerWindows": []
+  }
+ },
+ "step5": {
+  "zoom": "416%",
+  "panMoved": [
+   -120,
+   -80
+  ],
+  "hoverLabel": "no region tags on this reference",
+  "tabCheck": "not checked (no region)",
+  "drawnPx400": {
+   "x1": 388,
+   "y1": 310,
+   "x2": 526,
+   "y2": 454
+  },
+  "outlinePxAfterTag": {
+   "x": 457.90625,
+   "y": 364.609375,
+   "w": 33.125,
+   "h": 34.765625
+  },
+  "zoomAtDraw": "416%",
+  "zoomAfterPicker": "416%",
+  "zoomAfterTag": "100%",
+  "plateAtDraw": {
+   "x": -2971.65625,
+   "y": -1930.203125,
+   "w": 6663.3125,
+   "h": 4464.421875
+  },
+  "plateAfterPicker": {
+   "x": -2971.65625,
+   "y": -1930.203125,
+   "w": 6663.3125,
+   "h": 4464.421875
+  },
+  "maxFracError": {
+   "at400": "0.0000",
+   "atFit": "0.0000",
+   "at100": "0.0000"
+  },
+  "zFit": "57%",
+  "z100": "100%",
+  "callouts": [
+   3,
+   4
+  ]
+ },
+ "hand-T7": {
+  "viaShiftEnter": true,
+  "pin": [
+   "true",
+   "true"
+  ],
+  "filterChips": [
+   1,
+   1
+  ]
+ },
+ "step6 compare open": true,
+ "step6 saved": {
+  "linkLine": "Linked by you: “same raking light”",
+  "editors": 0,
+  "active": ""
+ },
+ "step6 after Esc": {
+  "compare": 1,
+  "view": "reference",
+  "editors": 0
+ },
+ "step6": {
+  "shared": [
+   "Stand out › Simultaneous contrast"
+  ],
+  "linkLine": "Linked by you: “same raking light”",
+  "ranked": {
+   "head": "Linked by you",
+   "headBeforeScored": true
+  }
+ },
+ "hand-T4": {
+  "leaderDuringDrag": true,
+  "editorsAfterDrop": 1,
+  "to": "to Breaker Boys",
+  "leaderAfterEsc": false,
+  "editorsAfterEscAndRelease": 0,
+  "plainClickOpensCombobox": true
+ },
+ "step7": {
+  "before": {
+   "linked": true,
+   "links": "1",
+   "callouts": 4,
+   "scope": "Board: Harbour · 10 references · Show all"
+  },
+  "after": [
+   {
+    "linked": false,
+    "links": "",
+    "callouts": 4,
+    "scope": "Board: Harbour · 10 references · Show all"
+   },
+   {
+    "linked": false,
+    "links": "",
+    "callouts": 3,
+    "scope": "Board: Harbour · 10 references · Show all"
+   },
+   {
+    "linked": false,
+    "links": "",
+    "callouts": 3,
+    "scope": "Board: Harbour · 9 references · Show all"
+   }
+  ]
+ },
+ "step8-prepare": {
+  "quitRequestedMsAfterSave": 374,
+  "focus": null
+ },
+ "step8": {
+  "noteOnDisk": true,
+  "noteInLinksTab": true
+ }
+}

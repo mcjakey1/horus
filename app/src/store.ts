@@ -1,8 +1,10 @@
 // The UI's one copy of the open library. Rust owns the data; every command that changes it
 // returns a `Change`, which `apply` merges here and then announces to the views.
-import type { Change, LibraryView, Link, Reference, Taxonomy } from "./api";
+import type { Board, Change, LibraryView, Link, Reference, Taxonomy } from "./api";
 
-export type StoreEvent = Change & { reset?: boolean };
+/** `scope`: the board scope changed (`setScope`). `scopeCleared`: a change removed the scoped
+ * board, so the scope went back to everything (the status line says so). */
+export type StoreEvent = Change & { reset?: boolean; scope?: true; scopeCleared?: true };
 
 export type Store = {
   root: string;
@@ -10,8 +12,17 @@ export type Store = {
   /** In library order; a changed reference keeps its place, a new one goes last. */
   refs: Map<string, Reference>;
   tax: Taxonomy;
-  /** Plan 2 never changes links (Plan 4 adds `Change.links`). */
+  /** Replaced whole by a `Change` that carries them (Plan 4). */
   links: Link[];
+  boards: Board[];
+  /** The board the views are scoped to, or null for everything. */
+  scope: string | null;
+  /** Notifies `{ scope: true }`. */
+  setScope(boardId: string | null): void;
+  /** True for every reference when `scope` is null, else only for the board's members. */
+  inScope(refId: string): boolean;
+  /** Links touching `refId`, in either direction, newest first. */
+  linksFor(refId: string): Link[];
   canUndo: boolean;
   canRedo: boolean;
   taxonomyReadOnly: boolean;
@@ -32,6 +43,8 @@ export function createStore(view: LibraryView, tax: Taxonomy): Store {
       warning: v.warning ?? null,
       refs: new Map(v.references.map((r) => [r.id, r])),
       links: v.links,
+      boards: v.boards,
+      scope: null, // a library switch never keeps a board id
       tax: t,
       taxonomyReadOnly: v.taxonomyReadOnly === true, // absent until Plan 2 Task 5's Rust sends it
       canUndo: false,
@@ -42,6 +55,8 @@ export function createStore(view: LibraryView, tax: Taxonomy): Store {
     refs: new Map(),
     tax,
     links: [],
+    boards: [],
+    scope: null,
     canUndo: false,
     canRedo: false,
     taxonomyReadOnly: false,
@@ -49,10 +64,25 @@ export function createStore(view: LibraryView, tax: Taxonomy): Store {
       for (const r of c.references) store.refs.set(r.id, r);
       for (const id of c.removed) store.refs.delete(id);
       if (c.taxonomy) store.tax = c.taxonomy;
+      if (c.links) store.links = c.links;
+      if (c.boards) store.boards = c.boards;
       store.canUndo = c.canUndo;
       store.canRedo = c.canRedo;
+      if (store.scope !== null && !store.boards.some((b) => b.id === store.scope)) {
+        store.scope = null;
+        return emit({ ...c, scopeCleared: true });
+      }
       emit(c);
     },
+    setScope(boardId) {
+      store.scope = boardId;
+      emit({ references: [], removed: [], created: null, canUndo: store.canUndo, canRedo: store.canRedo, scope: true });
+    },
+    inScope(refId) {
+      if (store.scope === null) return true;
+      return store.boards.find((b) => b.id === store.scope)?.referenceIds.includes(refId) ?? false;
+    },
+    linksFor: (refId) => store.links.filter((l) => l.fromRef === refId || l.toRef === refId).reverse(),
     reset(v, t) {
       load(v, t);
       emit({ references: [], removed: [], taxonomy: t, created: null, canUndo: false, canRedo: false, reset: true });

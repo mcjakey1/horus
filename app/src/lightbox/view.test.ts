@@ -33,12 +33,14 @@ let openPicker: ReturnType<typeof vi.fn<(o: PickerOpts) => void>>;
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector<T>(s)!;
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-/** The stage is 800Ã—600 at the origin, so the 0.75 plate letterboxes to left 175, width 450, height 600. */
+/** The stage is 800×600 at client (OX, OY), not the origin, so the client offset is exercised (review
+ * I3). In stage px the 0.75 plate letterboxes to left 175, width 450, height 600. */
+const OX = 40, OY = 30;
 function stubStage() {
   $(".lb-stage").getBoundingClientRect = () =>
-    ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect;
+    ({ left: OX, top: OY, width: 800, height: 600, right: OX + 800, bottom: OY + 600, x: OX, y: OY, toJSON() {} }) as DOMRect;
 }
-const at = (fx: number, fy: number) => ({ clientX: 175 + fx * 450, clientY: fy * 600 });
+const at = (fx: number, fy: number) => ({ clientX: OX + 175 + fx * 450, clientY: OY + fy * 600 });
 const pointer = (type: string, p: { clientX: number; clientY: number }, el = $(".lb-stage")) =>
   el.dispatchEvent(new MouseEvent(type, { ...p, button: 0, bubbles: true }));
 const key = (k: string, init: KeyboardEventInit = {}, el: Element = document.activeElement ?? document.body) =>
@@ -51,9 +53,9 @@ beforeEach(() => {
   document.body.innerHTML = `<button id="opener">Open lightbox</button>`;
   opener = $<HTMLButtonElement>("#opener");
   opener.focus();
-  store = createStore({ root: "C:\\lib", references: [R], links: [], warning: null, taxonomyReadOnly: false }, taxonomy);
+  store = createStore({ root: "C:\\lib", references: [R], links: [], boards: [], warning: null, taxonomyReadOnly: false }, taxonomy);
   api = {
-    imagePath: vi.fn(async (id: string) => `C:\\lib\\images\\${id}.jpg`),
+    lightboxSource: vi.fn(async (id: string) => ({ path: `C:\\lib\\images\\${id}.jpg`, full: true, width: 1200, height: 1600 })),
     assetUrl: (p: string) => `asset://${encodeURIComponent(p)}`,
   } as unknown as Api;
   openPicker = vi.fn<(o: PickerOpts) => void>();
@@ -283,8 +285,9 @@ describe("openLightbox", () => {
     expect(document.querySelectorAll(".lightbox [style]:not(.lb-box):not(.lb-plate)")).toHaveLength(0);
   });
 
-  it("full_image_from_imagePath_with_thumb_fallback", async () => {
+  it("full_image_from_lightboxSource_with_thumb_fallback", async () => {
     const src = () => $<HTMLImageElement>(".lb-plate img").getAttribute("src");
+    const note = () => $(".lb-note").hidden === false;
     const reopen = () => {
       lb.close();
       lb = openLightbox(api, store, "r", { openPicker });
@@ -295,32 +298,36 @@ describe("openLightbox", () => {
     reopen();
     expect(src()).toBe(api.assetUrl(R.thumb1024)); // the thumbnail at once
     await tick();
-    expect(api.imagePath).toHaveBeenLastCalledWith("r");
+    expect(api.lightboxSource).toHaveBeenLastCalledWith("r");
     expect(preloads).toHaveBeenLastCalledWith(api.assetUrl("C:\\lib\\images\\r.jpg"));
     expect(src()).toBe(api.assetUrl(R.thumb1024)); // not swapped before it loads
     preload().dispatchEvent(new Event("load"));
     expect(src()).toBe(api.assetUrl("C:\\lib\\images\\r.jpg")); // then the original
+    expect(note()).toBe(false); // full size: no preview note
     reopen();
     await tick();
-    preload().dispatchEvent(new Event("error")); // e.g. a TIFF original the WebView can't decode
+    preload().dispatchEvent(new Event("error")); // e.g. an original gone from disk (carry-in b)
     expect(src()).toBe(api.assetUrl(R.thumb1024));
+    expect(note()).toBe(true); // never a blank pane, and it says why
     reopen();
     await tick();
     const pending = preload();
     lb.close();
     pending.dispatchEvent(new Event("load")); // a load after close changes nothing
     lb = openLightbox(api, store, "r", { openPicker });
+    await tick(); // its own lightboxSource call is made before the next mock is set
     preloads.mockRestore();
-    vi.mocked(api.imagePath).mockRejectedValueOnce("Unknown reference"); // an unknown or hidden reference
+    vi.mocked(api.lightboxSource).mockRejectedValueOnce("Unknown reference"); // an unknown or hidden reference
     reopen();
     await tick();
     expect(src()).toBe(api.assetUrl(R.thumb1024));
-    let late!: (p: string) => void;
-    vi.mocked(api.imagePath).mockImplementationOnce(() => new Promise<string>((r) => (late = r)));
+    expect(note()).toBe(true);
+    let late!: (s: { path: string; full: boolean; width: number; height: number }) => void;
+    vi.mocked(api.lightboxSource).mockImplementationOnce(() => new Promise((r) => (late = r)));
     reopen();
     await tick();
     lb.close();
-    late("C:\\late.jpg"); // an answer after close changes nothing and throws nothing
+    late({ path: "C:\\late.jpg", full: true, width: 1, height: 1 }); // an answer after close changes nothing and throws nothing
     await tick();
     expect(document.querySelector(".lightbox")).toBeNull();
   });
@@ -329,8 +336,159 @@ describe("openLightbox", () => {
     const R2 = { ...R, tags: [...R.tags, tag("t3", "sequence", { x: 0.5, y: 0.5, w: 0.2, h: 0.2 })] };
     store.apply({ ...none, references: [R2] });
     expect(document.querySelectorAll(".lb-box")).toHaveLength(2);
+    // a link-only change re-renders too (Plan 4 Task 3 carry-in)
+    const before = document.querySelector(".lb-box");
+    store.apply({ ...none, links: [] });
+    expect(document.querySelector(".lb-box")).not.toBe(before);
     store.apply({ ...none, removed: ["r"] });
     expect(document.querySelector(".lightbox")).toBeNull();
     expect(document.activeElement).toBe(opener);
+  });
+
+  // ---------- Plan 4 Task 6: zoom, pan, overlays, preview ----------
+
+  it("a_missing_or_invalid_source_reply_is_a_refusal", async () => {
+    const src = () => $<HTMLImageElement>(".lb-plate img").getAttribute("src");
+    for (const bad of [undefined, null, {}, { path: "", full: true }]) {
+      vi.mocked(api.lightboxSource).mockResolvedValueOnce(bad as never);
+      lb.close();
+      lb = openLightbox(api, store, "r", { openPicker });
+      await tick();
+      expect(src()).toBe(api.assetUrl(R.thumb1024)); // the thumbnail stays
+      expect($(".lb-note").hidden).toBe(false); // and says why
+    }
+  });
+
+  it("preview_note_for_a_preview_source", async () => {
+    vi.mocked(api.lightboxSource).mockResolvedValueOnce({ path: "C:\\cache\\r.png", full: false, width: 300, height: 400 });
+    lb.close();
+    lb = openLightbox(api, store, "r", { openPicker });
+    expect($(".lb-note").hidden).toBe(true);
+    await tick();
+    expect($(".lb-note").hidden).toBe(false);
+    expect($(".lb-note").textContent).toBe("Showing a preview — this format can't be shown at full size here.");
+  });
+
+  it("o_toggles_the_overlays", () => {
+    key("o");
+    expect($(".lb-boxes").hidden).toBe(true);
+    key("o");
+    expect($(".lb-boxes").hidden).toBe(false);
+  });
+
+  it("toolbar_shows_zoom_and_source_size_and_1_is_100_percent", () => {
+    key("0"); // refit to the stubbed stage
+    expect($(".lb-zoom").textContent).toBe("150%");
+    expect($(".lb-size").textContent).toBe("300 × 400"); // the original's size (the reference), not the source's 1200 × 1600
+    key("1");
+    expect($(".lb-plate").style.width).toBe("300px");
+    expect($(".lb-zoom").textContent).toBe("100%");
+    key("0");
+    expect($(".lb-plate").style.width).toBe("450px");
+  });
+
+  it("AZERTY's & and à set 100% and fit (final review M2)", () => {
+    key("0");
+    key("&", { code: "Digit1" });
+    expect($(".lb-zoom").textContent).toBe("100%");
+    key("à", { code: "Digit0" });
+    expect($(".lb-zoom").textContent).toBe("150%");
+  });
+
+  it("the hover label goes when the pointer leaves the stage (M8)", () => {
+    pointer("pointermove", at(0.2, 0.3)); // over R's region (0.1..0.4, 0.2..0.6)
+    expect(document.querySelector(".lb-box.is-hot")).not.toBeNull();
+    $(".lb-stage").dispatchEvent(new MouseEvent("pointerleave"));
+    expect(document.querySelector(".lb-box.is-hot")).toBeNull();
+  });
+
+  it("arrow_pans_when_zoomed_in_and_drafts_at_fit", () => {
+    $(".lb-stage").focus();
+    key("+"); // 150% to 187.5% at the centre: the plate is 750 tall in a 600 stage
+    expect($(".lb-plate").style.top).toBe("-75px");
+    key("ArrowUp"); // no draft: pans down by 10% of the stage
+    expect($(".lb-plate").style.top).toBe("-15px");
+    expect($(".lb-draft").hidden).toBe(true);
+    key("0");
+    key("ArrowUp"); // at fit: the centred draft, as in Plan 2
+    expect($(".lb-draft").hidden).toBe(false);
+  });
+
+  it("wheel_zooms_at_the_cursor", () => {
+    key("0");
+    // Off-centre, at stage (300, 150): the image point under it, (300-175)/450 and 150/600, stays put.
+    const p = { x: 300, y: 150 };
+    $(".lb-stage").dispatchEvent(new WheelEvent("wheel", { deltaY: -1000, clientX: OX + p.x, clientY: OY + p.y, cancelable: true, bubbles: true }));
+    const n = (k: "left" | "top" | "width" | "height") => parseFloat($(".lb-plate").style[k]);
+    expect(n("width")).toBeGreaterThan(450);
+    expect((p.x - n("left")) / n("width")).toBeCloseTo(125 / 450, 4); // the px strings are rounded
+    expect((p.y - n("top")) / n("height")).toBeCloseTo(0.25, 4);
+  });
+
+  it("drag_after_zoom_saves_the_literal_region", () => {
+    $(".lb-stage").focus();
+    key("+"); // scale 1.875 at the centre: the plate is 562.5×750 at stage (118.75, -75)
+    // The image rectangle x 0.2..0.6, y 0.3..0.5, in client px (stage + offset).
+    pointer("pointerdown", { clientX: OX + 118.75 + 0.2 * 562.5, clientY: OY - 75 + 0.3 * 750 });
+    pointer("pointerup", { clientX: OX + 118.75 + 0.6 * 562.5, clientY: OY - 75 + 0.5 * 750 });
+    expect(openPicker).toHaveBeenCalledTimes(1);
+    const r = openPicker.mock.calls[0][0].region!;
+    for (const [k, want] of [["x", 0.2], ["y", 0.3], ["w", 0.4], ["h", 0.2]] as const) expect(Math.abs(r[k] - want)).toBeLessThan(1e-9);
+  });
+
+  it("a_focused_region_box_is_revealed_and_keeps_the_stage_keys", () => {
+    $(".lb-stage").focus();
+    for (let i = 0; i < 5; i++) key("+"); // about 458%
+    for (let i = 0; i < 12; i++) key("ArrowRight"); // pan to the right edge ...
+    for (let i = 0; i < 12; i++) key("ArrowDown"); // ... and the bottom: the region (top left) is off-screen
+    const n = (k: "left" | "top" | "width" | "height") => parseFloat($(".lb-plate").style[k]);
+    const centre = () => ({ x: n("left") + 0.25 * n("width"), y: n("top") + 0.4 * n("height") }); // R's region centre
+    expect(centre().x).toBeLessThan(0);
+    const box = $(".lb-box");
+    box.focus(); // Tab lands on it
+    const c = centre();
+    expect(c.x).toBeGreaterThanOrEqual(0);
+    expect(c.x).toBeLessThanOrEqual(800);
+    expect(c.y).toBeGreaterThanOrEqual(0);
+    expect(c.y).toBeLessThanOrEqual(600);
+    key("Enter", {}, box); // the stage's keys still work from the box
+    expect($(".lb-draft").hidden).toBe(false);
+  });
+
+  it("space_is_released_by_a_window_blur_or_a_keyup_elsewhere", () => {
+    $(".lb-stage").focus();
+    key(" ");
+    expect($(".lightbox").classList.contains("is-pan")).toBe(true);
+    window.dispatchEvent(new Event("blur"));
+    expect($(".lightbox").classList.contains("is-pan")).toBe(false);
+    pointer("pointerdown", at(0.2, 0.2)); // a plain drag draws again
+    pointer("pointerup", at(0.5, 0.5));
+    expect(openPicker).toHaveBeenCalledTimes(1);
+    key(" ");
+    document.body.dispatchEvent(new KeyboardEvent("keyup", { key: " ", bubbles: true })); // released outside the lightbox
+    expect($(".lightbox").classList.contains("is-pan")).toBe(false);
+  });
+
+  it("overlay_ink_from_taxonomy", () => {
+    const tax: Taxonomy = {
+      ...taxonomy,
+      operations: [...taxonomy.operations, { id: "pulse", name: "Pulse", plainLabel: "Beat", color: "teal", icon: "", description: "" }],
+      techniques: [{ id: "rim-light", name: "Rim light", icon: "", description: "", synonyms: [], examples: [], custom: false }],
+    };
+    const tagged = { ...tag("p1", "pulse", { x: 0.1, y: 0.1, w: 0.2, h: 0.2 }), techniqueId: "rim-light", branchId: "pulse.x" };
+    const R3 = ref("r3", [tagged, tag("g1", "ghost", { x: 0.6, y: 0.6, w: 0.2, h: 0.2 })]);
+    lb.close();
+    store = createStore({ root: "C:\\lib", references: [R3], links: [], boards: [], warning: null, taxonomyReadOnly: false }, tax);
+    lb = openLightbox(api, store, "r3", { openPicker });
+    stubStage();
+    const [pulse, ghost] = [...document.querySelectorAll<HTMLElement>(".lb-box")];
+    expect(pulse.style.getPropertyValue("--c")).toBe("var(--x-teal)");
+    expect(ghost.style.getPropertyValue("--c")).toBe("var(--ink-2)"); // unknown: neutral, never amber
+    store.apply({ ...none, taxonomy: { ...tax, operations: tax.operations.map((o) => (o.id === "pulse" ? { ...o, plainLabel: "Throb" } : o)) } });
+    pointer("pointermove", at(0.2, 0.28)); // hover the pulse region, near its lower edge: a dropped client offset (30 px) would miss it
+    const hot = document.querySelector<HTMLElement>(".lb-box.is-hot")!;
+    expect(hot.querySelector(".lb-tag")!.textContent).toBe("Throb › Rim light");
+    expect(hot.querySelector(".lb-tag .text")!.textContent).toBe("Throb");
+    expect(hot.tabIndex).toBe(0); // Tab reaches it too
   });
 });

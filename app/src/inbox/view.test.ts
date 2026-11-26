@@ -36,7 +36,7 @@ let off = () => {};
 function setup(refs: Reference[]) {
   document.body.innerHTML = `<span id="inbox-count">0</span><section id="inbox"></section>`;
   const api = fakeApi();
-  const store = createStore({ root: "C:\\lib", references: refs, links: [], warning: null, taxonomyReadOnly: false }, seed);
+  const store = createStore({ root: "C:\\lib", references: refs, links: [], boards: [], warning: null, taxonomyReadOnly: false }, seed);
   const root = document.getElementById("inbox")!;
   let dock!: ReturnType<typeof dockPicker>;
   const openPicker = vi.fn((o: PickerOpts) => dock(o));
@@ -195,7 +195,7 @@ describe("Inbox", () => {
   it("a library switch clears the current item, and dock.close() tears the picker down (AGY fix)", () => {
     const { store, inbox, dock } = setup([ref("a"), ref("b")]);
     inbox.focus(1);
-    store.reset({ root: "D:\other", references: [ref("a"), ref("b")], links: [], warning: null, taxonomyReadOnly: false }, seed);
+    store.reset({ root: "D:\other", references: [ref("a"), ref("b")], links: [], boards: [], warning: null, taxonomyReadOnly: false }, seed);
     expect(cur()).toBeUndefined();
     inbox.focus(0);
     expect(picker()).not.toBeNull();

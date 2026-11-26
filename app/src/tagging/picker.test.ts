@@ -69,7 +69,7 @@ function mount(
   { tax = seed, refs = [ref("r")], api = fakeApi(), readOnly = false } = {},
 ) {
   document.body.innerHTML = `<div id="host"></div>`;
-  const store = createStore({ root: "C:\\lib", references: refs, links: [], warning: null, taxonomyReadOnly: readOnly }, tax);
+  const store = createStore({ root: "C:\\lib", references: refs, links: [], boards: [], warning: null, taxonomyReadOnly: readOnly }, tax);
   const p = mountPicker(document.getElementById("host")!, api, store, { refId: "r", ...opts });
   pickers.push(p);
   return { p, api, store, el: p.el };
@@ -581,7 +581,7 @@ describe("technique picker", () => {
     const opener = document.getElementById("opener")!;
     opener.focus();
     const onClose = vi.fn();
-    const store = createStore({ root: "C:\\lib", references: [ref("r")], links: [], warning: null, taxonomyReadOnly: false }, seed);
+    const store = createStore({ root: "C:\\lib", references: [ref("r")], links: [], boards: [], warning: null, taxonomyReadOnly: false }, seed);
     const p = mountPicker(document.getElementById("host")!, fakeApi(), store, { refId: "r", onClose });
     pickers.push(p);
     expect(p.el.contains(document.activeElement)).toBe(true);
@@ -596,7 +596,7 @@ describe("technique picker", () => {
   it("close_leaves_focus_alone_when_it_is_elsewhere_or_the_opener_is_gone", () => {
     document.body.innerHTML = `<button id="opener">Tag…</button><input id="other"><div id="host"></div>`;
     document.getElementById("opener")!.focus();
-    const store = createStore({ root: "C:\\lib", references: [ref("r")], links: [], warning: null, taxonomyReadOnly: false }, seed);
+    const store = createStore({ root: "C:\\lib", references: [ref("r")], links: [], boards: [], warning: null, taxonomyReadOnly: false }, seed);
     const p = mountPicker(document.getElementById("host")!, fakeApi(), store, { refId: "r" });
     document.getElementById("other")!.focus();
     p.close();

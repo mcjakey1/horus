@@ -6,11 +6,22 @@ import seedJson from "../src-tauri/resources/taxonomy.json";
 import type { Api, LibraryView, Reference, Tag, Taxonomy } from "./api";
 import { boot, FIND_SIMILAR_COPY } from "./firstrun";
 
+// Plan 4 Task 7 wiring: capture what boot() hands the Galaxy and what reaches the one openCompare.
+const wiring = vi.hoisted(() => ({
+  compare: [] as unknown[][],
+  galaxy: null as null | { openCompare?(a: string, b: string): void },
+}));
+vi.mock("./compare/view", () => ({ makeOpenCompare: () => (...args: unknown[]) => void wiring.compare.push(args) }));
+vi.mock("./views/galaxy", () => ({
+  mountGalaxy: (_h: unknown, _s: unknown, deps: typeof wiring.galaxy) => ((wiring.galaxy = deps), { show() {}, hide() {}, destroy() {} }),
+}));
+
 // The library may land in a "Horus Library" subfolder of the picked folder.
 const lib: LibraryView = {
   root: "C:\\Références\\Horus Library",
   references: [],
   links: [],
+  boards: [],
   warning: null,
   seedWarnings: [],
   taxonomyReadOnly: false,
@@ -35,6 +46,7 @@ function fakeApi(lastLibrary: string | null): Api {
     systemRamGb: vi.fn(async () => 16),
     pickFolder: vi.fn(async () => "C:\\Références"),
     pickImages: vi.fn(async () => []),
+    revealFolder: vi.fn(async () => {}),
     assetUrl: (p: string) => p,
     undo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
     redo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
@@ -57,6 +69,16 @@ function fakeApi(lastLibrary: string | null): Api {
     addOperation: vi.fn(),
     updateOperation: vi.fn(),
     deleteOperation: vi.fn(),
+    addLink: vi.fn(),
+    updateLink: vi.fn(),
+    removeLink: vi.fn(),
+    createBoard: vi.fn(),
+    renameBoard: vi.fn(),
+    setBoardMembers: vi.fn(),
+    deleteBoard: vi.fn(),
+    exportBoard: vi.fn(),
+    scorePair: vi.fn(),
+    lightboxSource: vi.fn(async (id: string) => ({ path: `C:\\lib\\images\\${id}.jpg`, full: true, width: 1, height: 1 })),
     intakeBusy: vi.fn(async () => {}),
     retrySave: vi.fn(async () => {}),
     exitWithoutSaving: vi.fn(async () => {}),
@@ -139,7 +161,7 @@ describe("boot wiring (Task 9)", () => {
       id, title: `Plate ${id}`, file: `images/${id}.jpg`, hash: id, width: 3, height: 4,
       addedAt: "2026-11-25T00:00:00Z", tags, thumb256: id, thumb1024: id,
     });
-    const library: LibraryView = { root: "C:/lib", references: [mk("s"), mk("r1", [full])], links: [], warning: null, taxonomyReadOnly: false };
+    const library: LibraryView = { root: "C:/lib", references: [mk("s"), mk("r1", [full])], links: [], boards: [], warning: null, taxonomyReadOnly: false };
     const api: Api = {
       ...fakeApi("C:/lib"),
       openLibrary: vi.fn(async () => library),
@@ -174,13 +196,39 @@ describe("boot wiring (Task 9)", () => {
     view.destroy();
   });
 
+  it("one openCompare: the Galaxy's returns to the Galaxy, the Reference view's passes no onClose (Task 7)", async () => {
+    const full: Tag = { id: "t1", operationId: "differentiate", techniqueId: "chiaroscuro", branchId: "differentiate.feature", suggested: false };
+    const mk = (id: string, tags: Tag[] = []): Reference => ({
+      id, title: `Plate ${id}`, file: `images/${id}.jpg`, hash: id, width: 3, height: 4,
+      addedAt: "2026-11-25T00:00:00Z", tags, thumb256: id, thumb1024: id,
+    });
+    const library: LibraryView = { root: "C:/lib", references: [mk("s"), mk("r1", [full])], links: [], boards: [], warning: null, taxonomyReadOnly: false };
+    const api: Api = { ...fakeApi("C:/lib"), openLibrary: vi.fn(async () => library), getTaxonomy: vi.fn(async () => seedJson as unknown as Taxonomy) };
+    const view = await boot(document.body, api);
+    await view.ready;
+    view.show("r1");
+    $<HTMLButtonElement>('[data-view-tab="galaxy"]').click();
+    wiring.galaxy!.openCompare!("r1", "s");
+    const [a, b, opts] = wiring.compare[wiring.compare.length - 1] as [string, string, { onClose(a: string): void }];
+    expect([a, b]).toEqual(["r1", "s"]);
+    $<HTMLButtonElement>('[data-view-tab="reference"]').click();
+    opts.onClose("r1"); // Esc in that Compare
+    expect(document.body.dataset.view).toBe("galaxy");
+    // the Reference view's Shift-click (here on a stand-in row) calls it with no onClose
+    $<HTMLButtonElement>('[data-view-tab="reference"]').click();
+    document.body.insertAdjacentHTML("beforeend", `<button id="row-s" data-go="s"></button>`);
+    $("#row-s").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
+    expect(wiring.compare[wiring.compare.length - 1]).toEqual(["r1", "s"]);
+    view.destroy();
+  });
+
   it("a finished Inbox shows the empty copy on return, with no picker docked (QA F2)", async () => {
     const full: Tag = { id: "t1", operationId: "differentiate", techniqueId: "chiaroscuro", branchId: "differentiate.feature", suggested: false };
     const mk = (id: string, tags: Tag[] = []): Reference => ({
       id, title: `Plate ${id}`, file: `images/${id}.jpg`, hash: id, width: 3, height: 4,
       addedAt: "2026-11-25T00:00:00Z", tags, thumb256: id, thumb1024: id,
     });
-    const library: LibraryView = { root: "C:/lib", references: [mk("s"), mk("r1", [full])], links: [], warning: null, taxonomyReadOnly: false };
+    const library: LibraryView = { root: "C:/lib", references: [mk("s"), mk("r1", [full])], links: [], boards: [], warning: null, taxonomyReadOnly: false };
     const api: Api = {
       ...fakeApi("C:/lib"),
       openLibrary: vi.fn(async () => library),

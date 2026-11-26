@@ -1,0 +1,46 @@
+
+> horus@0.1.0 build
+> tsc && vite build
+
+[36mvite v8.3.8 [32mbuilding client environment for production...[36m[39m
+transforming...
+✓ 815 modules transformed.
+rendering chunks...
+computing gzip size...
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/index.html                                                                                5.08 kB │ gzip:   1.59 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/force.worker-YkOBH5xa.js                                                          16.42 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/jVyY7nDnA2uf2zVvFAhhzEs-VMSjJpBTfgjwQV3I-7E-nJxCvZnD.ttf                          31.34 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/jVyY7nDnA2uf2zVvFAhhzEs-VMSjJpBTfgjwQW_I-7E-DEOvMqTi.ttf                          31.38 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/vEF02_tTDB4M7-auWDN0ahZJW1ge6NmXpVAHV83Bfb_US2D2QYxoUKIkn98pRl9dCw-Cy5Iu-Ew.ttf  183.55 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/vEF02_tTDB4M7-auWDN0ahZJW1ge6NmXpVAHV83Bfb_US2D2QYxoUKIkn98pdF9dCw-6Dh4uqta.ttf  183.71 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/vEFy2_tTDB4M7-auWDN0ahZJW3IX2ih5nk3AucvUHf6OAVIJmeUDygwjihdqrhw-BZt7L9lQ.ttf     194.46 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/vEFy2_tTDB4M7-auWDN0ahZJW3IX2ih5nk3AucvUHf6OAVIJmeUDygwjiiVqrhw-CX-214my.ttf     194.71 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/vEFy2_tTDB4M7-auWDN0ahZJW3IX2ih5nk3AucvUHf6OAVIJmeUDygwjisltrhw-BNhWSLTm.ttf     194.80 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/index-B2RvUVOY.css                                                                40.08 kB │ gzip:   8.88 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/BitmapFont-B1ROUHuh.js                                                             0.04 kB │ gzip:   0.06 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/WebGLRenderer-CdSQ6HfY.js                                                          0.04 kB │ gzip:   0.06 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/CanvasRenderer-CnuwFkWH.js                                                         0.04 kB │ gzip:   0.06 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/WebGPURenderer-CX4svzjZ.js                                                         0.04 kB │ gzip:   0.06 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/webworkerAll-uQc80lMl.js                                                           0.05 kB │ gzip:   0.06 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/init-BOV_qIpW.js                                                                   0.15 kB │ gzip:   0.14 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/browserAll-DgW9wBgM.js                                                             0.27 kB │ gzip:   0.20 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/getTextureBatchBindGroup-B_YucLuk.js                                               0.38 kB │ gzip:   0.29 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/Cache-CCRn0x9W.js                                                                  1.10 kB │ gzip:   0.56 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/getTexelRangeRects-n0RS7wee.js                                                     3.55 kB │ gzip:   1.22 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/canvasUtils-Cmm0V8R4.js                                                            6.23 kB │ gzip:   2.12 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/init-Dr62yA8F.js                                                                  10.06 kB │ gzip:   2.33 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/Filter-D-gt4Etz.js                                                                11.00 kB │ gzip:   3.72 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/Shader-FMvjk2Qs.js                                                                17.37 kB │ gzip:   6.20 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/GCManagedHash-D0rVJrG_.js                                                         18.49 kB │ gzip:   6.12 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/RenderTargetSystem-Pfh2kBN3.js                                                    55.28 kB │ gzip:  15.40 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/GraphicsContext--zWfBiuI.js                                                       62.88 kB │ gzip:  21.08 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/ParticleBuffer-CZdXAjm1.js                                                       125.96 kB │ gzip:  36.30 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/index-DzFnPLkk.js                                                                171.85 kB │ gzip:  55.82 kB
+E:/D drive files/Design Second Brain/taxonomy-of-visuals/.worktrees/plan4-boards/app/dist/assets/lib-BsReQ8A7.js                                                                  682.31 kB │ gzip: 190.62 kB
+
+[33m[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 439ms[39m

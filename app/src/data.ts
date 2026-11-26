@@ -11,7 +11,7 @@ export type Snapshot = {
   version: number;
   /** store.taxonomyReadOnly (the seed fallback after a damaged taxonomy.json). */
   taxonomyReadOnly: boolean;
-  /** () => true until Plan 4 adds store.inScope (board scope, audit row 10). */
+  /** store.inScope: the board scope (Plan 4); true for everything when no board is chosen. */
   inScope(refId: string): boolean;
 };
 /** reset = a library switch (store.reset), not a data change (C20). */
@@ -20,8 +20,6 @@ export interface DataSource {
   get(): Snapshot;
   subscribe(fn: (s: Snapshot, e: SourceEvent) => void): () => void;
 }
-
-const everything = () => true;
 
 /** `version` bumps on every store event. */
 export function storeSource(store: Store): DataSource {
@@ -32,7 +30,7 @@ export function storeSource(store: Store): DataSource {
     tax: store.tax,
     version,
     taxonomyReadOnly: store.taxonomyReadOnly,
-    inScope: everything,
+    inScope: (id) => store.inScope(id),
   });
   let cur = snap();
   store.subscribe(() => {

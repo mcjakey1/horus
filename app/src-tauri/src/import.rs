@@ -3,13 +3,13 @@ use crate::model::Reference;
 use image::codecs::jpeg::JpegEncoder;
 use image::metadata::Orientation;
 use image::{
-    DynamicImage, GenericImageView, ImageDecoder, ImageError, ImageReader, Rgb, RgbImage,
-    RgbaImage, imageops,
+    DynamicImage, GenericImageView, ImageDecoder, ImageError, ImageFormat, ImageReader, Rgb,
+    RgbImage, RgbaImage, imageops,
 };
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
-use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::io::{self, BufRead, Read, Seek, SeekFrom, Write};
 use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -215,60 +215,20 @@ fn store(
     let unreadable = |e: io::Error| Skip::Unreadable(e.to_string());
     let mut f: &fs::File = tmp.as_file();
     f.seek(SeekFrom::Start(0)).map_err(unreadable)?;
-    let reader = ImageReader::new(io::BufReader::new(f))
-        .with_guessed_format()
-        .map_err(unreadable)?;
-    let format = reader
-        .format()
-        .ok_or_else(|| Skip::Unsupported("unrecognised file type".into()))?;
-    let mut decoder = reader.into_decoder().map_err(decode_skip)?;
-    let mut warn = |why: String| warnings.push((src.to_path_buf(), why));
-    let icc = decoder.icc_profile().unwrap_or_else(|e| {
-        warn(format!("could not read ICC profile: {e}"));
-        None
-    });
-    let orientation = decoder.orientation().unwrap_or_else(|e| {
-        warn(format!("could not read EXIF orientation: {e}"));
-        Orientation::NoTransforms
-    });
-    let mut img = DynamicImage::from_decoder(decoder).map_err(decode_skip)?;
-    img.apply_orientation(orientation);
-    let (width, height) = img.dimensions();
-    let mut rgba = img.into_rgba8();
-    if let Some(icc) = icc
-        && let Err(why) = to_srgb(&icc, &mut rgba)
-    {
-        warn(why);
-    }
-    let rgb = on_white(&rgba);
-    drop(rgba);
+    let decoded = decode_srgb_from(io::BufReader::new(f))?;
+    let (width, height) = (decoded.width, decoded.height);
+    let warned = decoded.warnings.into_iter();
+    warnings.extend(warned.map(|why| (src.to_path_buf(), why)));
+    let rgb = on_white(&decoded.rgba);
+    drop(decoded.rgba);
 
-    let file = format!("{hash}.{}", format.extensions_str()[0]);
+    let file = format!("{hash}.{}", decoded.format.extensions_str()[0]);
     let mut thumbs = Thumbs {
         root,
         hash,
         keep: false,
     };
-    let written = THUMB_SIZES
-        .iter()
-        .try_for_each(|&size| {
-            let (tw, th) = fit(width, height, size);
-            let small;
-            let thumb = if (tw, th) == (width, height) {
-                &rgb
-            } else {
-                small = imageops::thumbnail(&rgb, tw, th);
-                &small
-            };
-            #[cfg(test)]
-            if size == THUMB_SIZES[1] && src.file_stem() == Some(tests::PANIC_STEM.as_ref()) {
-                panic!("injected decoder panic"); // after the first thumbnail is on disk
-            }
-            write_thumb(
-                &thumb_path_in(root, hash, size).map_err(io::Error::other)?,
-                thumb,
-            )
-        })
+    let written = write_thumbs(root, hash, &rgb)
         .and_then(|()| tmp.as_file().sync_all())
         .and_then(|()| {
             let dest = image_path_in(root, &file).map_err(io::Error::other)?;
@@ -302,6 +262,97 @@ fn store(
     })
 }
 
+/// An image decoded to sRGB RGBA, oriented, alpha kept.
+pub struct Decoded {
+    pub rgba: RgbaImage,
+    pub width: u32,
+    pub height: u32,
+    /// `store` names `images/<hash>.<ext>` from it.
+    pub format: ImageFormat,
+    /// ICC and EXIF problems that did not stop the decode.
+    pub warnings: Vec<String>,
+}
+
+/// Sniffs the format, reads the ICC profile and the EXIF orientation (a warning on error),
+/// orients, converts to RGBA8 and then to sRGB (a warning on failure). Keeps alpha.
+pub fn decode_srgb_from<R: BufRead + Seek>(r: R) -> Result<Decoded, Skip> {
+    let reader = ImageReader::new(r)
+        .with_guessed_format()
+        .map_err(|e| Skip::Unreadable(e.to_string()))?;
+    let format = reader
+        .format()
+        .ok_or_else(|| Skip::Unsupported("unrecognised file type".into()))?;
+    let mut decoder = reader.into_decoder().map_err(decode_skip)?;
+    let mut warnings = vec![];
+    let icc = decoder.icc_profile().unwrap_or_else(|e| {
+        warnings.push(format!("could not read ICC profile: {e}"));
+        None
+    });
+    let orientation = decoder.orientation().unwrap_or_else(|e| {
+        warnings.push(format!("could not read EXIF orientation: {e}"));
+        Orientation::NoTransforms
+    });
+    let mut img = DynamicImage::from_decoder(decoder).map_err(decode_skip)?;
+    img.apply_orientation(orientation);
+    let (width, height) = img.dimensions();
+    let mut rgba = img.into_rgba8();
+    if let Some(icc) = icc
+        && let Err(why) = to_srgb(&icc, &mut rgba)
+    {
+        warnings.push(why);
+    }
+    Ok(Decoded {
+        rgba,
+        width,
+        height,
+        format,
+        warnings,
+    })
+}
+
+/// `decode_srgb_from` on a file. A file over `MAX_BYTES` is `Skip::TooLarge` and is not read.
+pub fn decode_srgb(path: &Path) -> Result<Decoded, Skip> {
+    let unreadable = |e: io::Error| Skip::Unreadable(e.to_string());
+    let len = fs::metadata(path).map_err(unreadable)?.len();
+    if len > MAX_BYTES {
+        return Err(Skip::TooLarge(len));
+    }
+    decode_srgb_from(io::BufReader::new(
+        fs::File::open(path).map_err(unreadable)?,
+    ))
+}
+
+/// Writes every `THUMB_SIZES` thumbnail of `rgb`. On failure it removes both (`Thumbs`).
+pub fn write_thumbs(root: &Path, hash: &str, rgb: &RgbImage) -> io::Result<()> {
+    let mut thumbs = Thumbs {
+        root,
+        hash,
+        keep: false,
+    };
+    let (width, height) = rgb.dimensions();
+    THUMB_SIZES.iter().try_for_each(|&size| {
+        let (tw, th) = fit(width, height, size);
+        let small;
+        let thumb = if (tw, th) == (width, height) {
+            rgb
+        } else {
+            small = imageops::thumbnail(rgb, tw, th);
+            &small
+        };
+        #[cfg(test)]
+        if size == THUMB_SIZES[1] && tests::PANIC_HASH.with(|h| h.borrow().as_deref() == Some(hash))
+        {
+            panic!("injected decoder panic"); // after the first thumbnail is on disk
+        }
+        write_thumb(
+            &thumb_path_in(root, hash, size).map_err(io::Error::other)?,
+            thumb,
+        )
+    })?;
+    thumbs.keep = true;
+    Ok(())
+}
+
 /// Removes a hash's thumbnails and their `.tmp` files when dropped, unless `keep` is set:
 /// a failed write or a panic never leaves a partial thumbnail set behind.
 struct Thumbs<'a> {
@@ -325,7 +376,7 @@ impl Drop for Thumbs<'_> {
 }
 
 /// JPEG has no alpha: composite onto white so cut-outs don't sit on black.
-fn on_white(rgba: &RgbaImage) -> RgbImage {
+pub fn on_white(rgba: &RgbaImage) -> RgbImage {
     RgbImage::from_fn(rgba.width(), rgba.height(), |x, y| {
         let [r, g, b, a] = rgba.get_pixel(x, y).0;
         let a = u16::from(a);
@@ -358,7 +409,7 @@ fn to_srgb(icc: &[u8], rgba: &mut [u8]) -> Result<(), String> {
 }
 
 /// Longest side at most `size`; never upscales.
-fn fit(w: u32, h: u32, size: u32) -> (u32, u32) {
+pub(crate) fn fit(w: u32, h: u32, size: u32) -> (u32, u32) {
     let long = w.max(h);
     if long <= size {
         return (w, h);
@@ -420,8 +471,14 @@ fn iso_utc(secs: u64) -> String {
 mod tests {
     use super::*;
 
-    /// A source file with this stem panics inside `store`, after its first thumbnail is written.
+    /// The source file's stem in the panic test (kept for its name only).
     pub(super) const PANIC_STEM: &str = "panic_in_decoder";
+
+    thread_local! {
+        /// `write_thumbs` panics for this hash, after its first thumbnail is written. Per
+        /// thread, so a parallel test never trips it.
+        pub(super) static PANIC_HASH: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+    }
 
     fn fixture(name: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -635,7 +692,9 @@ mod tests {
         let bad = outside.path().join(format!("{PANIC_STEM}.png"));
         image::RgbImage::new(300, 200).save(&bad).unwrap();
         let bad_hash = blake3::hash(&fs::read(&bad).unwrap()).to_hex().to_string();
+        PANIC_HASH.with(|h| *h.borrow_mut() = Some(bad_hash.clone()));
         let out = import(dir.path(), &[bad.clone(), fixture("small.jpg")]);
+        PANIC_HASH.with(|h| *h.borrow_mut() = None);
         assert_eq!(
             out.report.skipped,
             vec![(
@@ -792,5 +851,48 @@ mod tests {
             root.join("images").join(&r.file)
         );
         assert!(thumb_path_in(root, &r.hash, 256).unwrap().is_file());
+    }
+
+    // ---------- Plan 4 Task 3: the shared decode and thumbnail helpers ----------
+
+    #[test]
+    fn write_thumbs_matches_import() {
+        let lib = tempfile::tempdir().unwrap();
+        let out = import(lib.path(), &[fixture("small.jpg")]);
+        let hash = &out.references[0].hash;
+        let mine = tempfile::tempdir().unwrap();
+        let d = decode_srgb(&fixture("small.jpg")).unwrap();
+        write_thumbs(mine.path(), hash, &on_white(&d.rgba)).unwrap();
+        for size in THUMB_SIZES {
+            let read = |root: &Path| fs::read(thumb_path_in(root, hash, size).unwrap()).unwrap();
+            assert!(read(mine.path()) == read(lib.path()), "{size} px differs");
+        }
+    }
+
+    #[test]
+    fn decode_srgb_too_large_unread() {
+        let dir = tempfile::tempdir().unwrap();
+        let big = dir.path().join("big.jpg");
+        // Sparse on most file systems: set_len writes nothing. Its bytes are not an image, so
+        // only the size check can explain TooLarge.
+        fs::File::create(&big)
+            .unwrap()
+            .set_len(MAX_BYTES + 1)
+            .unwrap();
+        assert!(matches!(decode_srgb(&big), Err(Skip::TooLarge(n)) if n == MAX_BYTES + 1));
+    }
+
+    #[test]
+    fn decode_keeps_alpha() {
+        let dir = tempfile::tempdir().unwrap();
+        let png = dir.path().join("clear.png");
+        let mut img = RgbaImage::from_pixel(4, 3, image::Rgba([10, 20, 30, 255]));
+        img.put_pixel(1, 1, image::Rgba([0, 0, 0, 0]));
+        img.save(&png).unwrap();
+        let d = decode_srgb(&png).unwrap();
+        assert_eq!((d.width, d.height), (4, 3));
+        assert_eq!(d.format, ImageFormat::Png);
+        assert_eq!(d.rgba.get_pixel(1, 1).0[3], 0);
+        assert_eq!(d.rgba.get_pixel(0, 0).0[3], 255);
     }
 }

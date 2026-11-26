@@ -5,6 +5,7 @@ import type { Api, Hit, ImportReport, ImportResult, LibraryView, Reference, Scor
 import { summaryHTML } from "../importer";
 import { createStore, type Store } from "../store";
 import { mountReference } from "./view";
+import { makeOpenCompare } from "../compare/view";
 
 const tag = (id: string, operationId: string, techniqueId?: string, branchId?: string): Tag => ({
   id,
@@ -55,6 +56,7 @@ const library: LibraryView = {
   root: "C:\\lib",
   references: [A, B, C],
   links: [{ id: "l1", fromRef: "a", toRef: "c", why: "same mood" }],
+  boards: [],
   warning: null,
   taxonomyReadOnly: false,
 };
@@ -79,6 +81,7 @@ function fakeApi(): Api {
     systemRamGb: vi.fn(async () => 16),
     pickFolder: vi.fn(async () => null),
     pickImages: vi.fn(async () => []),
+    revealFolder: vi.fn(async () => {}),
     assetUrl: (path: string) => `asset://${encodeURIComponent(path)}`,
     undo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
     redo: vi.fn(async () => ({ references: [], removed: [], canUndo: false, canRedo: false })),
@@ -101,6 +104,16 @@ function fakeApi(): Api {
     addOperation: vi.fn(),
     updateOperation: vi.fn(),
     deleteOperation: vi.fn(),
+    addLink: vi.fn(),
+    updateLink: vi.fn(),
+    removeLink: vi.fn(),
+    createBoard: vi.fn(),
+    renameBoard: vi.fn(),
+    setBoardMembers: vi.fn(),
+    deleteBoard: vi.fn(),
+    exportBoard: vi.fn(),
+    scorePair: vi.fn(),
+    lightboxSource: vi.fn(async (id: string) => ({ path: `C:\\lib\\images\\${id}.jpg`, full: true, width: 1, height: 1 })),
     intakeBusy: vi.fn(async () => {}),
     retrySave: vi.fn(async () => {}),
     exitWithoutSaving: vi.fn(async () => {}),
@@ -134,6 +147,45 @@ describe("Reference view", () => {
     await settle();
   });
   afterEach(() => view.destroy());
+
+  // ---------- Plan 4 Task 7: Compare from the Reference view (C23, R24) ----------
+  async function withCompare() {
+    vi.mocked(api.scorePair).mockResolvedValue({ id: "b", score: 0.5, sharedTechniques: [], sharedBranches: [] });
+    view.destroy();
+    view = mountReference(document.body, api, store, { openCompare: makeOpenCompare(document.body, api, store) });
+    await view.ready;
+    view.show("a");
+    await settle();
+  }
+
+  it("shift_click_opens_compare_on_the_focus_and_that_reference", async () => {
+    await withCompare();
+    const thumb = document.querySelector<HTMLButtonElement>('#pane-callouts .thumb[data-go="b"]')!;
+    thumb.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
+    await settle();
+    expect(api.scorePair).toHaveBeenCalledWith("a", "b");
+    expect(document.querySelectorAll(".compare .cmp-side, .compare .cmp-mid")).toHaveLength(3);
+    expect(document.querySelector("#ref-id")?.textContent).toBe("a"); // no navigation
+  });
+
+  it("with_compare_open_v_and_esc_reach_compare_only", async () => {
+    await withCompare();
+    document.querySelector<HTMLButtonElement>('#pane-callouts .thumb[data-go="b"]')!
+      .dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true }));
+    await settle();
+    const value = document.querySelector<HTMLInputElement>("#value")!;
+    const before = value.checked;
+    const cmp = document.querySelector<HTMLElement>(".compare")!;
+    cmp.dispatchEvent(new KeyboardEvent("keydown", { key: "v", bubbles: true, cancelable: true }));
+    expect(value.checked).toBe(before); // the Reference view's v did not fire
+    expect(cmp.querySelector(".cmp-tile")!.classList.contains("is-value")).toBe(true);
+    // a key that lands on <body> under the modal is not the Reference view's either
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "v", bubbles: true, cancelable: true }));
+    expect(value.checked).toBe(before);
+    cmp.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(document.querySelector(".compare")).toBeNull();
+    expect(document.querySelector("#ref-id")?.textContent).toBe("a"); // Esc closes; it never navigates
+  });
 
   it("renders one callout per tag", () => {
     expect(document.querySelectorAll("#pane-callouts .call")).toHaveLength(2);
@@ -255,7 +307,7 @@ describe("Reference view", () => {
   });
 
   it("reset_switches_library", async () => {
-    store.reset({ root: "D:\\Pictures\\Second", references: [ref("z", "Plate Z", [])], links: [], warning: null, taxonomyReadOnly: false }, taxonomy);
+    store.reset({ root: "D:\\Pictures\\Second", references: [ref("z", "Plate Z", [])], links: [], boards: [], warning: null, taxonomyReadOnly: false }, taxonomy);
     await settle();
     expect($("#data-source").textContent).toBe("Library: Second");
     expect($("#ref-id").textContent).toBe("z");
@@ -305,6 +357,13 @@ describe("Reference view", () => {
     expect($("#lib-count").textContent).toBe("4 references"); // the status line still updates
     // a reference that now shares a technique with the focus does refresh
     store.apply({ ...none, references: [ref("s", "Plate S", [tag("s1", "differentiate", "silhouette", "differentiate-feature")])] });
+    await settle();
+    expect(vi.mocked(api.related).mock.calls.length).toBe(calls + 1);
+  });
+
+  it("link_only_change_refreshes", async () => {
+    const calls = vi.mocked(api.related).mock.calls.length;
+    store.apply({ ...none, links: [{ id: "l1", fromRef: "a", toRef: "b", why: "x" }] });
     await settle();
     expect(vi.mocked(api.related).mock.calls.length).toBe(calls + 1);
   });
@@ -417,6 +476,25 @@ describe("Reference view", () => {
     expect(document.activeElement).toBe(btn); // focus returns to the opener
   });
 
+  it("tagging a region drawn while zoomed in keeps the zoom (Task 8 F2)", async () => {
+    $<HTMLButtonElement>("#lab .lb-open").click();
+    const stage = $(".lb-stage");
+    stage.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect;
+    keyOn("0", stage);
+    for (let i = 0; i < 5; i++) keyOn("+", stage); // 150% to about 458%
+    const zoom = $(".lb-zoom").textContent;
+    expect(zoom).toBe("458%");
+    for (const [type, x, y] of [["pointerdown", 300, 200], ["pointermove", 420, 320], ["pointerup", 420, 320]] as const)
+      stage.dispatchEvent(new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true }));
+    expect($(".lightbox .lb-side .picker")).not.toBeNull();
+    keyOn("1"); // the first operation, in the picker
+    keyOn("Enter"); // a partial tag for the region
+    await settle();
+    expect(api.addTags).toHaveBeenCalled();
+    expect($(".lb-zoom").textContent).toBe(zoom); // the View survives the save and the re-render
+  });
+
   it("region_drag_docks_the_picker_inside_the_lightbox", async () => {
     keyOn("t", document.body); // a margin picker is open first
     $<HTMLButtonElement>("#lab .lb-open").click();
@@ -501,7 +579,8 @@ describe("Reference view", () => {
   });
 
   // ---------- Task 11: the AND/OR technique filter (SPEC §5a) ----------
-  const rows = () => [...document.querySelectorAll<HTMLElement>("#pane-ranked .row")].map((r) => r.dataset.go);
+  // The scored rows only: "Linked by you" stays above them under a filter (Plan 4 Task 4, R13).
+  const rows = () => [...document.querySelectorAll<HTMLElement>("#pane-ranked .row:not(.linked)")].map((r) => r.dataset.go);
   const chips = () => [...document.querySelectorAll<HTMLElement>("#pane-ranked .chip")].map((c) => c.textContent?.replace("×", "").trim());
   const pressed = () => document.querySelector("#pane-ranked [data-mode][aria-pressed='true']")?.textContent;
   const byCallout = (tech: string) => $<HTMLButtonElement>(`#pane-callouts [data-filter="${tech}"]`).click();
@@ -532,6 +611,31 @@ describe("Reference view", () => {
     expect(vi.mocked(api.related).mock.calls.length).toBe(calls);
     expect($("#pane-callouts .call").dataset.mark).toBe("kept");
     expect(api.undo).not.toHaveBeenCalled();
+  });
+
+  it("compare_from_a_filtered_ranked_row_closes_back_to_it (Task 7 review I2)", async () => {
+    vi.mocked(api.scorePair).mockResolvedValue({ id: "b", score: 0.5, sharedTechniques: [], sharedBranches: [] });
+    view.destroy();
+    view = mountReference(document.body, api, store, { openCompare: makeOpenCompare(document.body, api, store) });
+    await view.ready;
+    view.show("a");
+    await settle();
+    const pin = $<HTMLButtonElement>("#pane-callouts .call .pin");
+    pin.click(); // the artist pins a callout first (re-review I2)
+    expect(pin.getAttribute("aria-pressed")).toBe("true");
+    byCallout("silhouette");
+    expect(chips()).toEqual(["Silhouette"]);
+    const row = $<HTMLButtonElement>('#pane-ranked .row[data-go="b"]');
+    row.focus();
+    row.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, shiftKey: true })); // Shift+Enter arrives so
+    await settle();
+    const cmp = $(".compare");
+    cmp.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(document.querySelector(".compare")).toBeNull();
+    expect(chips()).toEqual(["Silhouette"]); // the filter is kept
+    expect($("#ref-id").textContent).toBe("a"); // no navigation
+    expect(document.activeElement).toBe(row); // focus is back on the row
+    expect(pin.getAttribute("aria-pressed")).toBe("true"); // Compare's Esc never reaches the Reference view's Esc
   });
 
   it("filter_show_clears_chips", async () => {
@@ -783,5 +887,335 @@ describe("notices", () => {
     expect(el.textContent).toContain("p3 <red>.png");
     expect(el.textContent).toContain("ICC profile could not be parsed; colours left unconverted");
     expect(el.querySelector("red")).toBeNull();
+  });
+});
+
+// ---------- Plan 4 Task 4: links you draw yourself ----------
+describe("links you draw", () => {
+  let api: Api;
+  let store: Store;
+  let view: ReturnType<typeof mountReference>;
+  const none = { references: [], removed: [], canUndo: true, canRedo: false };
+  const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s)!;
+  async function mount(related: Record<string, Scored[]> = scored) {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+    api = fakeApi();
+    api.related = vi.fn(async (id: string) => related[id] ?? []);
+    store = createStore(library, taxonomy);
+    view = mountReference(document.body, api, store);
+    await view.ready;
+    view.show("a");
+    await settle();
+  }
+  afterEach(() => view.destroy());
+
+  it("lists 'Linked by you' first in Ranked, with no score for an unrelated link", async () => {
+    await mount();
+    const pane = $("#pane-ranked");
+    const heading = pane.querySelector(".group-head")!;
+    expect(heading.textContent).toBe("Linked by you");
+    const scoredRow = pane.querySelector(".row:not(.linked)")!;
+    expect(heading.compareDocumentPosition(scoredRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const linked = pane.querySelector<HTMLElement>(".row.linked")!;
+    expect(linked.dataset.go).toBe("c");
+    expect(linked.textContent).toContain("same mood");
+    expect(linked.textContent).toContain("not related by technique");
+  });
+
+  it("a linked reference that also scores appears once, with its score", async () => {
+    await mount({ ...scored, a: [...scored.a, { id: "c", score: 0.5, sharedTechniques: [], sharedBranches: ["differentiate-feature"] }] });
+    const ids = [...document.querySelectorAll<HTMLElement>("#pane-ranked .row")].map((r) => r.dataset.go);
+    expect(ids).toEqual(["c", "b"]);
+    expect($("#pane-ranked .row.linked").textContent).toContain("0.50");
+  });
+
+  it("keeps 'Linked by you' under a technique filter", async () => {
+    await mount();
+    $<HTMLButtonElement>('#pane-callouts [data-filter="silhouette"]').click();
+    expect($("#pane-ranked .filter")).not.toBeNull();
+    expect($("#pane-ranked .row.linked").dataset.go).toBe("c");
+  });
+
+  it("re-renders the Links tab on a links-only Change", async () => {
+    await mount();
+    store.apply({ ...none, links: [...store.links, { id: "l2", fromRef: "b", toRef: "a", why: "both dark" }] });
+    await settle();
+    expect($("#links-count").textContent).toBe("2");
+    expect($("#pane-links").textContent).toContain("both dark");
+    expect($("#pane-links .link").dataset.link).toBe("l2"); // newest first
+  });
+
+  it("Delete on a link row calls removeLink and applies the Change", async () => {
+    await mount();
+    api.removeLink = vi.fn(async () => ({ ...none, links: [] }));
+    $<HTMLButtonElement>('#pane-links [data-link-del="l1"]').click();
+    await settle();
+    expect(api.removeLink).toHaveBeenCalledWith("l1");
+    expect($("#pane-links").textContent).toContain("No links drawn from this reference yet.");
+  });
+
+  it("keeps keyboard focus in the Links tab after a Delete", async () => {
+    await mount();
+    api.removeLink = vi.fn(async () => ({ ...none, links: [] }));
+    $<HTMLButtonElement>('.m-tab[data-pane="links"]').click();
+    const del = $<HTMLButtonElement>('#pane-links [data-link-del="l1"]');
+    del.focus();
+    expect(document.activeElement).toBe(del);
+    del.click();
+    await settle();
+    expect(document.activeElement).toBe($("#pane-links [data-link-new]"));
+  });
+
+  it("a board scope change refreshes the focus", async () => {
+    await mount();
+    const calls = vi.mocked(api.related).mock.calls.length;
+    store.setScope(null);
+    await settle();
+    expect(vi.mocked(api.related).mock.calls.length).toBe(calls + 1);
+  });
+
+  it("Edit on a link row opens the editor on that link", async () => {
+    await mount();
+    $<HTMLButtonElement>('#pane-links [data-link-edit="l1"]').click();
+    expect($(".link-editor").dataset.linkId).toBe("l1");
+  });
+
+  it("'+ Link to…' and the k key open the editor with the combobox", async () => {
+    await mount();
+    $<HTMLButtonElement>("#pane-links [data-link-new]").click();
+    expect($(".link-editor .le-q")).not.toBeNull();
+    $(".link-editor .le-cancel").click();
+    expect(document.querySelector(".link-editor")).toBeNull();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "k" }));
+    expect($(".link-editor .le-q")).not.toBeNull();
+  });
+
+  it("drop targets carry data-ref-id: Ranked and Links rows, callout thumbnails", async () => {
+    await mount();
+    expect(document.querySelector('#pane-ranked .row[data-ref-id="b"]')).not.toBeNull();
+    expect(document.querySelector('#pane-links .row[data-ref-id="c"]')).not.toBeNull();
+    expect(document.querySelector('#pane-callouts .thumb[data-ref-id="b"]')).not.toBeNull();
+  });
+
+  describe("link_handle_pointer_drag", () => {
+    const fire = (el: Element, type: string, x: number, y: number) =>
+      el.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 }));
+
+    it("dropping on a [data-ref-id] tile opens the editor with toRef set", async () => {
+      await mount();
+      const handle = $("#lab .link-handle");
+      const target = $('#pane-ranked .row[data-ref-id="b"]');
+      document.elementFromPoint = vi.fn(() => target);
+      fire(handle, "pointerdown", 10, 10);
+      fire(handle, "pointermove", 200, 120);
+      expect(document.querySelector(".link-leader")).not.toBeNull();
+      fire(handle, "pointerup", 400, 300);
+      expect(document.elementFromPoint).toHaveBeenCalledWith(400, 300);
+      expect(document.querySelector(".link-leader")).toBeNull();
+      expect($(".link-editor .le-to").textContent).toContain("Plate B");
+      // The click that follows a drag doesn't open a second, empty editor.
+      handle.click();
+      expect(document.querySelectorAll(".link-editor")).toHaveLength(1);
+    });
+
+    it("Esc unpins again after a drag that lost its capture (final review M4)", async () => {
+      await mount();
+      const pin = $<HTMLButtonElement>("#pane-callouts .call .pin");
+      pin.click();
+      expect(pin.getAttribute("aria-pressed")).toBe("true");
+      const handle = $("#lab .link-handle");
+      fire(handle, "pointerdown", 10, 10);
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); // cancels the drag only
+      expect(pin.getAttribute("aria-pressed")).toBe("true");
+      handle.dispatchEvent(new Event("lostpointercapture")); // no pointerup came
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      expect(pin.getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("dropping on empty space, or cancelling, opens nothing", async () => {
+      await mount();
+      const handle = $("#lab .link-handle");
+      document.elementFromPoint = vi.fn(() => document.body);
+      fire(handle, "pointerdown", 10, 10);
+      fire(handle, "pointermove", 200, 120);
+      fire(handle, "pointerup", 200, 120);
+      expect(document.querySelector(".link-editor")).toBeNull();
+      fire(handle, "pointerdown", 10, 10);
+      fire(handle, "pointermove", 200, 120);
+      fire(handle, "pointercancel", 200, 120);
+      expect(document.querySelector(".link-leader")).toBeNull();
+      expect(document.querySelector(".link-editor")).toBeNull();
+    });
+
+    it("Esc mid-drag aborts: the pointerup and the click after it open nothing", async () => {
+      await mount();
+      const handle = $("#lab .link-handle");
+      document.elementFromPoint = vi.fn(() => $('#pane-ranked .row[data-ref-id="b"]'));
+      fire(handle, "pointerdown", 10, 10);
+      fire(handle, "pointermove", 200, 120);
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      expect(document.querySelector(".link-leader")).toBeNull();
+      fire(handle, "pointermove", 260, 160); // ignored once aborted
+      expect(document.querySelector(".link-leader")).toBeNull();
+      fire(handle, "pointerup", 400, 300);
+      handle.click();
+      expect(document.querySelector(".link-editor")).toBeNull();
+      // The next plain click works again.
+      await new Promise((r) => setTimeout(r, 0));
+      handle.click();
+      expect(document.querySelector(".link-editor")).not.toBeNull();
+    });
+
+    it("dropping on the focus itself opens nothing", async () => {
+      await mount();
+      const handle = $("#lab .link-handle");
+      const self = document.createElement("div");
+      self.dataset.refId = "a";
+      document.body.append(self);
+      document.elementFromPoint = vi.fn(() => self);
+      fire(handle, "pointerdown", 10, 10);
+      fire(handle, "pointermove", 200, 120);
+      fire(handle, "pointerup", 200, 120);
+      expect(document.querySelector(".link-editor")).toBeNull();
+    });
+
+    it("registers no dragstart listener anywhere", async () => {
+      const spy = vi.spyOn(EventTarget.prototype, "addEventListener");
+      await mount();
+      expect(spy.mock.calls.some(([type]) => type === "pointerdown")).toBe(true); // the spy sees the view's listeners
+      expect(spy.mock.calls.some(([type]) => type === "dragstart")).toBe(false);
+      spy.mockRestore();
+    });
+  });
+});
+
+// ---------- Plan 4 Task 5: boards in the Reference view ----------
+describe("board scope in the Reference view", () => {
+  let api: Api;
+  let store: Store;
+  let view: ReturnType<typeof mountReference>;
+  const none = { references: [], removed: [], canUndo: true, canRedo: false };
+  const $ = <T extends Element = HTMLElement>(s: string) => document.querySelector<T>(s)!;
+  beforeEach(async () => {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+    api = fakeApi();
+    store = createStore(library, taxonomy);
+    view = mountReference(document.body, api, store);
+    await view.ready;
+    view.show("a");
+    await settle();
+  });
+  afterEach(() => view.destroy());
+  const scope = async (members: string[]) => {
+    store.apply({ ...none, boards: [{ id: "h", name: "Harbour", referenceIds: members }] });
+    store.setScope("h");
+    await settle();
+  };
+
+  it("Ranked keeps only members; a linked non-member stays, marked Not on this board", async () => {
+    await scope(["a"]);
+    expect(document.querySelector('#pane-ranked .row:not(.linked)[data-go="b"]')).toBeNull();
+    const linked = $('#pane-ranked .row.linked[data-go="c"]');
+    expect(linked.textContent).toContain("Not on this board");
+    expect($("#pane-ranked .pane-note").textContent).toContain("0 related");
+    await scope(["a", "b", "c"]);
+    expect(document.querySelector('#pane-ranked .row:not(.linked)[data-go="b"]')).not.toBeNull();
+    expect($('#pane-ranked .row.linked[data-go="c"]').textContent).not.toContain("Not on this board");
+  });
+
+  it("search reference hits keep only members", async () => {
+    await scope(["a"]);
+    vi.mocked(api.search).mockResolvedValueOnce([{ kind: "reference", id: "b" }, { kind: "reference", id: "a" }]);
+    const q = $<HTMLInputElement>("#q");
+    q.value = "plate";
+    q.dispatchEvent(new Event("input"));
+    await settle();
+    const hits = [...document.querySelectorAll<HTMLElement>("#q-results [data-r]")].map((li) => li.dataset.r);
+    expect(hits).toEqual(["a"]);
+  });
+
+  it("a focused non-member stays focused and shows the Not on this board chip", async () => {
+    expect($("#lab .off-board").hidden).toBe(true);
+    await scope(["b"]);
+    expect($("#ref-id").title).toBe("a"); // still focused
+    expect($("#lab .off-board").hidden).toBe(false);
+    store.setScope(null);
+    await settle();
+    expect($("#lab .off-board").hidden).toBe(true);
+  });
+
+  // ---------- fix round 1 (C1, S1): board Changes reach the Reference view ----------
+  it("C1: deleting the scoped board through a Change restores Ranked and drops the chip", async () => {
+    await scope(["b"]);
+    expect($("#lab .off-board").hidden).toBe(false);
+    store.apply({ ...none, boards: [] }); // a delete (or an undo of the creation): the store clears the scope
+    await settle();
+    expect(store.scope).toBeNull();
+    expect($("#lab .off-board").hidden).toBe(true);
+    expect(document.querySelector('#pane-ranked .row:not(.linked)[data-go="b"]')).not.toBeNull();
+  });
+
+  it("C1: putting the focus on the scoped board through a Change drops the chip", async () => {
+    await scope(["b"]);
+    store.apply({ ...none, boards: [{ id: "h", name: "Harbour", referenceIds: ["b", "a"] }] });
+    await settle();
+    expect($("#lab .off-board").hidden).toBe(true);
+  });
+
+  it("S1: shows which boards the focus is on, and On no board", async () => {
+    expect($(".ref-boards").textContent).toBe("Boards: On no board");
+    store.apply({ ...none, boards: [{ id: "h", name: "Harbour", referenceIds: ["a"] }, { id: "s", name: "Ships", referenceIds: ["a", "b"] }, { id: "x", name: "Other", referenceIds: ["b"] }] });
+    await settle();
+    expect($(".ref-boards").textContent).toBe("Boards: Harbour · Ships");
+  });
+
+  // ---------- final review fix wave ----------
+  it("C1: with no technique filter, Ranked keeps only members and counts them", async () => {
+    const D = ref("d", "Plate D", [tag("d1", "differentiate", "silhouette", "differentiate-feature")]);
+    const both: Scored[] = [
+      { id: "b", score: 0.8, sharedTechniques: ["silhouette"], sharedBranches: [] },
+      { id: "d", score: 0.5, sharedTechniques: ["silhouette"], sharedBranches: [] },
+    ];
+    vi.mocked(api.related).mockImplementation(async (id: string) => (id === "a" ? both : (scored[id] ?? [])));
+    store.apply({ ...none, references: [D] }); // shares a technique with the focus: Ranked refetches
+    await settle();
+    expect(document.querySelector('#pane-ranked .row:not(.linked)[data-go="d"]')).not.toBeNull();
+    await scope(["a", "b"]);
+    expect(document.querySelector('#pane-ranked .row:not(.linked)[data-go="b"]')).not.toBeNull();
+    expect(document.querySelector('#pane-ranked .row:not(.linked)[data-go="d"]')).toBeNull();
+    expect($("#pane-ranked .pane-note").textContent).toContain("1 related");
+  });
+
+  it("under a technique filter, a linked match appears once", async () => {
+    store.apply({ ...none, links: [...store.links, { id: "l2", fromRef: "a", toRef: "b", why: "both dark" }] });
+    await settle();
+    $<HTMLButtonElement>('#pane-callouts [data-filter="silhouette"]').click();
+    expect(document.querySelectorAll('#pane-ranked [data-go="b"]')).toHaveLength(1);
+  });
+
+  it("k and b work in any case and on a non-Latin layout (M1)", async () => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "K", shiftKey: true }));
+    expect(document.querySelector(".link-editor")).not.toBeNull();
+    document.querySelector<HTMLElement>(".link-editor [data-cancel], .link-editor .le-cancel")?.click();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "и", code: "KeyB" }));
+    expect(document.querySelector(".board-menu")).not.toBeNull();
+  });
+
+  it("the membership line follows the focus (M9)", async () => {
+    store.apply({ ...none, boards: [{ id: "h", name: "Harbour", referenceIds: ["a"] }, { id: "s", name: "Ships", referenceIds: ["b"] }] });
+    await settle();
+    expect($(".ref-boards").textContent).toBe("Boards: Harbour");
+    view.show("b");
+    await settle();
+    expect($(".ref-boards").textContent).toBe("Boards: Ships");
+  });
+
+  it("b and the Boards… button open the board menu for the focus", async () => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "b" }));
+    expect($(".margin .board-menu")).not.toBeNull();
+    $(".board-menu").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.querySelector(".board-menu")).toBeNull();
+    $<HTMLButtonElement>("#lab .boards-open").click();
+    expect($(".board-menu").getAttribute("aria-label")).toBe("Boards for Plate A");
   });
 });
