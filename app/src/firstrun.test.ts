@@ -11,6 +11,7 @@ const lib: LibraryView = {
   root: "C:\\Références\\Horus Library",
   references: [],
   links: [],
+  boards: [],
   warning: null,
   seedWarnings: [],
   taxonomyReadOnly: false,
@@ -57,6 +58,16 @@ function fakeApi(lastLibrary: string | null): Api {
     addOperation: vi.fn(),
     updateOperation: vi.fn(),
     deleteOperation: vi.fn(),
+    addLink: vi.fn(),
+    updateLink: vi.fn(),
+    removeLink: vi.fn(),
+    createBoard: vi.fn(),
+    renameBoard: vi.fn(),
+    setBoardMembers: vi.fn(),
+    deleteBoard: vi.fn(),
+    exportBoard: vi.fn(),
+    scorePair: vi.fn(),
+    lightboxSource: vi.fn(),
     intakeBusy: vi.fn(async () => {}),
     retrySave: vi.fn(async () => {}),
     exitWithoutSaving: vi.fn(async () => {}),
@@ -139,7 +150,7 @@ describe("boot wiring (Task 9)", () => {
       id, title: `Plate ${id}`, file: `images/${id}.jpg`, hash: id, width: 3, height: 4,
       addedAt: "2026-11-25T00:00:00Z", tags, thumb256: id, thumb1024: id,
     });
-    const library: LibraryView = { root: "C:/lib", references: [mk("s"), mk("r1", [full])], links: [], warning: null, taxonomyReadOnly: false };
+    const library: LibraryView = { root: "C:/lib", references: [mk("s"), mk("r1", [full])], links: [], boards: [], warning: null, taxonomyReadOnly: false };
     const api: Api = {
       ...fakeApi("C:/lib"),
       openLibrary: vi.fn(async () => library),
@@ -180,7 +191,7 @@ describe("boot wiring (Task 9)", () => {
       id, title: `Plate ${id}`, file: `images/${id}.jpg`, hash: id, width: 3, height: 4,
       addedAt: "2026-11-25T00:00:00Z", tags, thumb256: id, thumb1024: id,
     });
-    const library: LibraryView = { root: "C:/lib", references: [mk("s"), mk("r1", [full])], links: [], warning: null, taxonomyReadOnly: false };
+    const library: LibraryView = { root: "C:/lib", references: [mk("s"), mk("r1", [full])], links: [], boards: [], warning: null, taxonomyReadOnly: false };
     const api: Api = {
       ...fakeApi("C:/lib"),
       openLibrary: vi.fn(async () => library),

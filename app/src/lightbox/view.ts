@@ -208,7 +208,7 @@ export function openLightbox(
     if (c.reset || !store.refs.has(refId)) return close();
     // The pending marker stays: a docked picker still saves that region (the picker leaving clears it).
     if (c.references.some((r) => r.id === refId)) showDraft(null);
-    if (c.taxonomy || c.references.some((r) => r.id === refId)) renderBoxes();
+    if (c.taxonomy || c.links || c.references.some((r) => r.id === refId)) renderBoxes();
   });
 
   function close() {

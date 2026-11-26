@@ -55,6 +55,7 @@ const library: LibraryView = {
   root: "C:\\lib",
   references: [A, B, C],
   links: [{ id: "l1", fromRef: "a", toRef: "c", why: "same mood" }],
+  boards: [],
   warning: null,
   taxonomyReadOnly: false,
 };
@@ -101,6 +102,16 @@ function fakeApi(): Api {
     addOperation: vi.fn(),
     updateOperation: vi.fn(),
     deleteOperation: vi.fn(),
+    addLink: vi.fn(),
+    updateLink: vi.fn(),
+    removeLink: vi.fn(),
+    createBoard: vi.fn(),
+    renameBoard: vi.fn(),
+    setBoardMembers: vi.fn(),
+    deleteBoard: vi.fn(),
+    exportBoard: vi.fn(),
+    scorePair: vi.fn(),
+    lightboxSource: vi.fn(),
     intakeBusy: vi.fn(async () => {}),
     retrySave: vi.fn(async () => {}),
     exitWithoutSaving: vi.fn(async () => {}),
@@ -255,7 +266,7 @@ describe("Reference view", () => {
   });
 
   it("reset_switches_library", async () => {
-    store.reset({ root: "D:\\Pictures\\Second", references: [ref("z", "Plate Z", [])], links: [], warning: null, taxonomyReadOnly: false }, taxonomy);
+    store.reset({ root: "D:\\Pictures\\Second", references: [ref("z", "Plate Z", [])], links: [], boards: [], warning: null, taxonomyReadOnly: false }, taxonomy);
     await settle();
     expect($("#data-source").textContent).toBe("Library: Second");
     expect($("#ref-id").textContent).toBe("z");
@@ -305,6 +316,13 @@ describe("Reference view", () => {
     expect($("#lib-count").textContent).toBe("4 references"); // the status line still updates
     // a reference that now shares a technique with the focus does refresh
     store.apply({ ...none, references: [ref("s", "Plate S", [tag("s1", "differentiate", "silhouette", "differentiate-feature")])] });
+    await settle();
+    expect(vi.mocked(api.related).mock.calls.length).toBe(calls + 1);
+  });
+
+  it("link_only_change_refreshes", async () => {
+    const calls = vi.mocked(api.related).mock.calls.length;
+    store.apply({ ...none, links: [{ id: "l1", fromRef: "a", toRef: "b", why: "x" }] });
     await settle();
     expect(vi.mocked(api.related).mock.calls.length).toBe(calls + 1);
   });

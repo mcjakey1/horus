@@ -53,7 +53,7 @@ beforeEach(() => {
     pickFolder: vi.fn(async () => "C:/in" as string | null),
     intakeBusy: vi.fn(async () => {}),
   } as unknown as Api;
-  store = createStore({ root: "C:\\lib", references: [R1, E], links: [], warning: null, taxonomyReadOnly: false }, tax);
+  store = createStore({ root: "C:\\lib", references: [R1, E], links: [], boards: [], warning: null, taxonomyReadOnly: false }, tax);
   openPicker = vi.fn<(o: PickerOpts) => void>();
   show = vi.fn<(id: string) => void>();
   const win = { onDragDropEvent: vi.fn((cb: DropCb) => ((drop = cb), Promise.resolve(() => {}))) };
@@ -305,7 +305,7 @@ describe("intake", () => {
     dropAt(10, 10);
     await flush();
     const form = body().querySelector<HTMLFormElement>("form[data-intake-note]")!;
-    store.reset({ root: "D:\\other", references: [], links: [], warning: null, taxonomyReadOnly: false }, tax);
+    store.reset({ root: "D:\\other", references: [], links: [], boards: [], warning: null, taxonomyReadOnly: false }, tax);
     form.querySelector<HTMLInputElement>('[name="note"]')!.value = "moody";
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await flush();

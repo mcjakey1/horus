@@ -7,7 +7,7 @@ import { mountLibraryMenu } from "./library-menu";
 import { createStore } from "./store";
 
 const tax: Taxonomy = { operations: [], domains: [], branches: [], techniques: [], branchTechniques: [] };
-const view = (root: string): LibraryView => ({ root, references: [], links: [], warning: null, taxonomyReadOnly: false });
+const view = (root: string): LibraryView => ({ root, references: [], links: [], boards: [], warning: null, taxonomyReadOnly: false });
 
 function setup() {
   document.body.innerHTML = `<header><button id="library-menu">Library</button></header>`;

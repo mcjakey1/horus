@@ -610,7 +610,7 @@ export function mountReference(
    * reference sharing a technique or branch with the focus may have just become related. */
   const touchesFocus = (c: StoreEvent) => {
     const f = focusRef();
-    if (c.reset || c.taxonomy || c.removed.length || !f) return true;
+    if (c.reset || c.taxonomy || c.links || c.removed.length || !f) return true;
     // With a filter on, a ranked or newly matching reference changes the Ranked list too.
     const filtered = new Set(S.filter.techniques);
     if (

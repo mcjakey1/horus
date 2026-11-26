@@ -51,7 +51,7 @@ beforeEach(() => {
   document.body.innerHTML = `<button id="opener">Open lightbox</button>`;
   opener = $<HTMLButtonElement>("#opener");
   opener.focus();
-  store = createStore({ root: "C:\\lib", references: [R], links: [], warning: null, taxonomyReadOnly: false }, taxonomy);
+  store = createStore({ root: "C:\\lib", references: [R], links: [], boards: [], warning: null, taxonomyReadOnly: false }, taxonomy);
   api = {
     imagePath: vi.fn(async (id: string) => `C:\\lib\\images\\${id}.jpg`),
     assetUrl: (p: string) => `asset://${encodeURIComponent(p)}`,
@@ -329,6 +329,10 @@ describe("openLightbox", () => {
     const R2 = { ...R, tags: [...R.tags, tag("t3", "sequence", { x: 0.5, y: 0.5, w: 0.2, h: 0.2 })] };
     store.apply({ ...none, references: [R2] });
     expect(document.querySelectorAll(".lb-box")).toHaveLength(2);
+    // a link-only change re-renders too (Plan 4 Task 3 carry-in)
+    const before = document.querySelector(".lb-box");
+    store.apply({ ...none, links: [] });
+    expect(document.querySelector(".lb-box")).not.toBe(before);
     store.apply({ ...none, removed: ["r"] });
     expect(document.querySelector(".lightbox")).toBeNull();
     expect(document.activeElement).toBe(opener);

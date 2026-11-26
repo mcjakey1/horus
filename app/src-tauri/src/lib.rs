@@ -23,6 +23,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let config_dir = app.path().app_config_dir()?;
+            let cache_dir = app.path().app_cache_dir()?;
             let seed = app
                 .path()
                 .resolve("resources/taxonomy.json", BaseDirectory::Resource)?;
@@ -37,7 +38,8 @@ pub fn run() {
             // The picker's demo-set examples (SPEC §6.2). The asset protocol only reads.
             app.asset_protocol_scope()
                 .allow_directory(demo.join("images"), false)?;
-            app.manage(commands::AppState::new(config_dir, seed, demo));
+            app.manage(commands::AppState::new(config_dir, cache_dir, seed, demo));
+            commands::allow_lightbox_cache(app.handle())?;
             commands::start_saver(app.handle());
             Ok(())
         })
@@ -90,6 +92,16 @@ pub fn run() {
             commands::taxonomy_edit::add_operation,
             commands::taxonomy_edit::update_operation,
             commands::taxonomy_edit::delete_operation,
+            commands::add_link,
+            commands::update_link,
+            commands::remove_link,
+            commands::create_board,
+            commands::rename_board,
+            commands::set_board_members,
+            commands::delete_board,
+            commands::export_board,
+            commands::score_pair,
+            commands::lightbox_source,
             commands::undo,
             commands::redo,
             commands::image_path,

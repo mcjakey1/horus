@@ -57,6 +57,17 @@ const rows: [keyof Api, string, string[], (a: Api) => Promise<unknown>][] = [
   ["addOperation", "add_operation", ["color", "description", "name", "plainLabel"], (a) => a.addOperation("n", "l", "")],
   ["updateOperation", "update_operation", ["id", "patch"], (a) => a.updateOperation("op", { color: null })],
   ["deleteOperation", "delete_operation", ["id", "moveTo"], (a) => a.deleteOperation("op")],
+  // Plan 4 Task 3
+  ["addLink", "add_link", ["fromRef", "toRef", "why"], (a) => a.addLink("a", "b", "w")],
+  ["updateLink", "update_link", ["linkId", "why"], (a) => a.updateLink("l", "w")],
+  ["removeLink", "remove_link", ["linkId"], (a) => a.removeLink("l")],
+  ["createBoard", "create_board", ["name", "referenceIds"], (a) => a.createBoard("n", ["r"])],
+  ["renameBoard", "rename_board", ["boardId", "name"], (a) => a.renameBoard("b", "n")],
+  ["setBoardMembers", "set_board_members", ["boardId", "referenceIds"], (a) => a.setBoardMembers("b", ["r"])],
+  ["deleteBoard", "delete_board", ["boardId"], (a) => a.deleteBoard("b")],
+  ["exportBoard", "export_board", ["boardId", "dest"], (a) => a.exportBoard("b", "d")],
+  ["scorePair", "score_pair", ["a", "b"], (a) => a.scorePair("a", "b")],
+  ["lightboxSource", "lightbox_source", ["refId"], (a) => a.lightboxSource("r")],
 ];
 
 describe("IPC contract", () => {

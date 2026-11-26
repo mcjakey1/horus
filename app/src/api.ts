@@ -34,11 +34,18 @@ export type Reference = {
 };
 
 export type Link = { id: string; fromRef: string; toRef: string; why: string };
+/** Plan 4: `referenceIds` in board order. */
+export type Board = { id: string; name: string; referenceIds: string[] };
+/** `written`: image file names in board order; `skipped`: [reference id, reason]. */
+export type ExportReport = { written: string[]; credits: string | null; skipped: [string, string][] };
+/** What the lightbox loads: the original (`full`), or a cached PNG preview. */
+export type LightboxSource = { path: string; full: boolean; width: number; height: number };
 
 export type LibraryView = {
   root: string;
   references: Reference[];
   links: Link[];
+  boards: Board[];
   warning?: string | null;
   /** Demo-seed problems; already joined into `warning`. */
   seedWarnings?: string[];
@@ -90,6 +97,9 @@ export type Change = {
    * missing) and kept as partial tags in the same undo step; 0 otherwise. Rust always sends it.
    */
   madePartial?: number;
+  /** Plan 4: the full lists, set only when a link or a board changed. Absent in older fakes. */
+  links?: Link[] | null;
+  boards?: Board[] | null;
   canUndo: boolean;
   canRedo: boolean;
 };
@@ -192,6 +202,24 @@ export interface Api {
   addOperation(name: string, plainLabel: string, description: string, color?: string): Promise<Change>;
   updateOperation(id: string, patch: OperationPatch): Promise<Change>;
   deleteOperation(id: string, moveTo?: OpMove): Promise<Change>;
+  // Plan 4 Task 3. Each edit is one undo step. Errors are wire codes: "SelfLink",
+  // "DuplicateLink:<id>", "EmptyWhy", "EmptyName", "BoardNameTaken:<id>", "UnknownLink:<id>",
+  // "UnknownBoard:<id>".
+  /** `Change.created` is the link id. */
+  addLink(fromRef: string, toRef: string, why: string): Promise<Change>;
+  updateLink(linkId: string, why: string): Promise<Change>;
+  removeLink(linkId: string): Promise<Change>;
+  /** `Change.created` is the board id. */
+  createBoard(name: string, referenceIds: string[]): Promise<Change>;
+  renameBoard(boardId: string, name: string): Promise<Change>;
+  /** Add, remove and reorder in one call. */
+  setBoardMembers(boardId: string, referenceIds: string[]): Promise<Change>;
+  deleteBoard(boardId: string): Promise<Change>;
+  /** Copies the board's images and a credits file into `dest`. Reasons carry the OS's text. */
+  exportBoard(boardId: string, dest: string): Promise<ExportReport>;
+  /** Any two visible references, with no minimum-score cut. */
+  scorePair(a: string, b: string): Promise<Scored>;
+  lightboxSource(refId: string): Promise<LightboxSource>;
   /** The intake queue went busy or drained: a close waits while it is busy (R2). */
   intakeBusy(busy: boolean): Promise<void>;
   /** The save-failure dialog's "Try again"; on success Rust closes the window. */
@@ -252,6 +280,16 @@ export const tauriApi: Api = {
     invoke("add_operation", { name, plainLabel, description, color: color ?? null }),
   updateOperation: (id, patch) => invoke("update_operation", { id, patch }),
   deleteOperation: (id, moveTo) => invoke("delete_operation", { id, moveTo: moveTo ?? null }),
+  addLink: (fromRef, toRef, why) => invoke("add_link", { fromRef, toRef, why }),
+  updateLink: (linkId, why) => invoke("update_link", { linkId, why }),
+  removeLink: (linkId) => invoke("remove_link", { linkId }),
+  createBoard: (name, referenceIds) => invoke("create_board", { name, referenceIds }),
+  renameBoard: (boardId, name) => invoke("rename_board", { boardId, name }),
+  setBoardMembers: (boardId, referenceIds) => invoke("set_board_members", { boardId, referenceIds }),
+  deleteBoard: (boardId) => invoke("delete_board", { boardId }),
+  exportBoard: (boardId, dest) => invoke("export_board", { boardId, dest }),
+  scorePair: (a, b) => invoke("score_pair", { a, b }),
+  lightboxSource: (refId) => invoke("lightbox_source", { refId }),
   intakeBusy: (busy) => invoke("intake_busy", { busy }),
   retrySave: () => invoke("retry_save"),
   exitWithoutSaving: () => invoke("exit_without_saving"),

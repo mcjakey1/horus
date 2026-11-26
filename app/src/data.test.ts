@@ -10,7 +10,7 @@ const ref = (id: string): Reference => ({
 const tax = { operations: [], techniques: [] } as unknown as Taxonomy;
 const library: LibraryView = {
   root: "C:/lib", references: [ref("a"), ref("b")],
-  links: [{ id: "l1", fromRef: "a", toRef: "b", why: "same light" }], warning: null, taxonomyReadOnly: false,
+  links: [{ id: "l1", fromRef: "a", toRef: "b", why: "same light" }], boards: [], warning: null, taxonomyReadOnly: false,
 };
 const change = { references: [ref("c")], removed: [], canUndo: true, canRedo: false };
 
@@ -60,7 +60,15 @@ describe("storeSource", () => {
     expect(s.links).toBe(store.links);
     expect(s.tax).toBe(store.tax);
     expect(s.taxonomyReadOnly).toBe(true);
-    expect(s.inScope("a")).toBe(true);
-    expect(s.inScope("nope")).toBe(true);
+  });
+
+  it("store_inscope_signature", () => {
+    const board = { id: "b1", name: "B", referenceIds: ["a"] };
+    const store = createStore({ ...library, boards: [board] }, tax);
+    const src = storeSource(store);
+    const agree = () => ["a", "b", "nope"].map((id) => [src.get().inScope(id), store.inScope(id)]);
+    expect(agree()).toEqual([[true, true], [true, true], [true, true]]);
+    store.setScope("b1");
+    expect(agree()).toEqual([[true, true], [false, false], [false, false]]);
   });
 });

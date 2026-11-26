@@ -4,6 +4,7 @@
 use crate::correlate::{Edge, Index, Scored};
 use crate::demo::{self, DemoExample};
 use crate::edit::{self, Edit, EditError, Field, Touched, new_id};
+use crate::export::{self, ExportReport};
 use crate::history::History;
 use crate::hooks;
 use crate::import::{self, ImportReport};
@@ -52,13 +53,20 @@ pub struct AppState {
     /// Serialises the settings read-merge-write.
     settings: Mutex<()>,
     config_dir: PathBuf,
+    /// The app's cache folder: the lightbox's decoded previews (`lightbox/`) live here.
+    cache_dir: PathBuf,
     seed_taxonomy: PathBuf,
     /// The bundled demo set: `manifest.json` and `images/`.
     demo_dir: PathBuf,
 }
 
 impl AppState {
-    pub fn new(config_dir: PathBuf, seed_taxonomy: PathBuf, demo_dir: PathBuf) -> AppState {
+    pub fn new(
+        config_dir: PathBuf,
+        cache_dir: PathBuf,
+        seed_taxonomy: PathBuf,
+        demo_dir: PathBuf,
+    ) -> AppState {
         AppState {
             open: Mutex::new(None),
             saver: Condvar::new(),
@@ -68,6 +76,7 @@ impl AppState {
             import_gate: Mutex::new(()),
             settings: Mutex::new(()),
             config_dir,
+            cache_dir,
             seed_taxonomy,
             demo_dir,
         }
@@ -101,6 +110,7 @@ pub struct LibraryView {
     root: PathBuf,
     references: Vec<ReferenceView>,
     links: Vec<Link>,
+    boards: Vec<Board>,
     warning: Option<String>,
     /// Demo-seed problems (unknown names, skipped images); also joined into `warning`.
     seed_warnings: Vec<String>,
@@ -442,6 +452,7 @@ fn install<R: Runtime>(
         root: lib.root.clone(),
         references,
         links: lib.data.links.clone(),
+        boards: lib.data.boards.clone(),
         warning: (!warnings.is_empty()).then(|| warnings.join(" ")),
         seed_warnings,
         taxonomy_read_only: tax_source == TaxSource::SeedReadOnly,
@@ -842,6 +853,269 @@ pub fn add_technique<R: Runtime>(
         };
         Ok((edit, Some(id)))
     })
+}
+
+// ---------- Plan 4 Task 3: links, boards, export, pair score, lightbox ----------
+// Edits go through `commit`, so each is one undo step, and `edit::apply`'s errors reach the UI
+// as Task 1's wire codes. Each command keeps a link's pair and a board's id, so the
+// `InvalidTag` an identity-changing `Replace*` gives is unreachable from here.
+
+fn find_link<'a>(o: &'a Open, id: &str) -> Result<(usize, &'a Link), String> {
+    let mut links = o.lib.data.links.iter().enumerate();
+    let found = links.find(|(_, l)| l.id == id);
+    found.ok_or_else(|| EditError::UnknownLink(id.into()).to_string())
+}
+
+fn find_board<'a>(o: &'a Open, id: &str) -> Result<(usize, &'a Board), String> {
+    let mut boards = o.lib.data.boards.iter().enumerate();
+    let found = boards.find(|(_, b)| b.id == id);
+    found.ok_or_else(|| EditError::UnknownBoard(id.into()).to_string())
+}
+
+/// `Change.created` is the link id; `Err("DuplicateLink:<id>")` when the pair is linked, in
+/// either direction. IPC args: `{ fromRef, toRef, why }`.
+#[tauri::command]
+pub fn add_link<R: Runtime>(
+    app: AppHandle<R>,
+    from_ref: String,
+    to_ref: String,
+    why: String,
+) -> Result<Change, String> {
+    commit(&app, |_| {
+        let id = new_id("link");
+        let link = Link {
+            id: id.clone(),
+            from_ref,
+            to_ref,
+            why,
+        };
+        Ok((Edit::AddLink { link }, Some(id)))
+    })
+}
+
+/// IPC args: `{ linkId, why }`.
+#[tauri::command]
+pub fn update_link<R: Runtime>(
+    app: AppHandle<R>,
+    link_id: String,
+    why: String,
+) -> Result<Change, String> {
+    commit(&app, |o| {
+        let (_, before) = find_link(o, &link_id)?;
+        let after = Link {
+            why,
+            ..before.clone()
+        };
+        let before = before.clone();
+        Ok((Edit::ReplaceLink { before, after }, None))
+    })
+}
+
+/// IPC args: `{ linkId }`.
+#[tauri::command]
+pub fn remove_link<R: Runtime>(app: AppHandle<R>, link_id: String) -> Result<Change, String> {
+    commit(&app, |o| {
+        let (index, link) = find_link(o, &link_id)?;
+        let link = link.clone();
+        Ok((Edit::RemoveLink { index, link }, None))
+    })
+}
+
+/// `Change.created` is the board id; `Err("BoardNameTaken:<id>")` for a name in use (any
+/// case). IPC args: `{ name, referenceIds }`.
+#[tauri::command]
+pub fn create_board<R: Runtime>(
+    app: AppHandle<R>,
+    name: String,
+    reference_ids: Vec<String>,
+) -> Result<Change, String> {
+    commit(&app, |_| {
+        let id = new_id("board");
+        let board = Board {
+            id: id.clone(),
+            name,
+            reference_ids,
+        };
+        Ok((Edit::AddBoard { board }, Some(id)))
+    })
+}
+
+/// IPC args: `{ boardId, name }`.
+#[tauri::command]
+pub fn rename_board<R: Runtime>(
+    app: AppHandle<R>,
+    board_id: String,
+    name: String,
+) -> Result<Change, String> {
+    commit(&app, |o| {
+        let (_, before) = find_board(o, &board_id)?;
+        let after = Board {
+            name,
+            ..before.clone()
+        };
+        let before = before.clone();
+        Ok((Edit::ReplaceBoard { before, after }, None))
+    })
+}
+
+/// Add, remove and reorder are all this one call: one undo step. IPC args:
+/// `{ boardId, referenceIds }`.
+#[tauri::command]
+pub fn set_board_members<R: Runtime>(
+    app: AppHandle<R>,
+    board_id: String,
+    reference_ids: Vec<String>,
+) -> Result<Change, String> {
+    commit(&app, |o| {
+        let (_, before) = find_board(o, &board_id)?;
+        let after = Board {
+            reference_ids,
+            ..before.clone()
+        };
+        let before = before.clone();
+        Ok((Edit::ReplaceBoard { before, after }, None))
+    })
+}
+
+/// IPC args: `{ boardId }`.
+#[tauri::command]
+pub fn delete_board<R: Runtime>(app: AppHandle<R>, board_id: String) -> Result<Change, String> {
+    commit(&app, |o| {
+        let (index, board) = find_board(o, &board_id)?;
+        let board = board.clone();
+        Ok((Edit::RemoveBoard { index, board }, None))
+    })
+}
+
+/// Copies the board's images and a credits file into `dest`. The board and its visible
+/// members are cloned under the lock; the copying runs off it, off the main thread. A
+/// refusal and the skipped reasons carry the OS's text (Task 5 words them).
+/// IPC args: `{ boardId, dest }`.
+#[tauri::command(async)]
+pub fn export_board<R: Runtime>(
+    app: AppHandle<R>,
+    board_id: String,
+    dest: String,
+) -> Result<ExportReport, String> {
+    let st = app.state::<AppState>();
+    let (root, board, refs) = {
+        let open = lock(&st.open);
+        let o = open.as_ref().ok_or(NO_LIBRARY)?;
+        let (_, board) = find_board(o, &board_id)?;
+        let members: HashSet<&String> = board.reference_ids.iter().collect();
+        let data = visible(&o.lib);
+        let refs = data.references.iter().filter(|r| members.contains(&r.id));
+        (
+            o.lib.root.clone(),
+            board.clone(),
+            refs.cloned().collect::<Vec<_>>(),
+        )
+    };
+    export::export_board(&root, &board, &refs, &absolute(&dest)?)
+}
+
+/// The score of any two visible references, with no `MIN_SCORE` cut (Compare). A hidden or
+/// unknown id is refused. IPC args: `{ a, b }`.
+#[tauri::command]
+pub fn score_pair<R: Runtime>(app: AppHandle<R>, a: String, b: String) -> Result<Scored, String> {
+    let st = app.state::<AppState>();
+    let open = lock(&st.open);
+    let o = open.as_ref().ok_or(NO_LIBRARY)?;
+    let data = visible(&o.lib);
+    let find = |id: &str| {
+        let r = data.references.iter().find(|r| r.id == id);
+        r.ok_or_else(|| EditError::UnknownReference(id.into()).to_string())
+    };
+    Ok(o.index.score(find(&a)?, find(&b)?))
+}
+
+/// The longest side the lightbox shows at full size; a larger original gets a preview.
+pub const LIGHTBOX_MAX_SIDE: u32 = 8192;
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LightboxSource {
+    pub path: String,
+    /// The original itself; `false` for a cached PNG preview.
+    pub full: bool,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// What the lightbox loads: the original when the webview can show it (JPEG, PNG, WebP or
+/// GIF, longest side at most `LIGHTBOX_MAX_SIDE`), else a PNG decoded once into
+/// `<cache_dir>/lightbox/<hash>.png`, outside the library. The reference is resolved under the
+/// lock; the decode runs off it, off the main thread. IPC args: `{ refId }`.
+#[tauri::command(async)]
+pub fn lightbox_source<R: Runtime>(
+    app: AppHandle<R>,
+    ref_id: String,
+) -> Result<LightboxSource, String> {
+    let st = app.state::<AppState>();
+    let (original, r) = {
+        let open = lock(&st.open);
+        let o = open.as_ref().ok_or(NO_LIBRARY)?;
+        // Through `visible`: a hidden reference's hash never names a cache file.
+        let data = visible(&o.lib);
+        let r = data.references.iter().find(|r| r.id == ref_id);
+        let r = r.ok_or_else(|| EditError::UnknownReference(ref_id.clone()).to_string())?;
+        let original = o.lib.image_path(r).map_err(library_error)?;
+        (original, r.clone())
+    };
+    lightbox_from(&original, &r, &st.cache_dir.join("lightbox"))
+}
+
+fn lightbox_from(original: &Path, r: &Reference, cache: &Path) -> Result<LightboxSource, String> {
+    let ext = original.extension().and_then(|e| e.to_str());
+    let ext = ext.map(str::to_ascii_lowercase);
+    let shown = matches!(
+        ext.as_deref(),
+        Some("jpg" | "jpeg" | "png" | "webp" | "gif")
+    );
+    if shown && r.width.max(r.height) <= LIGHTBOX_MAX_SIDE {
+        return Ok(LightboxSource {
+            path: original.to_string_lossy().into_owned(),
+            full: true,
+            width: r.width,
+            height: r.height,
+        });
+    }
+    let png = cache.join(format!("{}.png", r.hash));
+    if !png.is_file() {
+        let d = import::decode_srgb(original).map_err(|s| format!("{s:?}"))?;
+        let (w, h) = import::fit(d.width, d.height, LIGHTBOX_MAX_SIDE);
+        let rgba = if (w, h) == (d.width, d.height) {
+            d.rgba
+        } else {
+            image::imageops::resize(&d.rgba, w, h, image::imageops::FilterType::Lanczos3)
+        };
+        // Through a temp file and a rename: a crash never leaves a half-written preview.
+        let io = |e: std::io::Error| e.to_string();
+        std::fs::create_dir_all(cache).map_err(io)?;
+        let tmp = tempfile::Builder::new()
+            .suffix(".tmp")
+            .tempfile_in(cache)
+            .map_err(io)?;
+        let mut w = std::io::BufWriter::new(tmp.as_file());
+        rgba.write_to(&mut w, image::ImageFormat::Png)
+            .map_err(|e| e.to_string())?;
+        std::io::Write::flush(&mut w).map_err(io)?;
+        drop(w);
+        tmp.persist(&png).map_err(|e| e.error.to_string())?;
+    }
+    let (width, height) = image::image_dimensions(&png).map_err(|e| e.to_string())?;
+    Ok(LightboxSource {
+        path: png.to_string_lossy().into_owned(),
+        full: false,
+        width,
+        height,
+    })
+}
+
+/// Lets the webview read the lightbox previews. From `setup`, and from the tests' mock app.
+pub fn allow_lightbox_cache<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    let dir = app.state::<AppState>().cache_dir.join("lightbox");
+    app.asset_protocol_scope().allow_directory(dir, true)
 }
 
 #[tauri::command]
@@ -1253,12 +1527,14 @@ mod tests {
             ])
             .manage(AppState::new(
                 dir.path().join("config"),
+                dir.path().join("cache"),
                 res.join("taxonomy.json"),
                 res.join("demo"),
             ))
             .build(mock_context(noop_assets()))
             .unwrap();
         start_saver(app.handle());
+        allow_lightbox_cache(app.handle()).unwrap();
         let lib = dir.path().join("lib").to_string_lossy().into_owned();
         Env {
             _dir: dir,
@@ -2154,6 +2430,189 @@ mod tests {
         let c = change(open.as_ref().unwrap(), &touched, None);
         assert!(c.references.is_empty());
         assert_eq!(c.removed, [id]);
+    }
+
+    // ---------- Plan 4 Task 3: link, board, export, pair-score and lightbox commands ----------
+
+    /// Two imported references, `small.jpg` then `p3_red.png`.
+    fn two_refs() -> (Env, String, String) {
+        let e = created();
+        let a = e.import("small.jpg").unwrap().added[0].clone();
+        let b = e.import("p3_red.png").unwrap().added[0].clone();
+        (e, a, b)
+    }
+
+    fn links_now(e: &Env) -> Vec<Link> {
+        lock(&st(e).open).as_ref().unwrap().lib.data.links.clone()
+    }
+
+    fn boards_now(e: &Env) -> Vec<Board> {
+        lock(&st(e).open).as_ref().unwrap().lib.data.boards.clone()
+    }
+
+    /// Decision 2: one link per unordered pair.
+    #[test]
+    fn add_link_reverse_pair_refused() {
+        let (e, a, b) = two_refs();
+        let c = add_link(e.handle(), a.clone(), b.clone(), "x".into()).unwrap();
+        let id = c.created.unwrap();
+        let err = add_link(e.handle(), b, a, "y".into()).unwrap_err();
+        assert_eq!(err, format!("DuplicateLink:{id}"));
+        assert_eq!(links_now(&e).len(), 1);
+    }
+
+    #[test]
+    fn link_crud_and_undo() {
+        let (e, a, b) = two_refs();
+        let original = links_now(&e);
+        let c = add_link(e.handle(), a, b, "Same light.".into()).unwrap();
+        let id = c.created.clone().unwrap();
+        assert_eq!(c.links.as_ref().map(Vec::len), Some(1));
+        let added = links_now(&e);
+        let c = update_link(e.handle(), id.clone(), "Both backlit.".into()).unwrap();
+        assert_eq!(c.links.unwrap()[0].why, "Both backlit.");
+        let updated = links_now(&e);
+        let c = remove_link(e.handle(), id.clone()).unwrap();
+        assert_eq!(c.links, Some(vec![]));
+        let err = remove_link(e.handle(), id.clone()).unwrap_err();
+        assert_eq!(err, format!("UnknownLink:{id}"));
+        for want in [updated, added, original] {
+            let c = undo(e.handle()).unwrap();
+            assert!(c.links.is_some());
+            assert_eq!(links_now(&e), want);
+        }
+    }
+
+    #[test]
+    fn board_crud_and_undo() {
+        let (e, a, b) = two_refs();
+        let mut states = vec![boards_now(&e)];
+        let c = create_board(e.handle(), " Harbour ".into(), vec![a.clone(), b.clone()]).unwrap();
+        let id = c.created.unwrap();
+        assert_eq!(c.boards.as_ref().unwrap()[0].name, "Harbour");
+        states.push(boards_now(&e));
+        let err = create_board(e.handle(), "harbour".into(), vec![]).unwrap_err();
+        assert_eq!(err, format!("BoardNameTaken:{id}"));
+        set_board_members(e.handle(), id.clone(), vec![b.clone(), a.clone()]).unwrap();
+        assert_eq!(boards_now(&e)[0].reference_ids, [b, a]);
+        states.push(boards_now(&e));
+        rename_board(e.handle(), id.clone(), "Night".into()).unwrap();
+        states.push(boards_now(&e));
+        let c = delete_board(e.handle(), id.clone()).unwrap();
+        assert_eq!(c.boards, Some(vec![]));
+        let err = rename_board(e.handle(), id.clone(), "x".into()).unwrap_err();
+        assert_eq!(err, format!("UnknownBoard:{id}"));
+        for want in states.into_iter().rev() {
+            let c = undo(e.handle()).unwrap();
+            assert!(c.boards.is_some());
+            assert_eq!(boards_now(&e), want);
+        }
+    }
+
+    #[test]
+    fn score_pair_matches_related() {
+        let e = created();
+        let a = e.import("small.jpg").unwrap().added[0].clone();
+        let b = e.import("p3_red.png").unwrap().added[0].clone();
+        let c = e.import("rotated.jpg").unwrap().added[0].clone();
+        add_tags(e.handle(), a.clone(), vec![chiaroscuro()]).unwrap();
+        add_tags(e.handle(), b.clone(), vec![chiaroscuro()]).unwrap();
+        let rel = related(e.handle(), a.clone()).unwrap();
+        let want = rel.iter().find(|s| s.id == b).unwrap();
+        let got = score_pair(e.handle(), a.clone(), b.clone()).unwrap();
+        assert!((got.score - want.score).abs() < 1e-9);
+        assert_eq!(got.shared_techniques, want.shared_techniques);
+        // An untagged pair is under MIN_SCORE: related leaves it out, score_pair still scores.
+        assert!(!rel.iter().any(|s| s.id == c));
+        assert_eq!(score_pair(e.handle(), a.clone(), c).unwrap().score, 0.0);
+
+        // A hidden reference (a bad hash) gets no score.
+        let path = Path::new(&e.lib).join("library.json");
+        let mut json: serde_json::Value = {
+            flush_open(lock(&st(&e).open).as_mut().unwrap()).unwrap();
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap()
+        };
+        let mut bad = json["references"][0].clone();
+        bad["id"] = "bad".into();
+        bad["hash"] = "../../evil".into();
+        json["references"].as_array_mut().unwrap().push(bad);
+        fs::write(&path, serde_json::to_vec(&json).unwrap()).unwrap();
+        open_library(e.handle(), e.lib.clone()).unwrap();
+        let err = score_pair(e.handle(), a, "bad".into()).unwrap_err();
+        assert_eq!(err, "unknown reference: bad");
+    }
+
+    #[test]
+    fn export_board_command() {
+        let (e, a, b) = two_refs();
+        let c = create_board(e.handle(), "Harbour".into(), vec![a, b]).unwrap();
+        let dest = tempfile::tempdir().unwrap();
+        let dest_s = dest.path().to_string_lossy().into_owned();
+        let id = c.created.unwrap();
+        let report = export_board(e.handle(), id, dest_s).unwrap();
+        assert_eq!(report.written.len(), 2, "{report:?}");
+        assert!(report.credits.is_some());
+        assert!(report.skipped.is_empty());
+    }
+
+    fn cache_of(e: &Env) -> PathBuf {
+        st(e).cache_dir.join("lightbox")
+    }
+
+    #[test]
+    fn lightbox_source_full_for_jpeg() {
+        let (e, a, _) = two_refs();
+        let got = lightbox_source(e.handle(), a.clone()).unwrap();
+        let state = st(&e);
+        let open = lock(&state.open);
+        let o = open.as_ref().unwrap();
+        let r = o.lib.data.references.iter().find(|r| r.id == a).unwrap();
+        let original = o.lib.image_path(r).unwrap();
+        assert_eq!(
+            got,
+            LightboxSource {
+                path: original.to_string_lossy().into_owned(),
+                full: true,
+                width: r.width,
+                height: r.height,
+            }
+        );
+        assert!(!cache_of(&e).exists(), "nothing decoded");
+    }
+
+    #[test]
+    fn lightbox_source_preview_for_tiff() {
+        let e = created();
+        let outside = tempfile::tempdir().unwrap();
+        let tiff = outside.path().join("plate.tif");
+        image::RgbImage::from_pixel(64, 48, image::Rgb([200, 40, 40]))
+            .save_with_format(&tiff, image::ImageFormat::Tiff)
+            .unwrap();
+        let p = tiff.to_string_lossy().into_owned();
+        let res = tauri::async_runtime::block_on(import_paths(e.handle(), vec![p], None, None));
+        let id = res.unwrap().report.added[0].clone();
+
+        let got = lightbox_source(e.handle(), id.clone()).unwrap();
+        assert!(!got.full);
+        assert_eq!((got.width, got.height), (64, 48));
+        let png = PathBuf::from(&got.path);
+        assert!(png.starts_with(cache_of(&e)) && png.is_file());
+        assert_eq!(png.extension().unwrap(), "png");
+        let files: Vec<_> = fs::read_dir(cache_of(&e)).unwrap().collect();
+        assert_eq!(files.len(), 1, "no temp file left");
+        let mtime = || fs::metadata(&png).unwrap().modified().unwrap();
+        let first = mtime();
+        std::thread::sleep(Duration::from_millis(20));
+        assert_eq!(lightbox_source(e.handle(), id).unwrap(), got);
+        assert_eq!(mtime(), first, "the cache hit is not decoded again");
+    }
+
+    #[test]
+    fn lightbox_cache_in_asset_scope() {
+        let e = env();
+        let scope = e.app.asset_protocol_scope();
+        assert!(scope.is_allowed(cache_of(&e).join("abc.png")));
+        assert!(!scope.is_allowed(st(&e).cache_dir.join("other.png")));
     }
 
     // ---------- Plan 4 Task 1: link and board edits save (B2) ----------
