@@ -525,7 +525,7 @@ export function mountReference(
     selectPane(next.dataset.pane!);
   }, { signal });
   document.addEventListener("keydown", (e) => {
-    if (e.isComposing) return;
+    if (e.isComposing || e.defaultPrevented) return; // a key a modal above already handled (Compare's Esc)
     if (drag && e.key === "Escape") return cancelDrag(); // a link drag aborts
     // Ctrl/⌘ combos (paste, copy…) belong to the browser; Alt only for Alt+← (Back).
     if (e.ctrlKey || e.metaKey || (e.altKey && e.key !== "ArrowLeft")) return;

@@ -601,6 +601,9 @@ describe("Reference view", () => {
     await view.ready;
     view.show("a");
     await settle();
+    const pin = $<HTMLButtonElement>("#pane-callouts .call .pin");
+    pin.click(); // the artist pins a callout first (re-review I2)
+    expect(pin.getAttribute("aria-pressed")).toBe("true");
     byCallout("silhouette");
     expect(chips()).toEqual(["Silhouette"]);
     const row = $<HTMLButtonElement>('#pane-ranked .row[data-go="b"]');
@@ -613,6 +616,7 @@ describe("Reference view", () => {
     expect(chips()).toEqual(["Silhouette"]); // the filter is kept
     expect($("#ref-id").textContent).toBe("a"); // no navigation
     expect(document.activeElement).toBe(row); // focus is back on the row
+    expect(pin.getAttribute("aria-pressed")).toBe("true"); // Compare's Esc never reaches the Reference view's Esc
   });
 
   it("filter_show_clears_chips", async () => {

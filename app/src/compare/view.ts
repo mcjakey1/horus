@@ -183,7 +183,10 @@ export function mountCompare(
     if ((e.target as Element).closest(".link-editor, input, textarea, select")) return; // the editor owns its keys
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === "Escape") {
+      // exit() removes the dialog mid-delivery: stop the key here, or the Reference view's document
+      // Esc (no longer seeing .compare) would clear the artist's pin (re-review I2).
       e.preventDefault();
+      e.stopPropagation();
       return exit();
     }
     if (e.key === "v") {
