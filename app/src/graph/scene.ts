@@ -343,6 +343,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     if (dirty) dirty = update();
   };
   app.ticker.add(tick);
+  const perf = import.meta.env.DEV || import.meta.env.VITE_PERF ? perfOverlay(app, host, () => tex.size()) : null;
 
   function setCamera(c: Camera, animate = false) {
     if (animate && !reducedMotion()) tween = { from: cam, to: c, t0: performance.now() };
@@ -552,9 +553,45 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       themeObserver.disconnect();
       resize?.disconnect();
       app.ticker.remove(tick);
+      perf?.();
       clearObjs();
       tex.destroy();
       app.destroy({ removeView: true }, { children: true });
     },
+  };
+}
+
+/**
+ * Task 11's speed check (dev or VITE_PERF builds only): the Pixi ticker's fps and the live texture
+ * count, with the worst fps and the most textures since the last reset (click the overlay, or call
+ * `__horusPerf.reset()` over CDP). fps is averaged per 500 ms window, which is also how often the
+ * text is written, so the overlay barely touches the frames it measures. Returns its teardown.
+ */
+function perfOverlay(app: PixiNS.Application, host: HTMLElement, texSize: () => number): () => void {
+  const el = document.createElement("div");
+  el.className = "perf-overlay";
+  el.style.cssText = "position:absolute;left:8px;bottom:8px;z-index:5;padding:2px 6px;font:11px/1.4 monospace;background:#000a;color:#fff;cursor:pointer;white-space:pre";
+  host.append(el);
+  const stats = { fps: 0, minFps: Infinity, tex: 0, maxTex: 0, reset() { stats.minFps = Infinity; stats.maxTex = 0; } };
+  (globalThis as unknown as { __horusPerf: typeof stats }).__horusPerf = stats;
+  el.onclick = () => stats.reset();
+  let frames = 0;
+  let t0 = performance.now();
+  const count = () => {
+    frames++;
+    stats.tex = texSize();
+    stats.maxTex = Math.max(stats.maxTex, stats.tex);
+    const now = performance.now();
+    if (now - t0 < 500) return;
+    stats.fps = (frames * 1000) / (now - t0);
+    stats.minFps = Math.min(stats.minFps, stats.fps);
+    frames = 0;
+    t0 = now;
+    el.textContent = `${stats.fps.toFixed(0)} fps (min ${stats.minFps.toFixed(0)})  tex ${stats.tex} (max ${stats.maxTex})`;
+  };
+  app.ticker.add(count);
+  return () => {
+    app.ticker.remove(count);
+    el.remove();
   };
 }
