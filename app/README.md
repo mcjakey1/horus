@@ -90,6 +90,56 @@ Plan 3 Task 11: the graph views at 2,500 references.
 
 The test libraries were deleted afterwards, and so was `%APPDATA%\art.horus.app`, which was absent before each run.
 
+## Plan 4 end-to-end check
+
+**Run:** 2026-11-26, on `plan4-boards` at `6e07004` (Plan 4 Tasks 0–7).
+- **Build:** the release perf build (`VITE_PERF=1 npm run tauri build -- --features perf --no-bundle`), driven over WebView2 CDP by `docs/superpowers/qa/plan4-e2e.js`.
+- **Why not `tauri dev`:** the brief named `tauri dev`. The release build is what ships, with the real CSP and the real opener capability.
+- **How the harness answers the dialogs:** it serves the library and export folders through the dialog IPC.
+- **Libraries:** temp libraries only. The export folder was `E:\D drive files\Design Second Brain\Export test\`, emptied afterwards.
+- **Window:** 1280×800 at DPR 1.
+
+**Step 1, the suites:**
+- `npx vitest run`: exit code 0, 45 files, 585 of 585, and no "Errors" line.
+- `npm run build`: exit 0. The only warning is Vite's existing chunk-size warning.
+- `cargo fmt --check`: exit 0.
+- `cargo test` (261 passed, 2 ignored, 1 doctest) and `cargo clippy --all-targets -D warnings`: verified by the controller at `189ff3a`. The Rust code is unchanged through `6e07004` (`git diff 189ff3a 6e07004 -- app/src-tauri` is empty).
+
+**Step 2, the manual run.** The demo library has 50 references and seeded in 9 s.
+
+| # | Check | Result | Measured |
+|---|---|---|---|
+| 1 | `b` on 10 references, a new board "Harbour" | PASS | 10 members; the margin reads "Boards: Harbour" |
+| 2 | Alt+→ in Boards, then Ctrl+Z | PASS (see F3) | Tiles 1 and 2 swapped; Ctrl+Z restored the order |
+| 3 | "Show only this board" | **FAIL (F1)** | Status reads "Board: Harbour · 10 references · Show all". But Ranked showed 3 scored rows that aren't on the board (5 scored rows). Search: not checked (the harness had no non-member title to search for). |
+| 4 | Export, twice; `credits.txt`; Open folder | PASS | 10 files `01 - …` to `10 - …`; `credits.txt` has 10 blocks in board order, no BOM and no CR. The toast read "Exported 10 to …". The second export gave 11 ` (2)` names, including `credits (2).txt`, and left the first files byte-identical. "Open folder" opened Explorer on the parent folder ("Design Second Brain"). Notepad, TextEdit, PureRef: not checked. |
+| 5 | Lightbox: zoom, pan, hover, draw at 400 % | PASS (see F2) | Zoom 416 % at the cursor; Space+drag panned (−120, −80). The new region matches the drag exactly as a fraction of the image at 416 %, at fit (57 %) and at 100 % (error 0.0000). Hover label: not checked (the reference had no region tags before). |
+| 6 | Shift-click, Compare, "Link these two" | PASS (see F4) | Shared: "Stand out › Simultaneous contrast". After the save, Compare shows "Linked by you: “same raking light”", and Ranked starts with "Linked by you". |
+| 7 | Three Ctrl+Z | PASS | The first removed the link; the second, the region tag (callouts 4 → 3); the third, the last board add (10 → 9 references) |
+| 8 | Edit a link's note, quit within 0.5 s, relaunch | PASS | Quit requested 374 ms after Save; the note was in `library.json` and in the Links tab after relaunch |
+| 9 | At scale: a 2,000-member board, 2,500-reference library | PASS | 36 `<img>` at the top and 48 scrolled to the middle (cap 200). The visible rows of tiles were drawn while scrolling. |
+
+**Hand checks** (things jsdom couldn't show), with a real mouse and keyboard over CDP:
+- **T4, the link handle:**
+  - The leader line shows during the drag.
+  - A drop on a Ranked row opens the editor "to Breaker Boys".
+  - Esc mid-drag, then release, opens nothing.
+  - A plain click opens the combobox.
+- **T5a:**
+  - Drag-reorder while scrolled to tile 1002 of 2,000: the ghost showed, the tile landed at 1004, and the scroll position held. No native image drag.
+  - "Open folder" (`revealItemInDir`) opens the parent with the folder selected; whether that reads right as "Open folder" is for QA.
+- **T6, Tab onto a region while zoomed:** not checked; the reference used had no region tag before the draw.
+- **T7, Compare:**
+  - Shift+Enter on a focused Ranked row opens Compare.
+  - Esc from Compare keeps the pinned callout and the filter chip.
+
+**Findings** (details in the Task 8 report):
+- **F1 (Important, cause not found):** under "Show only this board", Ranked showed 3 scored references that aren't on the board. The jsdom tests and the code both filter them.
+- **F2 (Minor):** tagging a region drawn at 416 % resets the lightbox zoom to 100 %.
+- **F3 (Minor):** after Alt+→ in Boards, keyboard focus fell to `<body>` instead of following the tile.
+- **F4 (Important):** after "Link these two" saves, Esc no longer closes Compare; focus is on `<body>`. Close works.
+- **The harness's first-run "Create" pick didn't register on 3 of 7 launches,** with no dialog IPC sent; a retry worked each time. This is not confirmed as an app bug.
+
 ## Plan 2 end-to-end check
 
 Run on 2026-11-25 at `5552f2d` (branch `p2-t12-e2e`), with the harness `docs/superpowers/qa/plan2-e2e.js`. It drives the release `horus.exe` over WebView2 CDP.
