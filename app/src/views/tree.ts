@@ -1,8 +1,9 @@
 // The taxonomy Tree view (SPEC §5): four bands on a canvas, the inspector docked on the right.
-// Read-only in Plan 3. The scene (Task 4) owns Enter, 0, +/- and the arrows while nothing is
+// Task 10: the inspector edits the taxonomy, and a technique dragged onto a branch links there. The scene (Task 4) owns Enter, 0, +/- and the arrows while nothing is
 // selected; the Tree listens for its `activate` and moves a selection through navigate.ts.
-import type { Api, Region } from "../api";
+import type { Api, Change, Region } from "../api";
 import type { DataSource } from "../data";
+import { esc } from "../esc";
 import { NODE } from "../graph/constants";
 import { mountCanvasOrFallback, type Scene, type SceneEdge, type SceneNode } from "../graph/frame";
 import { layoutTree } from "../graph/layout-tree";
@@ -11,7 +12,7 @@ import { createScene } from "../graph/scene";
 import { buildTaxGraph, type TaxGraph } from "../graph/taxgraph";
 import { opInk, opLabel } from "../ops";
 import type { ViewHandle } from "../views";
-import { renderInspector, selectionOf } from "./inspector";
+import { renderInspector, sayError, selectionOf } from "./inspector";
 
 /** Decision 3: "Show all references" is off by default and remembered for the session. */
 let showAllSession = false;
@@ -43,7 +44,15 @@ function pathOf(g: TaxGraph, sel: string | null): { op: string | null; ids: Set<
 export function mountTree(
   host: HTMLElement,
   data: DataSource,
-  deps: { api: Api; openReference(id: string): void; makeScene?: (el: HTMLElement) => Promise<Scene> },
+  deps: {
+    api: Api;
+    openReference(id: string): void;
+    makeScene?: (el: HTMLElement) => Promise<Scene>;
+    /** Task 10: store.apply. Without it the Tree stays read-only. */
+    apply?(c: Change): void;
+    /** Task 10: boot's notice, for refusals. */
+    notice?(html: string): void;
+  },
 ): ViewHandle {
   host.classList.add("tree");
   host.innerHTML = `<div class="tree-main">
@@ -62,6 +71,16 @@ export function mountTree(
   let stale = false;
   let fitOnShow = false;
 
+  const editing = () => !!deps.apply && !data.get().taxonomyReadOnly;
+  /** Drag to link (S3, R20): "ok" onto a branch that doesn't hold the technique yet, "no" onto one that does. */
+  const linkable = (dragged: string, target: string | null): "ok" | "no" | null => {
+    if (!dragged.startsWith("tech:") || !target?.startsWith("br:")) return null;
+    const { tax } = data.get();
+    const [t, b] = [dragged.slice(5), target.slice(3)];
+    if (!tax.branches.some((x) => x.id === b)) return null;
+    return tax.branchTechniques.some((l) => l.techniqueId === t && l.branchId === b) ? "no" : "ok";
+  };
+
   /** One technique is expanded: the selected one, or the one the selected reference sits under. */
   const expandedFor = (id: string | null): Set<string> | "all" => {
     if (showAllSession) return "all";
@@ -77,10 +96,14 @@ export function mountTree(
       g = buildTaxGraph(s, expandedFor(null));
     }
     renderInspector(insp, s, selectionOf(sel), {
-      editable: false,
+      editable: editing(),
       openReference: deps.openReference,
       select: (x) => select(x?.id ?? null),
       assetUrl: (p) => deps.api.assetUrl(p),
+      api: deps.api,
+      apply: deps.apply,
+      notice: deps.notice,
+      focusCanvas: () => stage.querySelector("canvas")?.focus(),
     });
     if (!scene) return;
     const placed = layoutTree(g);
@@ -188,6 +211,19 @@ export function mountTree(
     if (!sc) return; // the fallback paragraph is up; the inspector still works (Review Focus 1)
     scene = sc;
     sc.on("select", (id) => select(id));
+    sc.setDraggable((id) => id.startsWith("tech:") && editing()); // read live: a read-only library pans instead
+    sc.onDragOver?.((dragged, target) => {
+      const v = editing() ? linkable(dragged, target) : null;
+      const op = target && data.get().tax.branches.find((b) => `br:${b.id}` === target)?.operationId;
+      sc.setDropHint?.(v === "ok" ? { id: target!, color: opInk(data.get().tax, op ?? "").base } : v === "no" ? "blocked" : null);
+    });
+    sc.onDrop((dragged, target) => {
+      if (!editing() || linkable(dragged, target) !== "ok") return;
+      deps.api.linkTechnique(dragged.slice(5), target!.slice(3)).then(
+        (c) => deps.apply!(c),
+        (err) => deps.notice?.(`<p>${esc(sayError(err, data.get().tax))}</p>`),
+      );
+    });
     sc.on("activate", (id) => {
       const n = id ? g.nodes.get(id) : undefined;
       if (n?.kind === "ref") deps.openReference(n.refId);

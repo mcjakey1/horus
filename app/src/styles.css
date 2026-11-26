@@ -6,6 +6,12 @@
   --diff: #B87F00; --group: #1E8E5A; --seq: #2563D0; --infer: #D2462A;
   --diff-text: #7D5600; --group-text: #156B43; --seq-text: #1D4FA8; --infer-text: #A8341C;
   --diff-on: #161616; --group-on: #161616; --seq-on: #FFFFFF; --infer-on: #FFFFFF;
+  /* Extra operation inks (DESIGN.md): only ever an added operation's ink. */
+  --x-teal: #089B9B; --x-teal-text: #066B6B; --x-teal-on: #161616;
+  --x-olive: #6A7A1A; --x-olive-text: #455011; --x-olive-on: #FFFFFF;
+  --x-rose: #BC4E7B; --x-rose-text: #9B3B63; --x-rose-on: #FFFFFF;
+  --x-indigo: #8C84DB; --x-indigo-text: #675DD0; --x-indigo-on: #161616;
+  --x-umber: #815637; --x-umber-text: #5D3E28; --x-umber-on: #FFFFFF;
   --focus: #2563D0;
   --serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
   --mono: "Red Hat Mono", ui-monospace, "Cascadia Mono", monospace;
@@ -19,6 +25,11 @@
   --diff: #E0A42A; --group: #3DB07A; --seq: #5B8DEB; --infer: #EC6A4E;
   --diff-text: #E8B54A; --group-text: #5CC592; --seq-text: #8AAEF2; --infer-text: #F28A72;
   --diff-on: #161616; --group-on: #161616; --seq-on: #161616; --infer-on: #161616;
+  --x-teal: #0ABDBD; --x-teal-text: #0BDADA; --x-teal-on: #161616;
+  --x-olive: #9AA951; --x-olive-text: #A7B464; --x-olive-on: #161616;
+  --x-rose: #ED7EAC; --x-rose-text: #F098BD; --x-rose-on: #161616;
+  --x-indigo: #B7A4EF; --x-indigo-text: #CBBEF4; --x-indigo-on: #161616;
+  --x-umber: #A67E59; --x-umber-text: #B08E6D; --x-umber-on: #161616;
   --focus: #8AAEF2;
   color-scheme: dark;
 }
@@ -390,6 +401,38 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .insp-sel:hover, .insp-sel:focus-visible { border-color: var(--line-2); }
 .insp-sel .count { color: var(--ink-2); }
 .insp-body .text-btn { align-self: flex-start; }
+/* Task 10: taxonomy editing in the inspector, and its dialogs. No operation ink outside an operation's own swatch. */
+.insp-ro { margin: 0; padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--ink-2); }
+.insp-edit { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: text; }
+.insp-edit:hover { text-decoration: underline dotted var(--line-2); }
+.insp-ph { color: var(--ink-3); }
+.insp-field, .insp-form input, .insp-form textarea, .tx-search { width: 100%; padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--panel); color: var(--ink); font: 14px var(--sans); }
+.insp-title .insp-field { font: 500 21px/1.2 var(--serif); }
+.insp-area, .insp-form textarea { resize: vertical; }
+.insp-err, .insp-msg { display: block; margin: 0; font-size: 13px; color: var(--ink); }
+.insp-err:empty, .insp-msg:empty { display: none; }
+.insp-syns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.insp-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 8px; border: 1px solid var(--line); background: var(--shell); font-size: 13px; }
+.insp-x { padding: 2px 6px; border: 0; background: none; color: var(--ink-2); font-size: 15px; line-height: 1; }
+.insp-x:disabled, .insp-act:disabled { color: var(--ink-3); cursor: not-allowed; }
+.insp-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; align-items: center; }
+.insp-inks { display: flex; gap: 10px; }
+.insp-ink { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line-2); border-radius: 50%; background: var(--c, var(--ink-2)); /* --c: opInk, set through the CSSOM */ }
+.insp-ink[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
+.insp-icons { display: grid; gap: 4px; }
+.insp-icon { padding: 6px 10px; border: 1px solid var(--line); background: var(--shell); text-align: left; font-size: 13px; color: var(--ink-2); }
+.insp-icon[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
+.insp-slot:empty { display: none; }
+.insp-form { display: grid; gap: 8px; }
+.insp-form label { display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); }
+.tx-dialog { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; background: rgb(0 0 0 / .28); }
+.tx-sheet { width: min(460px, calc(100vw - 40px)); max-height: 80vh; overflow: auto; display: grid; gap: 10px; padding: 18px 20px; background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); font-size: 14px; }
+.tx-title { margin: 0; font: 500 19px/1.25 var(--serif); }
+.tx-h { margin: 0; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.tx-list { margin: 0; padding: 0; list-style: none; max-height: 40vh; overflow: auto; display: grid; gap: 2px; }
+.tx-list li[hidden] { display: none; }
+.tx-actions { display: flex; gap: 14px; align-items: center; }
+.tx-ok:disabled { opacity: .5; cursor: not-allowed; }
 
 /* Plan 3 Task 8: the Radial view. The operation switch is a segmented control that wraps to a
    second row past five operations; the inspector is the Tree's (.insp). */

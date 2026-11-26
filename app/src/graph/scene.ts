@@ -153,6 +153,23 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     hover: [], select: [], activate: [],
   };
   const drops: ((dragged: string, target: string | null) => void)[] = [];
+  const overs: ((dragged: string, target: string | null) => void)[] = [];
+  let over: string | null = null; // the node under the dragged one
+  let hint: { id: string; color: string } | "blocked" | null = null;
+  const setHint = (h: typeof hint) => {
+    hint = h;
+    canvas.style.cursor = h === "blocked" ? "not-allowed" : "";
+    dirty = true;
+  };
+  const dragOver = (dragged: string, target: string | null) => {
+    if (target === over) return;
+    over = target;
+    overs.forEach((f) => f(dragged, target));
+  };
+  const endDrag = (dragged: string) => {
+    dragOver(dragged, null);
+    setHint(null);
+  };
   const emit = (ev: "hover" | "select" | "activate", id: string | null, m: Mods) => handlers[ev].forEach((f) => f(id, m));
 
   const tex = new TexCache<PixiNS.Texture>(
@@ -268,6 +285,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     };
     if (hovered !== selected) ring(hovered, "var(--line-2)", 1);
     ring(selected, "var(--ink)", 2);
+    if (hint && hint !== "blocked") ring(hint.id, hint.color, 2);
     if (ghost) {
       const n = nodes.get(ghost.id);
       if (n && n.kind !== "label") marks.rect(ghost.x - n.size / 2, ghost.y - n.size / 2, n.size, n.size).fill({ color: resolveColor("var(--ink-2)"), alpha: 0.35 });
@@ -406,6 +424,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       else {
         ghost = { id: press.hit!, ...toWorld(sx, sy) };
         dirty = true;
+        dragOver(press.hit!, pickAt(ghost.x, ghost.y, press.hit!));
       }
       return;
     }
@@ -431,6 +450,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       ghost = null;
       dirty = true;
       const target = pickAt(w.x, w.y, p.hit);
+      endDrag(p.hit);
       drops.forEach((f) => f(p.hit!, target));
     }
   };
@@ -472,7 +492,10 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   canvas.addEventListener("pointerdown", onDown, { signal });
   canvas.addEventListener("pointermove", onMove, { signal });
   canvas.addEventListener("pointerup", onUp, { signal });
-  canvas.addEventListener("pointercancel", () => { press = null; ghost = null; dirty = true; }, { signal });
+  canvas.addEventListener("pointercancel", () => {
+    if (press?.mode === "drag" && press.hit) endDrag(press.hit);
+    press = null; ghost = null; dirty = true;
+  }, { signal });
   canvas.addEventListener("pointerleave", onLeave, { signal });
   canvas.addEventListener("dblclick", onDbl, { signal });
   canvas.addEventListener("wheel", onWheel, { passive: false, signal });
@@ -543,6 +566,10 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     onDrop(fn) {
       drops.push(fn);
     },
+    onDragOver(fn) {
+      overs.push(fn);
+    },
+    setDropHint: setHint,
     select(id) {
       selected = id && nodes.has(id) ? id : null;
       dirty = true;
