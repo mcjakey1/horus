@@ -1396,6 +1396,25 @@ mod tests {
         assert_eq!(snapshot(&e), before);
     }
 
+    /// Redo of a second batch shape (Plan 3 deferred list): a `delete_operation` that moves
+    /// branches and tags. After undo and redo, data and taxonomy equal the first apply's.
+    #[test]
+    fn redo_reapplies_a_second_batch_shape() {
+        let e = lib3();
+        let before = snapshot(&e);
+        let target = Some(OpMove::Operation {
+            operation_id: "differentiate".into(),
+        });
+        delete_operation(e.handle(), "group".into(), target).unwrap();
+        let applied = snapshot(&e);
+        assert_ne!(applied, before);
+        undo(e.handle()).unwrap();
+        assert_eq!(snapshot(&e), before);
+        let c = redo(e.handle()).unwrap();
+        assert!(c.taxonomy.is_some());
+        assert_eq!(snapshot(&e), applied, "redo equals the first apply");
+    }
+
     #[test]
     fn delete_operation_delete() {
         let e = lib3();
