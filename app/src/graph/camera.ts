@@ -35,3 +35,16 @@ export function viewRect(c: Camera, view: { w: number; h: number }, margin = 0.1
   const h = view.h / c.scale;
   return { x: c.x - w * margin, y: c.y - h * margin, w: w * (1 + 2 * margin), h: h * (1 + 2 * margin) };
 }
+
+/**
+ * Keeps `rect` on screen (final review I6): the same camera when the rect lies inside the view
+ * inset by `margin` of its size, otherwise one centred on the rect at the same scale.
+ */
+export function reveal(c: Camera, view: { w: number; h: number }, rect: Rect, margin = 0.05): Camera {
+  const w = view.w / c.scale;
+  const h = view.h / c.scale;
+  const inside = rect.x >= c.x + w * margin && rect.y >= c.y + h * margin
+    && rect.x + rect.w <= c.x + w * (1 - margin) && rect.y + rect.h <= c.y + h * (1 - margin);
+  if (inside) return c;
+  return { x: rect.x + rect.w / 2 - w / 2, y: rect.y + rect.h / 2 - h / 2, scale: c.scale };
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fit, pan, viewRect, zoomAt, type Camera } from "./camera";
+import { fit, pan, reveal, viewRect, zoomAt, type Camera } from "./camera";
 import { MAX_SCALE, MIN_SCALE } from "./constants";
 
 // Seeded LCG so a failure reproduces.
@@ -49,5 +49,17 @@ describe("camera", () => {
 
   it("viewRect adds the margin on every side", () => {
     expect(viewRect({ x: 0, y: 0, scale: 1 }, { w: 100, h: 50 })).toEqual({ x: -10, y: -5, w: 120, h: 60 });
+  });
+
+  it("reveal_pans_only_when_outside (final review I6)", () => {
+    const c: Camera = { x: 0, y: 0, scale: 2 }; // sees x 0..400, y 0..300 of the world
+    const view = { w: 800, h: 600 };
+    expect(reveal(c, view, { x: 100, y: 100, w: 20, h: 20 })).toBe(c); // inside: the same object
+    expect(reveal(c, view, { x: 5, y: 100, w: 20, h: 20 })).not.toBe(c); // inside the view, but in its 5% margin
+    const out = reveal(c, view, { x: 1000, y: -500, w: 20, h: 20 });
+    expect(out.scale).toBe(2);
+    const v = viewRect(out, view, 0);
+    expect(v.x + v.w / 2).toBeCloseTo(1010, 9); // centred on the rect
+    expect(v.y + v.h / 2).toBeCloseTo(-490, 9);
   });
 });

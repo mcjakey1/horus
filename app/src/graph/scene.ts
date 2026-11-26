@@ -5,7 +5,7 @@ import type * as PixiNS from "pixi.js";
 import type { Api } from "../api";
 import { isTextEntry } from "../keys";
 import { tileBox } from "../reference/tile";
-import { fit, pan, zoomAt, type Camera, type Rect } from "./camera";
+import { fit, pan, reveal, zoomAt, type Camera, type Rect } from "./camera";
 import { LABEL_FONT, TEX_CAP } from "./constants";
 import {
   buildGrids,
@@ -478,16 +478,17 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   const onKey = (e: KeyboardEvent) => {
     if (isTextEntry(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
     const { w, h } = view();
+    const base = tween?.to ?? cam; // fast presses compound: each starts where the last one is going (M1)
     const zero = e.key === "0" || (!e.shiftKey && e.code === "Digit0"); // AZERTY's unshifted "à"
-    if (e.key === "+" || e.key === "=") setCamera(zoomAt(cam, w / 2, h / 2, 1.25), true);
-    else if (e.key === "-") setCamera(zoomAt(cam, w / 2, h / 2, 0.8), true);
+    if (e.key === "+" || e.key === "=") setCamera(zoomAt(base, w / 2, h / 2, 1.25), true);
+    else if (e.key === "-") setCamera(zoomAt(base, w / 2, h / 2, 0.8), true);
     else if (zero) fitAll();
     else if (e.key === "Enter" && selected) emit("activate", selected, { shift: e.shiftKey });
     else if (e.key.startsWith("Arrow") && selected === null) {
       // With a selection, the view moves it (navigate.ts); without one, the arrows pan.
       const d = 60;
       const [dx, dy] = { ArrowLeft: [d, 0], ArrowRight: [-d, 0], ArrowUp: [0, d], ArrowDown: [0, -d] }[e.key] ?? [0, 0];
-      setCamera(pan(cam, dx, dy), true);
+      setCamera(pan(base, dx, dy), true);
     } else return;
     e.preventDefault();
   };
@@ -574,7 +575,15 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     },
     setDropHint: setHint,
     select(id) {
-      selected = id && nodes.has(id) ? id : null;
+      const next = id && nodes.has(id) ? id : null;
+      // A new selection (keyboard or inspector) is brought on screen; the same one re-sent by a
+      // render never pans, and a click has already set `selected` before it emits (I6).
+      if (next && next !== selected) {
+        const base = tween?.to ?? cam;
+        const c = reveal(base, view(), nodeRect(nodes.get(next)!));
+        if (c !== base) setCamera(c, true);
+      }
+      selected = next;
       dirty = true;
     },
     destroy() {
