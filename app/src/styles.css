@@ -467,6 +467,8 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 
 /* ---------- Plan 4 Task 6: the full lightbox (zoom, pan, region overlays, preview note) ---------- */
 /* The plate's left/top/width/height come from the zoom View through the CSSOM. */
+/* clip, not hidden: a clip box is not a scroll container, so focusing a region box can't scroll the plate (review I1) */
+.lb-stage { overflow: clip; }
 .lightbox.is-pan .lb-stage { cursor: grab; }
 .lb-boxes[hidden] { display: none; }
 /* A region overlay stays dotted in its operation ink (--c); hover or Tab raises it and names it. */

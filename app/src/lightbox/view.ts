@@ -84,6 +84,14 @@ export function openLightbox(
     for (const k of ["left", "top", "width", "height"] as const) plateEl.style.setProperty(k, `${p[k]}px`);
     zoomEl.textContent = `${Math.round(v.scale * 100)}%`;
   }
+  /** Pans so `r` (0..1 of the image) is centred, unless it is already wholly on screen. */
+  function reveal(r: Region) {
+    const s = rect();
+    const p = plateOf(cur(), imgSize);
+    const [l, t, w, h] = [p.left + r.x * p.width, p.top + r.y * p.height, r.w * p.width, r.h * p.height];
+    if (l >= 0 && t >= 0 && l + w <= s.width && t + h <= s.height) return;
+    setView(panBy(cur(), s.width / 2 - (l + w / 2), s.height / 2 - (t + h / 2), imgSize, vpOf(s)));
+  }
   function setView(v: View) {
     fitted = false;
     view = v;
@@ -233,7 +241,8 @@ export function openLightbox(
       }
       if (e.key === "1") return void zoomBy(1 / cur().scale); // one image pixel per CSS pixel
     }
-    if (t !== stage) return;
+    // The stage's keys work from a Tab-focused region box too (review I1).
+    if (t !== stage && !t.matches(".lb-box")) return;
     if (e.key === " ") {
       e.preventDefault();
       space = true;
@@ -259,10 +268,20 @@ export function openLightbox(
         : { ...r, x: clamp(r.x + dx * STEP, 0, 1 - r.w), y: clamp(r.y + dy * STEP, 0, 1 - r.h) },
     );
   }, { signal });
-  el.addEventListener("keyup", (e) => {
-    if (e.key !== " ") return;
+  // Space is released wherever focus went (a notice over the lightbox), or by leaving the window:
+  // a stuck Space would turn every drag into a pan (review I2).
+  const releaseSpace = () => {
     space = false;
     el.classList.remove("is-pan");
+  };
+  document.addEventListener("keyup", (e) => void (e.key === " " && releaseSpace()), { capture: true, signal });
+  window.addEventListener("blur", releaseSpace, { signal });
+  // A Tab-focused region box off-screen pans the View to show it (review I1); the stage is
+  // `overflow: clip`, so focus never scrolls it behind the View's back.
+  el.addEventListener("focusin", (e) => {
+    const id = (e.target as HTMLElement).closest?.<HTMLElement>(".lb-box")?.dataset.tag;
+    const r = regionTags().find((t) => t.id === id)?.region;
+    if (r) reveal(r);
   }, { signal });
   el.addEventListener("click", (e) => {
     if ((e.target as Element).closest(".lb-close")) close();
