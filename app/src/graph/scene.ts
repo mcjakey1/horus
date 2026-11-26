@@ -564,8 +564,10 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
 /**
  * Task 11's speed check (dev or VITE_PERF builds only): the Pixi ticker's fps and the live texture
  * count, with the worst fps and the most textures since the last reset (click the overlay, or call
- * `__horusPerf.reset()` over CDP). fps is averaged per 500 ms window, which is also how often the
- * text is written, so the overlay barely touches the frames it measures. Returns its teardown.
+ * `__horusPerf.<view>.reset()` over CDP, e.g. `__horusPerf.galaxy`). Views stay mounted while
+ * hidden, so each scene has its own entry, keyed by its `data-view-host`. fps is averaged per
+ * 500 ms window, which is also how often the text is written, so the overlay barely touches the
+ * frames it measures. Returns its teardown.
  */
 function perfOverlay(app: PixiNS.Application, host: HTMLElement, texSize: () => number): () => void {
   const el = document.createElement("div");
@@ -573,7 +575,9 @@ function perfOverlay(app: PixiNS.Application, host: HTMLElement, texSize: () => 
   el.style.cssText = "position:absolute;left:8px;bottom:8px;z-index:5;padding:2px 6px;font:11px/1.4 monospace;background:#000a;color:#fff;cursor:pointer;white-space:pre";
   host.append(el);
   const stats = { fps: 0, minFps: Infinity, tex: 0, maxTex: 0, reset() { stats.minFps = Infinity; stats.maxTex = 0; } };
-  (globalThis as unknown as { __horusPerf: typeof stats }).__horusPerf = stats;
+  const key = host.closest<HTMLElement>("[data-view-host]")?.dataset.viewHost ?? "scene";
+  const reg = ((globalThis as unknown as { __horusPerf?: Record<string, typeof stats> }).__horusPerf ??= {});
+  reg[key] = stats;
   el.onclick = () => stats.reset();
   let frames = 0;
   let t0 = performance.now();
@@ -593,5 +597,6 @@ function perfOverlay(app: PixiNS.Application, host: HTMLElement, texSize: () => 
   return () => {
     app.ticker.remove(count);
     el.remove();
+    if (reg[key] === stats) delete reg[key];
   };
 }
