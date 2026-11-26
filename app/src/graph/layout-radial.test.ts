@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BAND_GAP, LABEL_W, NODE } from "./constants";
+import { BAND_GAP, LABEL_W, REF_ARC } from "./constants";
 import { clashes, labelBox, nameOf, refOf, seed, snap, synth, tagOf } from "./fixtures.test-util";
 import { clipLabel } from "./frame";
 import { layoutRadial } from "./layout-radial";
@@ -13,6 +13,20 @@ function ringOf(g: TaxGraph, p: ReturnType<typeof layoutRadial>, kind: "branch" 
   const rs = [...p.entries()].filter(([k]) => g.nodes.get(k)?.kind === kind).map(([, q]) => r(q));
   for (const x of rs) expect(Math.abs(x - rs[0])).toBeLessThan(1e-6);
   return rs[0];
+}
+/** Ring 3's row index for a point: rows sit at r3 + j·REF_ARC, r3 = ring 2 + BAND_GAP. */
+function rowOf(q: { x: number; y: number }, r3: number) {
+  const j = (r(q) - r3) / REF_ARC;
+  expect(Math.abs(j - Math.round(j))).toBeLessThan(1e-6);
+  expect(Math.round(j)).toBeGreaterThanOrEqual(0);
+  return Math.round(j);
+}
+/** The least distance between two distinct points (one per reference). */
+function closest(pts: { x: number; y: number }[]) {
+  let d = Infinity;
+  for (let i = 0; i < pts.length; i++)
+    for (let j = i + 1; j < pts.length; j++) d = Math.min(d, Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y));
+  return d;
 }
 
 describe("layoutRadial", () => {
@@ -34,19 +48,16 @@ describe("layoutRadial", () => {
     expect(r2).toBeGreaterThanOrEqual(r1 + BAND_GAP - 1e-9);
     const techs = new Set(branches.flatMap((b) => g.children.get(b)!));
     for (const t of techs) expect(p.has(t)).toBe(true);
-    // ring 3: one radius for every reference, at least 3·BAND_GAP, grown for 62 references
+    // ring 3: every reference on one of ring 3's rows, the first BAND_GAP past ring 2
     const ring3 = [...p.entries()].filter(([k]) => k.startsWith("ref:"));
-    const r3 = r(ring3[0][1]);
-    expect(r3).toBeGreaterThan(3 * BAND_GAP);
-    for (const [, q] of ring3) expect(Math.abs(r(q) - r3)).toBeLessThan(1e-6);
+    for (const [, q] of ring3) rowOf(q, r2 + BAND_GAP);
     const placedRefs = new Set(ring3.map(([k]) => k.split(":")[2]));
     expect(placedRefs).toEqual(new Set(["a", "b", ...Array.from({ length: 60 }, (_, i) => `m${i}`)]));
     // a reference's nodes under several techniques share one point
     expect(p.get("ref:chiaroscuro:a")).toEqual(p.get("ref:silhouette:a"));
-    // distinct references keep the minimum arc spacing
-    const angles = [...new Set(ring3.map(([k]) => k.split(":")[2]))].map((id) => ang(ring3.find(([k]) => k.endsWith(`:${id}`))![1])).sort((x, y) => x - y);
-    for (let i = 1; i < angles.length; i++) expect((angles[i] - angles[i - 1]) * r3).toBeGreaterThanOrEqual(NODE + 8 - 1e-6);
-    expect((angles[0] + 2 * Math.PI - angles[angles.length - 1]) * r3).toBeGreaterThanOrEqual(NODE + 8 - 1e-6);
+    // distinct references keep the minimum spacing
+    const pts = [...placedRefs].map((id) => ring3.find(([k]) => k.endsWith(`:${id}`))![1]);
+    expect(closest(pts)).toBeGreaterThanOrEqual(0.95 * REF_ARC);
     // other operations' nodes are not placed
     expect(p.has("op:group")).toBe(false);
     expect(p.has("tech:closure")).toBe(false);
@@ -67,7 +78,27 @@ describe("layoutRadial", () => {
     const seq = layoutRadial(g, "sequence");
     expect(seq.has("ref:chiaroscuro:s")).toBe(true);
     expect(seq.has("ref:chiaroscuro:w")).toBe(true);
-    expect(r(seq.get("ref:chiaroscuro:s")!)).toBeGreaterThan(3 * BAND_GAP); // 62 references grow it
+    rowOf(seq.get("ref:chiaroscuro:s")!, ringOf(g, seq, "tech") + BAND_GAP);
+  });
+
+  it("ring3_packs_rows (final review I2)", () => {
+    const t = synth(1);
+    const techs = t.techniques.map((x) => x.id);
+    const refs = Array.from({ length: 2000 }, (_, i) => refOf(`r${i}`, [tagOf(t, { tech: techs[i % 4] }), ...(i % 7 ? [] : [tagOf(t, { tech: techs[(i + 1) % 4] }, 1)])]));
+    const g = buildTaxGraph(snap(t, refs), "all");
+    const p = layoutRadial(g, "o0");
+    const r3 = ringOf(g, p, "tech") + BAND_GAP;
+    const one = new Map<string, { x: number; y: number }>(); // one point per reference
+    for (const [k, q] of p) if (k.startsWith("ref:")) one.set(k.split(":")[2], q);
+    expect(one.size).toBe(2000);
+    const pts = [...one.values()];
+    for (const q of pts) {
+      expect(r(q)).toBeLessThanOrEqual(2200);
+      rowOf(q, r3);
+    }
+    expect(closest(pts)).toBeGreaterThanOrEqual(0.95 * REF_ARC);
+    // a reference under two techniques is one point
+    expect(p.get(`ref:${techs[0]}:r0`)).toEqual(p.get(`ref:${techs[1]}:r0`));
   });
 
   it("radial_single_tech_ref_angle", () => {

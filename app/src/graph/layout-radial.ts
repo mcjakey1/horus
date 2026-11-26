@@ -1,6 +1,10 @@
 // The Radial layout (SPEC §4): one operation at the centre, its branches on ring 1, its techniques
-// on ring 2, and every reference tagged with those techniques on ring 3. Radial always expands all
-// techniques (build the graph with "all"); culling carries the load.
+// on ring 2, and on ring 3 every reference tagged under this operation (a tag on one of its
+// branches). Rings 1 and 2 are sized so neighbouring labels never meet. Ring 3 is a band of
+// concentric rows REF_ARC apart, so 2,000+ references fit in a wheel about 1,600 units across
+// rather than one ring tens of thousands long (final review I2; a plan delta to Task 8, which
+// specified one growing ring). Radial always expands all techniques (build the graph with "all");
+// culling carries the load.
 import { BAND_GAP, LABEL_W, REF_ARC } from "./constants";
 import { type Placed, spread } from "./layout-tree";
 import type { TaxGraph } from "./taxgraph";
@@ -65,8 +69,8 @@ export function layoutRadial(g: TaxGraph, opId: string): Placed {
   const techAngle = new Map(techs.map((t, i) => [t, techAngles[i]]));
   techs.forEach((t, i) => p.set(t, polar(r2, techAngles[i])));
   // Ring 3: every reference tagged under this operation (a `vias` entry on one of its branches),
-  // one point each, at the mean angle of its techniques here; its nodes under each of those
-  // techniques share that point. The ring grows to keep REF_ARC between the kept references.
+  // one point each, near the mean angle of its techniques here; its nodes under each of those
+  // techniques share that point.
   const here = new Set(branches.map((b) => (g.nodes.get(b) as { branchId: string }).branchId));
   const byRef = new Map<string, { nodes: string[]; angles: number[] }>();
   for (const t of techs)
@@ -79,11 +83,26 @@ export function layoutRadial(g: TaxGraph, opId: string): Placed {
       byRef.set(n.refId, e);
     }
   const refs = [...byRef.values()];
-  const r3 = Math.max(r2 + BAND_GAP, (refs.length * REF_ARC) / TAU);
-  const refAngles = onRing(refs.map((e) => meanAngle(e.angles)), r3, REF_ARC);
-  refs.forEach((e, i) => {
-    const at = polar(r3, refAngles[i]);
-    for (const id of e.nodes) p.set(id, { ...at });
+  // Rows j = 0, 1, … at r3 + j·REF_ARC, each holding floor(TAU·r / REF_ARC): the fewest rows that
+  // hold them all. In order of wanted angle, each reference goes to the row least full for its
+  // size (ties: the inner row), so every row spans the whole angle range evenly.
+  const r3 = r2 + BAND_GAP;
+  const caps: number[] = [];
+  for (let held = 0; held < refs.length; held += caps[caps.length - 1])
+    caps.push(Math.floor((TAU * (r3 + caps.length * REF_ARC)) / REF_ARC));
+  const want = refs.map((e) => meanAngle(e.angles));
+  const rows: number[][] = caps.map(() => []);
+  for (const i of want.map((_, i) => i).sort((a, b) => want[a] - want[b])) {
+    let j = 0;
+    for (let k = 1; k < rows.length; k++) if (rows[k].length / caps[k] < rows[j].length / caps[j]) j = k;
+    rows[j].push(i);
+  }
+  rows.forEach((row, j) => {
+    const rj = r3 + j * REF_ARC;
+    onRing(row.map((i) => want[i]), rj, REF_ARC).forEach((a, k) => {
+      const at = polar(rj, a);
+      for (const id of refs[row[k]].nodes) p.set(id, { ...at });
+    });
   });
   return p;
 }

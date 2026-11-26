@@ -65,7 +65,7 @@ Plan 3 Task 11: the graph views at 2,500 references.
 | Far zoom shows only dots (Galaxy, Tree) | all dots | all dots, judged from screenshots | 2 (Galaxy) / 1 (Tree) | Pass for the Galaxy. Tree: re-check at QA. Since the final-review fix wave, taxonomy squares stay drawn at every zoom, so only the Tree's references become dots. |
 | Tree, Complementary pairing expanded: pan fitted / zoomed | ≥ 55 fps | min 130–131 / 130 | 3 / 1 | Pass |
 | Tree, "Show all references" on: pan fitted / zoomed | ≥ 55 fps | min 129–130 / 125–130 | 3 / 2 | Pass |
-| Radial, Differentiate: pan fitted / zoomed | ≥ 55 fps | min 130–131 / 130–131 | 3 / 2 | Pass. Only the taxonomy wheel is drawn here: no references, 0 textures. |
+| Radial, Differentiate: pan fitted / zoomed | ≥ 55 fps | min 130–131 / 130–131 | 3 / 2 | Re-measure at QA (ring 3 now on screen). These runs drew only the taxonomy wheel: no references, 0 textures, because ring 3 was one ring about 19,500 units out. The final-review fix wave packs it into rows (about 1,600 out at this size). |
 
 **Carry-ins:**
 - **The ~110 empty `PIXI.Text` joint nodes in the Tree:** not measured. The release build exposes no scene-graph hook.
