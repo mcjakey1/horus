@@ -161,6 +161,12 @@ describe("mountLinkEditor", () => {
     expect($<HTMLButtonElement>(".le-save").disabled).toBe(false);
   });
 
+  it("ignores Enter while an IME is composing", () => {
+    mountLinkEditor(host, api, store, { fromRef: "A" });
+    $(".le-q").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true }));
+    expect(document.querySelector(".le-to")).toBeNull();
+  });
+
   it("Esc closes the editor", () => {
     mountLinkEditor(host, api, store, { fromRef: "A", toRef: "B" });
     $(".le-why").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));

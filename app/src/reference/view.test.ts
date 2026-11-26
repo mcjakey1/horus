@@ -869,6 +869,26 @@ describe("links you draw", () => {
     expect($("#pane-links").textContent).toContain("No links drawn from this reference yet.");
   });
 
+  it("keeps keyboard focus in the Links tab after a Delete", async () => {
+    await mount();
+    api.removeLink = vi.fn(async () => ({ ...none, links: [] }));
+    $<HTMLButtonElement>('.m-tab[data-pane="links"]').click();
+    const del = $<HTMLButtonElement>('#pane-links [data-link-del="l1"]');
+    del.focus();
+    expect(document.activeElement).toBe(del);
+    del.click();
+    await settle();
+    expect(document.activeElement).toBe($("#pane-links [data-link-new]"));
+  });
+
+  it("a board scope change refreshes the focus", async () => {
+    await mount();
+    const calls = vi.mocked(api.related).mock.calls.length;
+    store.setScope(null);
+    await settle();
+    expect(vi.mocked(api.related).mock.calls.length).toBe(calls + 1);
+  });
+
   it("Edit on a link row opens the editor on that link", async () => {
     await mount();
     $<HTMLButtonElement>('#pane-links [data-link-edit="l1"]').click();
@@ -944,6 +964,7 @@ describe("links you draw", () => {
     it("registers no dragstart listener anywhere", async () => {
       const spy = vi.spyOn(EventTarget.prototype, "addEventListener");
       await mount();
+      expect(spy.mock.calls.some(([type]) => type === "pointerdown")).toBe(true); // the spy sees the view's listeners
       expect(spy.mock.calls.some(([type]) => type === "dragstart")).toBe(false);
       spy.mockRestore();
     });

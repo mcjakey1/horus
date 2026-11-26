@@ -159,6 +159,7 @@ export function mountReference(
   }
 
   function renderEmpty() {
+    linkEditor?.close(); // nothing left to link from
     S.focus = S.pinned = S.hot = S.arrival = null;
     S.filter = noFilter();
     S.related = [];
@@ -334,9 +335,12 @@ export function mountReference(
           <div class="link-actions"><button type="button" class="text-btn" data-link-edit="${esc(l.id)}" aria-label="Edit the note on the link to ${t}">Edit</button><button type="button" class="text-btn" data-link-del="${esc(l.id)}" aria-label="Delete the link to ${t}">Delete</button></div></div>`;
       })
       .join("");
-    $("#pane-links")!.innerHTML =
+    const pane = $("#pane-links")!;
+    const hadFocus = pane.contains(document.activeElement); // innerHTML drops it (a Delete, a save)
+    pane.innerHTML =
       `<button type="button" class="text-btn link-new" data-link-new aria-keyshortcuts="k">+ Link to…</button><p class="links-msg" role="status"></p>` +
       (ls.length ? rows : `<p class="none">No links drawn from this reference yet.</p>`);
+    if (hadFocus) pane.querySelector<HTMLElement>("[data-link-new]")!.focus();
   }
 
   function renderRecord(ref: Reference, tag: Tag | null) {

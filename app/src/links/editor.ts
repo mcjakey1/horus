@@ -108,7 +108,7 @@ export function mountLinkEditor(
         e.preventDefault();
         if (n) st.active = (st.active + (e.key === "ArrowDown" ? 1 : -1) + n) % n;
         renderOpts();
-      } else if (e.key === "Enter") {
+      } else if (e.key === "Enter" && !e.isComposing) {
         e.preventDefault();
         const id = $(".le-opts").children[st.active]?.getAttribute("data-r");
         if (id) choose(id);
@@ -127,8 +127,11 @@ export function mountLinkEditor(
     $(".le-opts").innerHTML = list
       .map((r, k) => `<li role="option" id="${name}-o${k}" data-r="${esc(r.id)}" aria-selected="${k === st.active}">${esc(r.title)}</li>`)
       .join("");
-    if (list.length) q.setAttribute("aria-activedescendant", `${name}-o${Math.min(st.active, list.length - 1)}`);
-    else q.removeAttribute("aria-activedescendant");
+    if (list.length) {
+      const id = `${name}-o${Math.min(st.active, list.length - 1)}`;
+      q.setAttribute("aria-activedescendant", id);
+      el.querySelector(`#${id}`)?.scrollIntoView?.({ block: "nearest" }); // the list scrolls past 6 rows
+    } else q.removeAttribute("aria-activedescendant");
   }
 
   function choose(id: string) {
