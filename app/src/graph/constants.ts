@@ -10,6 +10,7 @@ export const EDGE_W1 = 2.25;
 export const BAND_GAP = 160; // world units between Tree bands and Radial rings
 export const NODE = 48; // reference node size in world units
 export const MAX_OPS = 9; // number keys 1–9 reach each operation
+export const COLLIDE_R = NODE * Math.SQRT1_2 + 2; // Galaxy: a square card's half-diagonal, plus 2 (final review M2)
 // Layout spacing (final review I1, I2, I5): the Tree's band step and reference grid, and the
 // label box both layouts make room for.
 export const GAP = NODE + 16; // least x spacing between neighbours in a Tree band

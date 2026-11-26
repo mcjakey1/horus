@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Edge } from "../api";
-import { NODE } from "./constants";
+import { COLLIDE_R, NODE } from "./constants";
 import { createForce, initialPosition, runForce, type XY } from "./force";
 
 const dist = (a: XY, b: XY) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -72,12 +72,23 @@ describe("force layout", () => {
   });
 
   it("tiles_in_a_cluster_do_not_overlap", () => {
-    // I3: forceCollide keeps tiles inside a tight clique legible (radius NODE/2 + 4).
+    // I3: forceCollide keeps tiles inside a tight clique legible (radius COLLIDE_R since final review M2).
     const { ids, edges } = clique("k", 10, 0.8);
     const p = runForce({ ids, edges, seed: 5 }, 600);
     let closest = Infinity;
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) closest = Math.min(closest, dist(p[ids[i]], p[ids[j]]));
     expect(closest).toBeGreaterThan(NODE * 0.9);
+  });
+
+  it("a demo-sized library settles with no two cards overlapping (final review M2)", () => {
+    // 50 references: five cliques of 8 at mixed scores, chained loosely, and 10 untagged
+    const parts = [0.9, 0.7, 0.5, 0.3, 0.15].map((s, k) => clique(`c${k}`, 8, s));
+    const ids = [...parts.flatMap((p) => p.ids), ...Array.from({ length: 10 }, (_, i) => `u${i}`)];
+    const edges = [...parts.flatMap((p) => p.edges), ...parts.slice(1).map((p, k) => ({ a: parts[k].ids[0], b: p.ids[0], score: 0.1 }))];
+    const p = runForce({ ids, edges, seed: 7 }, 600);
+    let closest = Infinity;
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) closest = Math.min(closest, dist(p[ids[i]], p[ids[j]]));
+    expect(closest).toBeGreaterThanOrEqual(0.95 * 2 * COLLIDE_R);
   });
 
   it("edges_to_unknown_ids_are_ignored", () => {
