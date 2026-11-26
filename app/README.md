@@ -62,7 +62,7 @@ Plan 3 Task 11: the graph views at 2,500 references.
 | Galaxy pan, zoomed in (thumbnails) | ≥ 55 fps | min 118 | 1 | Pass |
 | Zooming | ≥ 55 fps | Zoom-in fps: not measured. Lowest fps across a zoomed pan, a fit and 30 notches out to far zoom: Galaxy 98–105, Tree 87–89 | 2 | Pass for zooming out; zoom-in not measured |
 | Peak live textures (any view, any run) | ≤ 600 | 600 (Galaxy); 154 (Tree); 0 (Radial) | 3 | Pass |
-| Far zoom shows only dots (Galaxy, Tree) | all dots | all dots, judged from screenshots | 2 (Galaxy) / 1 (Tree) | Pass |
+| Far zoom shows only dots (Galaxy, Tree) | all dots | all dots, judged from screenshots | 2 (Galaxy) / 1 (Tree) | Pass for the Galaxy. Tree: re-check at QA. Since the final-review fix wave, taxonomy squares stay drawn at every zoom, so only the Tree's references become dots. |
 | Tree, Complementary pairing expanded: pan fitted / zoomed | ≥ 55 fps | min 130–131 / 130 | 3 / 1 | Pass |
 | Tree, "Show all references" on: pan fitted / zoomed | ≥ 55 fps | min 129–130 / 125–130 | 3 / 2 | Pass |
 | Radial, Differentiate: pan fitted / zoomed | ≥ 55 fps | min 130–131 / 130–131 | 3 / 2 | Pass. Only the taxonomy wheel is drawn here: no references, 0 textures. |

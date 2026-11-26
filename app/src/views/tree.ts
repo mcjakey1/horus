@@ -4,9 +4,9 @@
 import type { Api, Change, Region } from "../api";
 import type { DataSource } from "../data";
 import { esc } from "../esc";
-import { NODE } from "../graph/constants";
-import { mountCanvasOrFallback, type Scene, type SceneEdge, type SceneNode } from "../graph/frame";
-import { layoutTree } from "../graph/layout-tree";
+import { LABEL_ROW, NODE } from "../graph/constants";
+import { clipLabel, mountCanvasOrFallback, type Scene, type SceneEdge, type SceneNode } from "../graph/frame";
+import { labelRows, layoutTree } from "../graph/layout-tree";
 import { canvasKeys, move } from "../graph/navigate";
 import { createScene } from "../graph/scene";
 import { buildTaxGraph, type TaxGraph } from "../graph/taxgraph";
@@ -107,6 +107,7 @@ export function mountTree(
     });
     if (!scene) return;
     const placed = layoutTree(g);
+    const rows = labelRows(g, placed); // branch and technique labels on 3 staggered rows (I1)
     const path = pathOf(g, sel);
     const ink = path.op ? opInk(s.tax, path.op).base : HAIR;
     const colorOf = (id: string) => (path.ids.has(id) ? ink : HAIR);
@@ -125,7 +126,10 @@ export function mountTree(
         const label = n.kind === "op" ? opLabel(s.tax, n.opId).name
           : n.kind === "branch" ? (s.tax.domains.find((d) => d.id === n.domainId)?.name ?? n.domainId)
           : (s.tax.techniques.find((t) => t.id === n.techId)?.name ?? n.techId);
-        nodes.push({ id: n.id, kind: n.kind, x, y, size: SIZE[n.kind], color: colorOf(n.id), label });
+        nodes.push({
+          id: n.id, kind: n.kind, x, y, size: SIZE[n.kind], color: colorOf(n.id), label: clipLabel(label),
+          ...(n.kind === "op" ? {} : { labelDy: rows.get(n.id)! * LABEL_ROW }),
+        });
       }
     }
     // Orthogonal hairlines: down from the parent to the gap between the bands, across, then down

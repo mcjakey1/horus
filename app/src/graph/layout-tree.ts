@@ -1,13 +1,10 @@
 // The Tree layout (SPEC §4): four bands, operations on top. Each technique is placed once, at the
 // mean x of its parent branches, then pushed apart; edges are drawn as orthogonal hairlines from
 // each parent, so a DAG needs no duplicated nodes.
-import { BAND_GAP, NODE } from "./constants";
+import { BAND_GAP, GAP, ROW } from "./constants";
 import type { TaxGraph } from "./taxgraph";
 
 export type Placed = Map<string, { x: number; y: number }>;
-
-const GAP = NODE + 16; // least x spacing between neighbours in a band
-const ROW = NODE + 8; // step between references in a technique's column
 
 /**
  * Least-squares placement of sorted `want` values with neighbours at least `gap` apart: pool
@@ -30,6 +27,20 @@ export function spread(want: number[], gap: number): number[] {
   const out: number[] = [];
   for (const b of blocks) for (let k = 0; k < b.n; k++) out.push(b.sum / b.n + out.length * gap);
   return out;
+}
+
+/**
+ * The label row (0, 1 or 2) of each branch and technique: by x order within its band, so labels
+ * on one row are at least 3 × GAP = 192 apart, wider than a clipped label (final review I1).
+ */
+export function labelRows(g: TaxGraph, p: Placed): Map<string, number> {
+  const rows = new Map<string, number>();
+  for (const kind of ["branch", "tech"] as const) {
+    const band = [...g.nodes.values()].filter((n) => n.kind === kind && p.has(n.id)).map((n) => n.id);
+    band.sort((a, b) => p.get(a)!.x - p.get(b)!.x);
+    band.forEach((id, k) => rows.set(id, k % 3));
+  }
+  return rows;
 }
 
 export function layoutTree(g: TaxGraph): Placed {

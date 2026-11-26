@@ -6,6 +6,8 @@ import { NODE, TEX_CAP } from "./constants";
 import {
   buildGrids,
   classifyDrag,
+  clipLabel,
+  labelShown,
   mountCanvasOrFallback,
   nodeRect,
   planFrame,
@@ -86,6 +88,27 @@ describe("planFrame", () => {
     const nodes = new Map<string, SceneNode>();
     const plan = planFrame(buildGrids(nodes).all, nodes, { x: 0, y: 0, scale: 1 }, { w: 100, h: 100 });
     expect(plan.visible).toEqual([]);
+  });
+
+  it("taxonomy nodes never become dots; references still do (final review I1)", () => {
+    const nodes = new Map<string, SceneNode>([
+      ["tech:a", { id: "tech:a", kind: "tech", x: 0, y: 0, size: 20, color: "var(--ink-3)", label: "A" }],
+      ["op:o", { id: "op:o", kind: "op", x: 40, y: 0, size: 28, color: "var(--diff)", label: "O" }],
+      ["r", { id: "r", kind: "ref", x: 80, y: 0, size: 20, url: "u/r", aspect: 1 }],
+    ]);
+    const plan = planFrame(buildGrids(nodes).all, nodes, { x: -1000, y: -1000, scale: 0.1 }, { w: 1000, h: 1000 });
+    expect(plan.lod.get("tech:a")).toBe("thumb");
+    expect(plan.lod.get("op:o")).toBe("thumb");
+    expect(plan.lod.get("r")).toBe("dot");
+  });
+
+  it("labels hide below 8 screen px and are cut at 24 characters (final review I1)", () => {
+    expect(labelShown(0.5)).toBe(false); // 6.5 px
+    expect(labelShown(1)).toBe(true);
+    expect(labelShown(8 / 13)).toBe(true);
+    expect(clipLabel("Rim light")).toBe("Rim light");
+    expect(clipLabel("x".repeat(24))).toBe("x".repeat(24));
+    expect(clipLabel("Complementary pairing of warm and cool")).toBe("Complementary pairing of…");
   });
 });
 

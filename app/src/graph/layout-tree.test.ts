@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { BAND_GAP, NODE } from "./constants";
-import { refOf, seed, snap, synth, tagOf } from "./fixtures.test-util";
-import { layoutTree } from "./layout-tree";
+import { clipLabel } from "./frame";
+import { BAND_GAP, GAP, NODE } from "./constants";
+import { clashes, labelBox, nameOf, refOf, seed, snap, synth, tagOf } from "./fixtures.test-util";
+import { labelRows, layoutTree } from "./layout-tree";
 import { buildTaxGraph, type TaxGraph } from "./taxgraph";
 
 const BAND = { op: 0, branch: BAND_GAP, tech: 2 * BAND_GAP } as const;
-const GAP = NODE + 16;
 
 /** x values of a band's nodes, left to right. */
 function bandXs(g: TaxGraph, p: ReturnType<typeof layoutTree>, kind: "op" | "branch" | "tech") {
@@ -95,6 +95,24 @@ describe("layoutTree", () => {
     expect(allFinite(pb)).toBe(true);
     const tx = [...pb.entries()].filter(([k]) => k.startsWith("tech:")).map(([, q]) => q.x).sort((a, b) => a - b);
     for (let i = 1; i < tx.length; i++) expect(tx[i] - tx[i - 1]).toBeGreaterThanOrEqual(GAP);
+  });
+
+  it("labels_never_overlap (final review I1)", () => {
+    const long = synth(2);
+    long.techniques.forEach((t, i) => (t.name = `A very long technique name number ${i}`)); // names the artist types
+    for (const tax of [seed, long]) {
+      const g = buildTaxGraph(snap(tax));
+      const p = layoutTree(g);
+      const rows = labelRows(g, p);
+      for (const kind of ["branch", "tech"] as const) {
+        const boxes = [...g.nodes.values()].filter((n) => n.kind === kind).map((n) => {
+          const { x, y } = p.get(n.id)!;
+          return { id: n.id, box: labelBox(x, y, 20, clipLabel(nameOf(tax, n.id)), rows.get(n.id)) };
+        });
+        expect(boxes.length).toBeGreaterThan(1);
+        expect(clashes(boxes)).toEqual([]);
+      }
+    }
   });
 
   it("empty_library_no_nan (Review Focus 2)", () => {

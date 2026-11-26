@@ -160,6 +160,18 @@ describe("Tree view", () => {
     expect(es.slice(es.length - inked.length).every((e) => e.color === "var(--diff)")).toBe(true);
   });
 
+  it("labels are cut at 24 characters and staggered over 3 rows (final review I1)", () => {
+    const tax = { ...seed, techniques: seed.techniques.map((t) => (t.id === "chiaroscuro" ? { ...t, name: "Chiaroscuro with a very long name" } : t)) };
+    src.set({ ...snap(tax, refs), version: 1 });
+    const ns = fake.last();
+    const chi = ns.find((n) => n.id === "tech:chiaroscuro") as { label: string };
+    expect(chi.label).toBe("Chiaroscuro with a very …");
+    const dy = (kind: string) => ns.filter((n) => n.kind === kind).map((n) => (n as { labelDy?: number }).labelDy);
+    expect(new Set(dy("tech"))).toEqual(new Set([0, 18, 36]));
+    expect(new Set(dy("branch"))).toEqual(new Set([0, 18, 36]));
+    expect(dy("op").every((d) => d === undefined)).toBe(true);
+  });
+
   it("arrow_up_goes_to_parent", () => {
     fake.emit("select", "tech:face-schema");
     key("ArrowUp");

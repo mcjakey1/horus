@@ -6,11 +6,12 @@ import type { Api } from "../api";
 import { isTextEntry } from "../keys";
 import { tileBox } from "../reference/tile";
 import { fit, pan, zoomAt, type Camera, type Rect } from "./camera";
-import { TEX_CAP } from "./constants";
+import { LABEL_FONT, TEX_CAP } from "./constants";
 import {
   buildGrids,
   classifyDrag,
   EdgeGate,
+  labelShown,
   sameLook,
   nodeRect,
   planFrame,
@@ -89,7 +90,7 @@ type Obj = {
   body?: PixiNS.Container; // the tile or shape drawn in "thumb" LOD
   sprite?: PixiNS.Sprite;
   outline?: PixiNS.Graphics;
-  label?: PixiNS.Text;
+  label?: PixiNS.Text; // a label node's text, or a taxonomy node's name (hidden when tiny)
 };
 
 // ---------- the scene ----------
@@ -247,10 +248,11 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         if (n.kind === "op") g.fill(ink);
         else g.fill(resolveColor("var(--panel)")).stroke({ width: 1, color: ink });
         body.addChild(g);
-        const t = new PIXI.Text({ text: n.label, style: { fontFamily: "Source Serif 4, Georgia, serif", fontSize: 13, fill: resolveColor("var(--ink)") } });
+        const t = new PIXI.Text({ text: n.label, style: { fontFamily: "Source Serif 4, Georgia, serif", fontSize: LABEL_FONT, fill: resolveColor("var(--ink)") } });
         t.anchor.set(0.5, 0);
-        t.position.set(0, half + 4);
+        t.position.set(0, half + 4 + (n.labelDy ?? 0));
         body.addChild(t);
+        o.label = t;
       }
       o.body = body;
       root.addChild(dot, body);
@@ -321,6 +323,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       o.dot.visible = !thumb;
       o.dot.scale.set(1 / cam.scale); // a 3 px dot at every zoom
       o.body.visible = thumb;
+      if (o.label) o.label.visible = labelShown(cam.scale); // a taxonomy name (I1)
       if (n.kind === "ref" && o.sprite) {
         if (!thumb) {
           o.sprite.texture = PIXI.Texture.EMPTY;

@@ -6,7 +6,7 @@ import type { Api, Region } from "../api";
 import type { DataSource, Snapshot } from "../data";
 import { esc } from "../esc";
 import { MAX_OPS, NODE } from "../graph/constants";
-import { mountCanvasOrFallback, type Scene, type SceneEdge, type SceneNode } from "../graph/frame";
+import { clipLabel, mountCanvasOrFallback, type Scene, type SceneEdge, type SceneNode } from "../graph/frame";
 import { layoutRadial } from "../graph/layout-radial";
 import type { Placed } from "../graph/layout-tree";
 import { canvasKeys, move } from "../graph/navigate";
@@ -188,7 +188,7 @@ export function mountRadial(
         const label = n.kind === "op" ? opLabel(s.tax, n.opId).name
           : n.kind === "branch" ? (s.tax.domains.find((d) => d.id === n.domainId)?.name ?? n.domainId)
           : (s.tax.techniques.find((t) => t.id === n.techId)?.name ?? n.techId);
-        nodes.push({ id, kind: n.kind, x, y, size: SIZE[n.kind], color: path.has(id) ? ink : HAIR, label });
+        nodes.push({ id, kind: n.kind, x, y, size: SIZE[n.kind], color: path.has(id) ? ink : HAIR, label: clipLabel(label) });
       }
     }
     scene.setNodes(nodes);

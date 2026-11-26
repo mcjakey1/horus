@@ -1,13 +1,15 @@
 // The Radial layout (SPEC §4): one operation at the centre, its branches on ring 1, its techniques
 // on ring 2, and every reference tagged with those techniques on ring 3. Radial always expands all
 // techniques (build the graph with "all"); culling carries the load.
-import { BAND_GAP, NODE } from "./constants";
+import { BAND_GAP, LABEL_W, REF_ARC } from "./constants";
 import { type Placed, spread } from "./layout-tree";
 import type { TaxGraph } from "./taxgraph";
 
 const TAU = 2 * Math.PI;
-const TECH_ARC = NODE + 16; // least arc length between techniques
-const REF_ARC = NODE + 8; // least arc length between references
+/** The least radius at which n evenly spaced neighbours are LABEL_W apart (a chord); 0 below 2. */
+const chordR = (n: number) => (n < 2 ? 0 : LABEL_W / (2 * Math.sin(Math.PI / n)));
+/** The angle between neighbours LABEL_W apart on a ring of radius r. */
+const labelAngle = (r: number) => 2 * Math.asin(Math.min(1, LABEL_W / (2 * r)));
 
 const polar = (r: number, a: number) => ({ x: r * Math.cos(a), y: r * Math.sin(a) });
 /** Circular mean; opposite angles have none, and atan2(0, 0) = 0 keeps that finite. */
@@ -45,19 +47,23 @@ export function layoutRadial(g: TaxGraph, opId: string): Placed {
   if (!g.nodes.has(op)) return p;
   p.set(op, { x: 0, y: 0 });
   const kids = (id: string) => g.children.get(id) ?? [];
-  // Ring 1: the branches, evenly, starting at the top.
+  // Ring 1: the branches, evenly, starting at the top, far enough out that neighbouring labels
+  // (LABEL_W wide) don't meet (final review I1).
   const branches = kids(op);
+  const r1 = Math.max(BAND_GAP, chordR(branches.length));
   const branchAngle = new Map(branches.map((b, i) => [b, -Math.PI / 2 + (TAU * i) / branches.length]));
-  for (const [b, a] of branchAngle) p.set(b, polar(BAND_GAP, a));
-  // Ring 2: each technique at the mean angle of its parent branches in this operation.
+  for (const [b, a] of branchAngle) p.set(b, polar(r1, a));
+  // Ring 2: each technique at the mean angle of its parent branches in this operation, on the
+  // smallest ring past r1 + BAND_GAP where every technique gets a label's chord.
   const techs = [...new Set(branches.flatMap(kids))];
+  const r2 = Math.max(r1 + BAND_GAP, chordR(techs.length));
   const techAngles = onRing(
     techs.map((t) => meanAngle(branches.filter((b) => kids(b).includes(t)).map((b) => branchAngle.get(b)!))),
-    2 * BAND_GAP,
-    TECH_ARC,
+    r2,
+    r2 * labelAngle(r2), // onRing takes an arc length
   );
   const techAngle = new Map(techs.map((t, i) => [t, techAngles[i]]));
-  techs.forEach((t, i) => p.set(t, polar(2 * BAND_GAP, techAngles[i])));
+  techs.forEach((t, i) => p.set(t, polar(r2, techAngles[i])));
   // Ring 3: every reference tagged under this operation (a `vias` entry on one of its branches),
   // one point each, at the mean angle of its techniques here; its nodes under each of those
   // techniques share that point. The ring grows to keep REF_ARC between the kept references.
@@ -73,7 +79,7 @@ export function layoutRadial(g: TaxGraph, opId: string): Placed {
       byRef.set(n.refId, e);
     }
   const refs = [...byRef.values()];
-  const r3 = Math.max(3 * BAND_GAP, (refs.length * REF_ARC) / TAU);
+  const r3 = Math.max(r2 + BAND_GAP, (refs.length * REF_ARC) / TAU);
   const refAngles = onRing(refs.map((e) => meanAngle(e.angles)), r3, REF_ARC);
   refs.forEach((e, i) => {
     const at = polar(r3, refAngles[i]);
