@@ -15,10 +15,11 @@
   | Plan 4 | 48 | 2 | 1 |
 
   Every baseline fail is harness drift; see below. CSP violations: 0. Console errors: 0.
-- **Screenshot set for -0c:** `D:\Design Second Brain\qa-shots\plan6\`, 70 files named `<view>-<theme>-<width>.png`.
+- **Screenshot set for -0c:** `D:\Design Second Brain\qa-shots\plan6\`, 71 files.
+  - 70 are named `<view>-<theme>-<width>.png`.
   - Themes and widths: light and dark at 1280 and 760, plus light at 1100.
-  - Views: reference, reference-similar, search-dropdown, inbox, tree, galaxy, radial, boards, lightbox, compare, details, settings, about and intro.
-  - Two extra files: `intro-light-1280.png` and `firstrun-light-1280.png`, which are first-launch captures.
+  - Views: reference, reference-similar, search-dropdown, inbox, tree, galaxy, radial, boards, lightbox, compare, details, settings, about, and intro (replayed from Help).
+  - One extra file: `firstrun-light-1280.png`, the first-run sheet.
 
 ## Given (recorded as decided by the controller, -02)
 
