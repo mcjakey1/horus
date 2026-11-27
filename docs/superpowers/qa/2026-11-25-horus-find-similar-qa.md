@@ -3,7 +3,7 @@
 QA session: `design-second-brain-b5`. Controller: `design-second-brain-02`. Persona and method: `QA-PERSONA.md`.
 Cross-check: AGY #3 (`9639ac0d-afd6-4032-905f-456e5be2c893`), through `agent-logs/agy-run.sh`.
 
-**Final verdict: PASS on `8efd665`** (re-verified 2026-11-27; see "Re-verify on 8efd665"). F1 and F2 are fixed and pass on the real app, wide and narrow. The Plan 4 baseline is unchanged. AGY #3 sign-off is below.
+**Final verdict: PASS on `8efd665`** (re-verified 2026-11-27; see "Re-verify on 8efd665"). F1 and F2 are fixed and pass on the real app, wide and narrow. The Plan 4 baseline is unchanged. AGY #3 signed off: **`PASS`** (verbatim, quoted at the end).
 
 **First pass (fa42df5 / bac92d1): PASS WITH FIXES.** That pass found 1 Important finding (F1) and 1 Minor (F2). Everything else in the plan worked for Mara on the real app, including the download drill that Task 8 left unchecked. I first labelled it FAIL; AGY #3 recommended PASS WITH FIXES, citing the Plan 2 precedent (1 Important + 1 Minor), and I adopted that label. The first-pass report follows unchanged, apart from this header.
 
@@ -236,3 +236,21 @@ Its answer, verbatim:
 > Recommend **`PASS WITH FIXES`** rather than `FAIL`:
 > - Matches Plan 2 QA precedent (1 Important + 1 Minor -> `PASS WITH FIXES`, fix, re-verify, close as `PASS`).
 > - Every other Plan 5 workflow (download/resume/checksum, lazy ORT, indexing/pause/Galaxy pan, Looks similar tab & dropdown, board scope, restart/rebuild, Remove model, Plan 4 regression) passed; F1 is a single localized hit-test-order bug, not a systemic failure.
+
+### AGY #3 sign-off on 8efd665
+
+Run through `agent-logs/agy-run.sh` against 69621fb. **Verdict, verbatim: `PASS`.** It asked for no edits.
+
+Its answer, verbatim:
+
+> PASS
+>
+> ### 1. Root-cause fix & regression check (`bac92d1..8efd665`)
+> - **F1 ([intake.ts:29-37,125](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/intake.ts#L29-L37), [similar-ui.ts:168-171](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/similar-ui.ts#L168-L171)):** Root cause fixed for both wide and narrow (`<= 760px`) windows. `dropHit` synchronously holds `is-drag` only when `[data-similar-drop]` exists in the DOM (no-op when Find similar is off), hit-tests, then restores the class — making both listeners order-independent and matching the exact layout visible during the drag. No regression risk.
+> - **F2 ([settings/panel.ts:54-82](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/settings/panel.ts#L54-L82)):** Root cause fixed. `trap` wraps `Tab` / `Shift+Tab` inside `sheet` (including from `tabIndex = -1` on `sheet` itself). The capture `keydown` listener returns immediately when `sheet.contains(e.target)` (`:77`), so keys inside Settings (including Remove confirmation's Esc, or future text/IME/paste inputs) are untouched; only stray keys aimed outside the modal (`body`) are swallowed, routing `Tab` back in and `Escape` to `close()`, and `life.abort()` cleans up on `close()`. No regression risk.
+>
+> ### 2. Re-verify claims vs results files
+> Exact match against `results-fix.json` (9 pass, 0 fail, 0 console errors) and `results-main.json` (52 pass, 0 fail, 1 baseline note, 0 console errors) — wide drop `(622, 83.5)` and narrow drop `(374.25, 84)` at `704 px` both call `similar_by_file` ×1 / `import_paths` ×0, Galaxy pan `p50 6.1 / max 6.6` vs `6.2`, and all F2 focus/Esc/Backspace/`v` checks match verbatim.
+>
+> ### 3. Close Plan 5 QA as `PASS` on `8efd665`?
+> Yes. Both findings are cleanly fixed and re-verified on the real binary with Vitest 659/659, `tsc` clean, and Plan 4 regression unchanged. Signed off — Plan 5 QA closed as `PASS`.
