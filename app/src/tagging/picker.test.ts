@@ -286,7 +286,7 @@ describe("technique picker", () => {
   it("pointer_focus_on_a_tick_box_does_not_repaint_before_the_click (fix round 2, I3)", () => {
     const { el } = mount();
     key(row(el), "1");
-    const box = el.querySelectorAll<HTMLInputElement>(".pk-card[data-tech] .pk-tick")[1];
+    const box = el.querySelectorAll<HTMLElement>(".pk-card[data-tech] .pk-tick")[1];
     pointerdown(box);
     box.focus(); // the browser focuses on mousedown
     expect(box.isConnected).toBe(true); // a detached mousedown target loses its click
@@ -398,21 +398,39 @@ describe("technique picker", () => {
     const { el, api } = mount();
     key(row(el), "1");
     key(row(el), "ArrowDown"); // the first card is highlighted
-    el.querySelectorAll<HTMLInputElement>(".pk-card[data-tech] .pk-tick")[1].click();
+    el.querySelectorAll<HTMLElement>(".pk-card[data-tech] .pk-tick")[1].click();
     expect([...el.querySelectorAll<HTMLElement>(".pk-card.is-ticked")].map((c) => c.dataset.tech)).toEqual([cards(el)[1]]);
     key(row(el), "Enter");
     expect(sent(api)[0][1].map((t) => t.techniqueId)).toEqual([cards(el)[1]]);
   });
 
+  it("an option carries its tick as aria-selected and holds no control of its own (QA F4)", () => {
+    const { el } = mount();
+    key(row(el), "1");
+    const grid = el.querySelector<HTMLElement>(".pk-grid")!;
+    expect(grid.getAttribute("aria-multiselectable")).toBe("true");
+    const options = [...el.querySelectorAll<HTMLElement>('.pk-card[data-tech][role="option"]')];
+    expect(options.length).toBeGreaterThan(1);
+    for (const o of options) {
+      expect(o.querySelector("input, button, select, textarea, [tabindex]")).toBeNull(); // axe nested-interactive
+      expect(o.querySelector(".pk-tick")!.getAttribute("aria-hidden")).toBe("true");
+      expect(o.getAttribute("aria-selected")).toBe("false");
+    }
+    options[1].querySelector<HTMLElement>(".pk-tick")!.click(); // the tick still toggles on a click
+    const ticked = el.querySelectorAll<HTMLElement>('.pk-card[data-tech][aria-selected="true"]');
+    expect([...ticked].map((c) => c.dataset.tech)).toEqual([cards(el)[1]]);
+  });
+
   it("tick_box_on_an_ask_card_shows_its_radios_and_stays_unticked", () => {
     const { el } = mount({}, { tax: withTexture() });
     key(row(el), "1");
-    const box = el.querySelector<HTMLInputElement>('.pk-card[data-tech="chiaroscuro"] .pk-tick')!;
+    const box = el.querySelector<HTMLElement>('.pk-card[data-tech="chiaroscuro"] .pk-tick')!;
     box.click();
     const card = el.querySelector<HTMLElement>('.pk-card[data-tech="chiaroscuro"]')!;
     expect(card.classList.contains("is-hi")).toBe(true);
     expect(card.querySelectorAll('input[type="radio"]')).toHaveLength(2);
-    expect(card.querySelector<HTMLInputElement>(".pk-tick")!.checked).toBe(false);
+    expect(card.getAttribute("aria-selected")).toBe("false");
+    expect(card.classList.contains("is-ticked")).toBe(false);
     expect(el.querySelector(".pk-msg")!.textContent).toBe("Choose a domain first.");
   });
 

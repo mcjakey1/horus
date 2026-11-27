@@ -144,9 +144,11 @@ export function mountPicker(
     if (on) {
       grid.setAttribute("role", "listbox");
       grid.setAttribute("aria-label", "Techniques");
+      grid.setAttribute("aria-multiselectable", "true"); // QA F4: an option's aria-selected is its tick
     } else {
       grid.removeAttribute("role");
       grid.removeAttribute("aria-label");
+      grid.removeAttribute("aria-multiselectable");
     }
   }
 
@@ -166,8 +168,8 @@ export function mountPicker(
         const on = i === h;
         const ticked = tickOf(t.id) >= 0;
         const ex = exampleHTML(t);
-        return `<div class="pk-card${on ? " is-hi" : ""}${ticked ? " is-ticked" : ""}" role="option" aria-selected="${on}" data-tech="${esc(t.id)}" tabindex="${i === stop ? 0 : -1}">
-          <input type="checkbox" class="pk-tick" tabindex="-1" aria-label="Tick ${esc(t.name)}"${ticked ? " checked" : ""}>
+        return `<div class="pk-card${on ? " is-hi" : ""}${ticked ? " is-ticked" : ""}" role="option" aria-selected="${ticked}" data-tech="${esc(t.id)}" tabindex="${i === stop ? 0 : -1}">
+          <span class="pk-tick" aria-hidden="true"></span>
           <span class="pk-body"><span class="pk-head"><b class="pk-name">${esc(t.name)}</b>${on ? domainHTML(t) : ""}</span>
           ${glyphSpan(t.icon)}
           <span class="pk-desc">${esc(t.description)}</span>
@@ -176,7 +178,7 @@ export function mountPicker(
       if (showNew()) {
         const on = h === vis.length;
         cards.push(
-          `<div class="pk-card pk-new${on ? " is-hi" : ""}" role="option" aria-selected="${on}" aria-disabled="${store.taxonomyReadOnly}" tabindex="${vis.length === stop ? 0 : -1}"${store.taxonomyReadOnly ? ` title="The technique list is read-only because taxonomy.json is damaged."` : ""}>+ New technique <span class="muted">“${esc(S.q.trim())}”</span></div>`,
+          `<div class="pk-card pk-new${on ? " is-hi" : ""}" role="option" aria-selected="false" aria-disabled="${store.taxonomyReadOnly}" tabindex="${vis.length === stop ? 0 : -1}"${store.taxonomyReadOnly ? ` title="The technique list is read-only because taxonomy.json is damaged."` : ""}>+ New technique <span class="muted">“${esc(S.q.trim())}”</span></div>`,
         );
       }
       grid.innerHTML = cards.join("") || `<p class="none">No technique matches.</p>`;
