@@ -1219,6 +1219,19 @@ pub fn set_board_members<R: Runtime>(
 ) -> Result<Change, String> {
     commit(&app, |o| {
         let (_, before) = find_board(o, &board_id)?;
+        // D19: a hand-edited board can name a reference that is gone; the UI sends its list back
+        // whole, so drop those ids rather than refuse the reorder or remove.
+        let known: HashSet<&str> = o
+            .lib
+            .data
+            .references
+            .iter()
+            .map(|r| r.id.as_str())
+            .collect();
+        let reference_ids = reference_ids
+            .into_iter()
+            .filter(|id| known.contains(id.as_str()))
+            .collect();
         let after = Board {
             reference_ids,
             ..before.clone()
@@ -2744,6 +2757,29 @@ mod tests {
             assert!(c.links.is_some());
             assert_eq!(links_now(&e), want);
         }
+    }
+
+    #[test]
+    fn a_hand_edited_board_with_a_missing_reference_still_reorders_and_removes() {
+        // D19: library.json names a reference id that is gone; the UI sends it back with the rest.
+        let (e, a, b) = two_refs();
+        let c = create_board(e.handle(), "Harbour".into(), vec![a.clone(), b.clone()]).unwrap();
+        let id = c.created.unwrap();
+        {
+            let st = e.app.state::<AppState>();
+            let mut open = lock(&st.open);
+            let board = &mut open.as_mut().unwrap().lib.data.boards[0];
+            board.reference_ids.push("gone".into());
+        }
+        set_board_members(
+            e.handle(),
+            id.clone(),
+            vec![b.clone(), "gone".into(), a.clone()],
+        )
+        .unwrap();
+        assert_eq!(boards_now(&e)[0].reference_ids, [b.clone(), a.clone()]);
+        set_board_members(e.handle(), id, vec!["gone".into(), a.clone()]).unwrap();
+        assert_eq!(boards_now(&e)[0].reference_ids, [a]);
     }
 
     #[test]

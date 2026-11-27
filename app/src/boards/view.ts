@@ -107,7 +107,7 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
     renderHead();
     grid.update(members(board()));
     if (S.focusAfter != null) {
-      $(`.bd-tile[data-i="${S.focusAfter}"]`)?.focus();
+      $(`.bd-tile[data-i="${S.focusAfter}"]`)?.focus({ preventScroll: true }); // D19: the grid stays where it is
       S.focusAfter = null;
     }
   }
