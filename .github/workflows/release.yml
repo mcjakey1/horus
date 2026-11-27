@@ -73,7 +73,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: app/src-tauri/ort
-          key: ort-${{ runner.os }}-${{ hashFiles('app/scripts/fetch-ort.mjs') }}
+          key: ort-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('app/scripts/fetch-ort.mjs') }}
 
       - name: Linux prerequisites (Tauri v2)
         if: runner.os == 'Linux'
@@ -143,7 +143,7 @@ jobs:
       # 3. The release check. On a tag, --final: an open gate in RELEASE-GATES.md fails the job
       # before any build time is spent.
       - name: release-check
-        run: npm run release-check -- ${{ startsWith(github.ref, 'refs/tags/v') && '--final' || '' }}
+        run: npm run release-check -- ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && '--final' || '' }}
 
       # 4. The bundles. No release here: the `release` job makes one draft for all three.
       # No signing secrets are set, so everything is unsigned (macOS ad hoc: signingIdentity "-").
@@ -156,7 +156,7 @@ jobs:
       # checkBundle (Task 5) measures the artefacts against their size budgets, so it runs again
       # now that they exist.
       - name: release-check, with the bundles
-        run: npm run release-check -- ${{ startsWith(github.ref, 'refs/tags/v') && '--final' || '' }}
+        run: npm run release-check -- ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && '--final' || '' }}
 
       # 6. macOS only, the signing spike (B2): the app's ad-hoc signature verifies, and the ORT
       # dylib in Contents/Frameworks is signed. Either failing fails the job.
@@ -182,10 +182,21 @@ jobs:
             ref="${GITHUB_REF_NAME//\//-}" # a branch name may hold a slash
             tar -czf "out/Horus_${ref}_aarch64.app.tar.gz" -C "$b/macos" Horus.app
           fi
-          ls out/* > /dev/null
+          # Every installer this platform must make: a silent bundler skip fails the job.
+          case "${{ matrix.name }}" in
+            windows) want="exe msi" ;;
+            macos-arm64) want="dmg app.tar.gz" ;;
+            linux) want="AppImage deb" ;;
+          esac
+          for ext in $want; do
+            ls out/*."$ext" > /dev/null || { echo "no .$ext installer"; exit 1; }
+          done
+          # Listed outside out/ first, so the sizes file never lists itself.
           for f in out/*; do
             printf '%s\t%s\n' "$(wc -c < "$f" | tr -d ' ')" "$(basename "$f")"
-          done | tee "out/sizes-${{ matrix.name }}.txt"
+          done > "sizes-${{ matrix.name }}.txt"
+          cat "sizes-${{ matrix.name }}.txt"
+          mv "sizes-${{ matrix.name }}.txt" out/
 
       - uses: actions/upload-artifact@v4
         with:
@@ -194,12 +205,16 @@ jobs:
           if-no-files-found: error
 
   # 5. Tags only: one draft prerelease, "(unsigned beta)", with every artefact and SHA256SUMS.
+  # A tag push only: a manual run started on a v* tag never makes a release.
   release:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -214,15 +229,17 @@ jobs:
         run: |
           mkdir -p ../sizes
           mv sizes-*.txt ../sizes/
-          sha256sum * > SHA256SUMS
+          sha256sum -- * > ../SHA256SUMS
+          mv ../SHA256SUMS .
           cat SHA256SUMS ../sizes/*
 
       - name: Draft prerelease
         env:
           GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ github.ref_name }} # never interpolated into the script itself
         run: |
-          gh release create "${{ github.ref_name }}" dist/* \
+          gh release create "$REF_NAME" dist/* \
             --draft --prerelease \
-            --title "Horus ${{ github.ref_name }} (unsigned beta)" \
+            --title "Horus $REF_NAME (unsigned beta)" \
             --notes-file docs/release/INSTALL-UNSIGNED.md \
             --verify-tag
