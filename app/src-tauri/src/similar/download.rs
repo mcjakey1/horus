@@ -131,7 +131,10 @@ fn fetch(
             };
             out.write_all(&buf[..n]).map_err(io_err)?;
             have += n as u64;
-            on(DlEvent::Progress { done: before + have, total });
+            on(DlEvent::Progress {
+                done: before + have,
+                total,
+            });
         }
         // Closed before hashing, renaming or deleting (Windows).
         drop(out);
@@ -140,7 +143,9 @@ fn fetch(
     if sha256_file(&part)? != f.sha256 {
         // Wrong or truncated bytes: start clean next time.
         fs::remove_file(&part).map_err(io_err)?;
-        return Err(DlError::Checksum { path: f.path.to_string() });
+        return Err(DlError::Checksum {
+            path: f.path.to_string(),
+        });
     }
     fs::rename(&part, dest).map_err(io_err)
 }
@@ -191,7 +196,7 @@ fn part_path(dest: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::similar::model::{is_installed, ModelFile, OK_MARKER};
+    use crate::similar::model::{ModelFile, OK_MARKER, is_installed};
     use sha2::{Digest, Sha256};
     use std::collections::HashMap;
     use std::io::{BufRead, BufReader, Write};
@@ -240,7 +245,9 @@ mod tests {
     }
 
     fn fixture(len: usize, seed: u8) -> Vec<u8> {
-        (0..len).map(|i| ((i * 31 + seed as usize) % 251) as u8).collect()
+        (0..len)
+            .map(|i| ((i * 31 + seed as usize) % 251) as u8)
+            .collect()
     }
 
     fn hex(bytes: &[u8]) -> String {
@@ -291,10 +298,20 @@ mod tests {
             sim_min_image: 0.5,
             sim_min_text: 0.03,
         }));
-        Server { spec, files, mode, log }
+        Server {
+            spec,
+            files,
+            mode,
+            log,
+        }
     }
 
-    fn handle(mut s: TcpStream, files: &HashMap<String, Vec<u8>>, mode: Mode, log: &Mutex<Vec<Req>>) {
+    fn handle(
+        mut s: TcpStream,
+        files: &HashMap<String, Vec<u8>>,
+        mode: Mode,
+        log: &Mutex<Vec<Req>>,
+    ) {
         let mut r = BufReader::new(s.try_clone().unwrap());
         let mut line = String::new();
         r.read_line(&mut line).unwrap();
@@ -316,9 +333,14 @@ mod tests {
             ua: headers.get("user-agent").cloned(),
             accept_encoding: headers.get("accept-encoding").cloned(),
         });
-        let key = path.split_once("/resolve/rev1/").map(|(_, k)| k).unwrap_or("");
+        let key = path
+            .split_once("/resolve/rev1/")
+            .map(|(_, k)| k)
+            .unwrap_or("");
         let Some(file) = files.get(key) else {
-            let _ = s.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            let _ = s.write_all(
+                b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            );
             let _ = s.shutdown(Shutdown::Write);
             return;
         };
@@ -343,7 +365,10 @@ mod tests {
                 body.len(),
                 body.len() - n
             ),
-            None => format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()),
+            None => format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            ),
         };
         let slice = &body[start.unwrap_or(0)..];
         let sent = match mode {
@@ -363,12 +388,21 @@ mod tests {
 
     fn run(srv: &Server, dir: &Path) -> (Result<(), DlError>, Vec<DlEvent>) {
         let mut ev = Vec::new();
-        let r = download(srv.spec, dir, &test_agent(), &AtomicBool::new(false), &mut |e| ev.push(e));
+        let r = download(
+            srv.spec,
+            dir,
+            &test_agent(),
+            &AtomicBool::new(false),
+            &mut |e| ev.push(e),
+        );
         (r, ev)
     }
 
     fn no_parts(dir: &Path, srv: &Server) -> bool {
-        srv.spec.files.iter().all(|f| !part_path(&dir.join(f.path)).exists())
+        srv.spec
+            .files
+            .iter()
+            .all(|f| !part_path(&dir.join(f.path)).exists())
     }
 
     #[test]
@@ -380,18 +414,34 @@ mod tests {
         assert!(is_installed(dir.path(), srv.spec));
         assert!(no_parts(dir.path(), &srv));
         for f in srv.spec.files {
-            assert_eq!(std::fs::read(dir.path().join(f.path)).unwrap(), srv.files[f.path]);
+            assert_eq!(
+                std::fs::read(dir.path().join(f.path)).unwrap(),
+                srv.files[f.path]
+            );
         }
         let total = srv.spec.total_bytes();
         assert_eq!(ev.last(), Some(&DlEvent::Done));
         assert!(ev.contains(&DlEvent::Verifying));
         assert!(ev.contains(&DlEvent::Progress { done: total, total }));
-        assert!(ev.iter().all(|e| !matches!(e, DlEvent::Progress { done, .. } if *done > total)));
+        assert!(
+            ev.iter()
+                .all(|e| !matches!(e, DlEvent::Progress { done, .. } if *done > total))
+        );
         let reqs = srv.requests();
         let ua = format!("Horus/{}", env!("CARGO_PKG_VERSION"));
-        assert!(reqs.iter().all(|q| q.ua.as_deref() == Some(ua.as_str())), "{reqs:?}");
-        assert!(reqs.iter().all(|q| q.accept_encoding.as_deref().is_none_or(|a| !a.contains("gzip"))));
-        assert!(reqs.iter().all(|q| q.path.starts_with("/test/repo/resolve/rev1/")));
+        assert!(
+            reqs.iter().all(|q| q.ua.as_deref() == Some(ua.as_str())),
+            "{reqs:?}"
+        );
+        assert!(reqs.iter().all(|q| {
+            q.accept_encoding
+                .as_deref()
+                .is_none_or(|a| !a.contains("gzip"))
+        }));
+        assert!(
+            reqs.iter()
+                .all(|q| q.path.starts_with("/test/repo/resolve/rev1/"))
+        );
     }
 
     #[test]
@@ -409,8 +459,15 @@ mod tests {
         srv.set(Mode::Normal);
         let (r, _) = run(&srv, dir.path());
         assert_eq!(r, Ok(()));
-        let big_reqs: Vec<_> = srv.requests().into_iter().filter(|q| q.path.ends_with(BIG)).collect();
-        assert_eq!(big_reqs.last().unwrap().range.as_deref(), Some(format!("bytes={have}-").as_str()));
+        let big_reqs: Vec<_> = srv
+            .requests()
+            .into_iter()
+            .filter(|q| q.path.ends_with(BIG))
+            .collect();
+        assert_eq!(
+            big_reqs.last().unwrap().range.as_deref(),
+            Some(format!("bytes={have}-").as_str())
+        );
         assert!(is_installed(dir.path(), srv.spec));
         assert_eq!(std::fs::read(dir.path().join(BIG)).unwrap(), srv.files[BIG]);
     }
@@ -428,7 +485,10 @@ mod tests {
         assert_eq!(std::fs::read(dir.path().join(BIG)).unwrap(), srv.files[BIG]);
         assert!(is_installed(dir.path(), srv.spec));
         let total = srv.spec.total_bytes();
-        assert!(ev.iter().all(|e| !matches!(e, DlEvent::Progress { done, .. } if *done > total)));
+        assert!(
+            ev.iter()
+                .all(|e| !matches!(e, DlEvent::Progress { done, .. } if *done > total))
+        );
     }
 
     #[test]
@@ -437,7 +497,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         srv.set(Mode::Wrong);
         let (r, _) = run(&srv, dir.path());
-        assert_eq!(r, Err(DlError::Checksum { path: BIG.to_string() }));
+        assert_eq!(
+            r,
+            Err(DlError::Checksum {
+                path: BIG.to_string()
+            })
+        );
         assert!(no_parts(dir.path(), &srv));
         assert!(!dir.path().join(BIG).exists());
         assert!(!is_installed(dir.path(), srv.spec));
@@ -449,7 +514,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         srv.set(Mode::Truncated(1_000));
         let (r, _) = run(&srv, dir.path());
-        assert_eq!(r, Err(DlError::Checksum { path: BIG.to_string() }));
+        assert_eq!(
+            r,
+            Err(DlError::Checksum {
+                path: BIG.to_string()
+            })
+        );
         assert!(no_parts(dir.path(), &srv));
         assert!(!is_installed(dir.path(), srv.spec));
     }
@@ -465,13 +535,19 @@ mod tests {
             }
         });
         assert_eq!(r, Err(DlError::Cancelled));
-        let have = std::fs::metadata(part_path(&dir.path().join(BIG))).unwrap().len();
+        let have = std::fs::metadata(part_path(&dir.path().join(BIG)))
+            .unwrap()
+            .len();
         assert!(have > 0 && have < 300_000, "{have}");
         assert!(!dir.path().join(OK_MARKER).exists());
         assert!(!is_installed(dir.path(), srv.spec));
         // Resumable: the next run picks up where it stopped.
         assert_eq!(run(&srv, dir.path()).0, Ok(()));
-        assert!(srv.requests().iter().any(|q| q.range.as_deref() == Some(format!("bytes={have}-").as_str())));
+        assert!(
+            srv.requests()
+                .iter()
+                .any(|q| q.range.as_deref() == Some(format!("bytes={have}-").as_str()))
+        );
         assert_eq!(std::fs::read(dir.path().join(BIG)).unwrap(), srv.files[BIG]);
     }
 
@@ -493,7 +569,13 @@ mod tests {
         let srv = serve();
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(run(&srv, dir.path()).0, Ok(()));
-        let r = download(srv.spec, dir.path(), &test_agent(), &AtomicBool::new(true), &mut |_| {});
+        let r = download(
+            srv.spec,
+            dir.path(),
+            &test_agent(),
+            &AtomicBool::new(true),
+            &mut |_| {},
+        );
         assert_eq!(r, Err(DlError::Cancelled));
         assert!(is_installed(dir.path(), srv.spec));
     }
