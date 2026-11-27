@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "A local reference workbench for artists"
 authors = ["Jake Manahan"]
 edition = "2024"
+# Never published to crates.io; cargo-about's `private.ignore` (about.toml) skips this crate,
+# which has no licence of its own to list.
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

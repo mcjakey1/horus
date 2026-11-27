@@ -67,6 +67,9 @@ mod tests {
     use super::*;
     use tauri::test::{mock_builder, mock_context, noop_assets};
 
+    // ponytail: not on macOS, where AppKit builds menus on the main thread only and cargo test
+    // runs tests on worker threads (muda panics there). The macOS menu is a Task 8 manual row.
+    #[cfg(not(target_os = "macos"))]
     #[test]
     fn menu_has_every_item() {
         let app = mock_builder().build(mock_context(noop_assets())).unwrap();
