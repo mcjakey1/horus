@@ -332,9 +332,11 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
       pub fn load(root: &Path, spec: &ModelSpec) -> EmbStore;          // missing/corrupt/other model -> empty (never panics)
       pub fn save(&self, root: &Path) -> std::io::Result<()>;
       pub fn has(&self, hash: &str) -> bool;
+      pub fn get(&self, hash: &str) -> Option<&[f32]>;              // Task 5 by_ref's query vector; None -> NotIndexedYet
+      pub fn len(&self) -> usize;                                     // Task 5's SimilarStatus.indexed (plus is_empty, for clippy)
       pub fn put(&mut self, hash: &str, v: Vec<f32>);
       pub fn prune(&mut self, keep: &HashSet<String>) -> usize;        // drop hashes no longer in the library
-      pub fn top_k(&self, q: &[f32], k: usize, min: f32, exclude: Option<&str>) -> Vec<(String, f32)>;
+      pub fn top_k(&self, q: &[f32], k: usize, min: f32, exclude: Option<&str>) -> Vec<(String, f32)>;   // equal scores ordered by hash
   }
   pub fn embeddings_path(root: &Path) -> PathBuf;                       // root/embeddings.bin
   ```
