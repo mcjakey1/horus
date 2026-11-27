@@ -23,6 +23,19 @@ export type DupRow = { existingId: string; title: string; action: "show" | "merg
 /** What `getCurrentWebview()` offers; the payload's position is in physical pixels. */
 export type DropWin = { onDragDropEvent(cb: (e: { payload: DragDropEvent }) => void): Promise<() => void> };
 
+/** What a drop lands on, hit-tested against the layout seen during the drag: Find similar's
+ * drop target shows only while `.search` has `is-drag`, and the listener that clears it may run
+ * first, so the class is held on for the hit-test (QA F1). Tauri reports physical pixels. */
+export function dropHit(doc: Document, pos: { x: number; y: number }): Element | null {
+  const search = doc.querySelector(".search");
+  const force = !!doc.querySelector("[data-similar-drop]") && !search?.classList.contains("is-drag");
+  if (force) search?.classList.add("is-drag");
+  const dpr = doc.defaultView?.devicePixelRatio || 1;
+  const hit = doc.elementFromPoint?.(pos.x / dpr, pos.y / dpr) ?? null;
+  if (force) search?.classList.remove("is-drag");
+  return hit;
+}
+
 export const NO_IMAGE = "Paste the image itself — Horus doesn't download from the web.";
 const FIELDS = ["note", "sourceUrl"] as const;
 const isHttp = (s?: string | null): s is string => !!s && /^https?:\/\//i.test(s.trim());
@@ -109,8 +122,7 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
   // ---------- drag and drop ----------
   const unlisten = win?.onDragDropEvent(({ payload: p }) => {
     if (p.type !== "drop" || !p.paths.length) return;
-    const dpr = window.devicePixelRatio || 1; // Tauri reports physical pixels; hit-testing wants CSS ones
-    const hit = doc.elementFromPoint?.(p.position.x / dpr, p.position.y / dpr);
+    const hit = dropHit(doc, p.position);
     if (hit?.closest("[data-similar-drop]")) return; // Plan 5: Find similar's drop target searches, never imports
     const onto = hit?.closest<HTMLElement>("[data-ref-drop]")?.dataset.refDrop;
     const source = onto ? store.refs.get(onto) : undefined;

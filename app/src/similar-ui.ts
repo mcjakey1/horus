@@ -5,7 +5,7 @@
 // bar's #find-similar line. No path here leads to tagging (SPEC §5a, §11).
 import type { Api, SimilarStatus } from "./api";
 import { esc } from "./esc";
-import type { DropWin } from "./intake";
+import { type DropWin, dropHit } from "./intake";
 import type { SearchHandle } from "./search";
 import type { Store } from "./store";
 
@@ -165,11 +165,10 @@ export function wireSimilar(
     const search = $(".search");
     if (!on || !search) return;
     if (p.type === "enter" || p.type === "over") return void search.classList.add("is-drag");
+    // Hit-test before `is-drag` goes: the target may be showing only because of the drag.
+    const hit = p.type === "drop" && p.paths.length ? dropHit(document, p.position) : null;
     search.classList.remove("is-drag");
-    if (p.type !== "drop" || !p.paths.length) return;
-    const dpr = window.devicePixelRatio || 1; // Tauri reports physical pixels
-    const hit = document.elementFromPoint?.(p.position.x / dpr, p.position.y / dpr);
-    if (!hit?.closest("[data-similar-drop]")) return; // wireIntake imports it
+    if (p.type !== "drop" || !hit?.closest("[data-similar-drop]")) return; // wireIntake imports it
     // The response slot is taken now: a typed query, Esc or a later drop makes this one stale.
     const show = hooks.search.beginDrop();
     show({ note: "Searching…" });
