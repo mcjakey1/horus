@@ -80,6 +80,8 @@ pub struct SimilarEnv {
     pub spec: &'static ModelSpec,
     pub load: Box<Loader>,
     pub has_avx2: fn() -> bool,
+    /// `download::agent` (HTTPS only); tests use a plain-http one for a local server.
+    pub agent: fn() -> ureq::Agent,
 }
 
 impl SimilarEnv {
@@ -93,6 +95,7 @@ impl SimilarEnv {
                     .map(|e| Box::new(e) as Box<dyn Embedder>)
             }),
             has_avx2,
+            agent: download::agent,
         }
     }
 }
@@ -213,6 +216,7 @@ fn set_phase<R: Runtime>(app: &AppHandle<R>, run: u64, phase: Phase) -> bool {
     true
 }
 
+/// Raw text to stderr, copy to the artist (R11).
 fn set_find_similar(st: &AppState, v: FindSimilar) -> Result<(), String> {
     update_settings(
         st,
@@ -221,6 +225,10 @@ fn set_find_similar(st: &AppState, v: FindSimilar) -> Result<(), String> {
             ..SettingsPatch::default()
         },
     )
+    .map_err(|e| {
+        eprintln!("Find similar: {e}");
+        copy::UNKNOWN.to_string()
+    })
 }
 
 /// A failure the artist sees as copy; the raw text goes to stderr.
@@ -262,9 +270,7 @@ fn record_failure<R: Runtime>(app: &AppHandle<R>, run: u64, f: Failure) {
         s.encoder = None;
         s.download_done = 0;
     }
-    if let Err(e) = set_find_similar(&app.state::<AppState>(), FindSimilar::Off) {
-        eprintln!("Find similar: {e}");
-    }
+    let _ = set_find_similar(&app.state::<AppState>(), FindSimilar::Off);
     publish(app, true);
 }
 
@@ -307,11 +313,14 @@ fn pipeline<R: Runtime>(app: &AppHandle<R>, run: u64, cancel: &AtomicBool) {
     if !(env.has_avx2)() {
         return record_failure(app, run, Failure::NoAvx2);
     }
+    // A cancelled download from an earlier run may still sit in a read: wait it out, so two
+    // writers never share one `.part` (task review).
+    let download_guard = lock(&app.state::<AppState>().inner().similar_download);
     if !smodel::is_installed(&env.model_dir, env.spec) {
         if !set_phase(app, run, Phase::Downloading) {
             return;
         }
-        let agent = download::agent();
+        let agent = (env.agent)();
         let mut on = |e: DlEvent| match e {
             DlEvent::Progress { done, .. } => {
                 {
@@ -329,10 +338,16 @@ fn pipeline<R: Runtime>(app: &AppHandle<R>, run: u64, cancel: &AtomicBool) {
         };
         match download::download(env.spec, &env.model_dir, &agent, cancel, &mut on) {
             Ok(()) => {}
-            Err(DlError::Cancelled) => return,
-            Err(e) => return record_failure(app, run, Failure::Download(e)),
+            Err(DlError::Cancelled) => {
+                return;
+            }
+            Err(e) => {
+                drop(download_guard);
+                return record_failure(app, run, Failure::Download(e));
+            }
         }
     }
+    drop(download_guard);
     if !set_phase(app, run, Phase::Loading) {
         return;
     }
@@ -430,6 +445,9 @@ pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
     };
     let st = app.state::<AppState>();
     let _one = lock(&st.similar_start);
+    // Before the snapshot: a switch that lands in between makes this pass stale, never the
+    // old library's pass under the new generation (task review).
+    let generation = lock(&st.similar).generation.load(Ordering::SeqCst);
     let snapshot = {
         let open = lock(&st.open);
         open.as_ref().map(|o| {
@@ -447,9 +465,12 @@ pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
     let Some((root, items)) = snapshot else {
         return;
     };
-    let (gen_arc, generation, encoder, store, failed) = {
+    let (gen_arc, encoder, store, failed) = {
         let mut s = lock(&st.similar);
-        if !s.phase.searchable() || s.indexer.is_some() {
+        if s.generation.load(Ordering::SeqCst) != generation
+            || !s.phase.searchable()
+            || s.indexer.is_some()
+        {
             return;
         }
         let Some(encoder) = s.encoder.clone() else {
@@ -460,14 +481,7 @@ pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
             s.failed.clear();
         }
         let store = if same { s.store.clone() } else { None };
-        let generation = s.generation.load(Ordering::SeqCst);
-        (
-            s.generation.clone(),
-            generation,
-            encoder,
-            store,
-            s.failed.clone(),
-        )
+        (s.generation.clone(), encoder, store, s.failed.clone())
     };
     let store = store.unwrap_or_else(|| Arc::new(Mutex::new(EmbStore::load(&root, env.spec))));
     let keep: HashSet<String> = items.iter().map(|(h, _)| h.clone()).collect();
@@ -541,6 +555,7 @@ pub(super) fn detach_indexer(st: &AppState) -> Option<Indexer> {
     let mut s = lock(&st.similar);
     s.generation.fetch_add(1, Ordering::SeqCst);
     s.indexer_run += 1;
+    s.failed.clear(); // a reopened library retries what failed
     if matches!(s.phase, Phase::Indexing | Phase::Paused) {
         s.phase = Phase::Ready;
     }
@@ -612,7 +627,7 @@ fn shut_down(st: &AppState) -> (Option<Indexer>, Option<Shared<Box<dyn Embedder>
     let mut s = lock(&st.similar);
     s.run += 1;
     s.download_cancel.store(true, Ordering::SeqCst);
-    s.generation.fetch_add(1, Ordering::SeqCst);
+    // No generation bump: the stopped indexer still saves its last batches (task review).
     s.indexer_run += 1;
     s.phase = Phase::Off;
     s.error = None;
@@ -737,6 +752,7 @@ pub fn similar_remove_model<R: Runtime>(app: AppHandle<R>) -> Result<SimilarStat
         _ => Ok(()),
     };
     let mut result = Ok(());
+    let _download = lock(&st.similar_download); // a cancelled download has let go of its files
     if let Some(env) = app.try_state::<SimilarEnv>() {
         result = gone(std::fs::remove_dir_all(&env.model_dir));
     }
@@ -940,12 +956,24 @@ mod tests {
 
     /// An app with a library, a pre-installed fake model, and the fake encoder.
     fn rig_with(sleep: Duration, avx2: fn() -> bool, load_ok: bool) -> Rig {
+        rig_full(test_spec(), true, sleep, avx2, load_ok)
+    }
+
+    /// `installed`: the model folder already holds `m.bin` and `.ok`; else it is empty.
+    fn rig_full(
+        spec: &'static ModelSpec,
+        installed: bool,
+        sleep: Duration,
+        avx2: fn() -> bool,
+        load_ok: bool,
+    ) -> Rig {
         let e = created();
         let model = tempfile::tempdir().unwrap();
-        let spec = test_spec();
-        fs::write(model.path().join("m.bin"), b"abc").unwrap();
-        fs::write(model.path().join(".ok"), b"").unwrap();
-        assert!(smodel::is_installed(model.path(), spec));
+        if installed {
+            fs::write(model.path().join("m.bin"), b"abc").unwrap();
+            fs::write(model.path().join(".ok"), b"").unwrap();
+            assert!(smodel::is_installed(model.path(), spec));
+        }
         let calls = Arc::new(AtomicUsize::new(0));
         let loads = Arc::new(AtomicUsize::new(0));
         let (c, l) = (calls.clone(), loads.clone());
@@ -964,6 +992,7 @@ mod tests {
                 }
             }),
             has_avx2: avx2,
+            agent: download::local_test_agent,
         });
         let h = e.handle();
         hooks::register(&e.handle(), move |c| on_change(&h, c));
@@ -973,6 +1002,66 @@ mod tests {
             loads,
             model,
         }
+    }
+
+    /// Serves `m.bin` ("abc") after a delay, logging (accepted, answered) per connection.
+    /// (accepted, answered) per connection.
+    type ConnLog = Arc<Mutex<Vec<(Instant, Instant)>>>;
+
+    fn slow_server(delay: Duration) -> (String, ConnLog) {
+        use std::io::{BufRead, BufReader, Write};
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://127.0.0.1:{}", l.local_addr().unwrap().port());
+        let log = Arc::new(Mutex::new(vec![]));
+        let seen = log.clone();
+        std::thread::spawn(move || {
+            for mut s in l.incoming().flatten() {
+                let seen = seen.clone();
+                std::thread::spawn(move || {
+                    let accepted = Instant::now();
+                    let mut r = BufReader::new(s.try_clone().unwrap());
+                    let mut line = String::new();
+                    while r.read_line(&mut line).unwrap_or(0) > 0 && line != "\r\n" {
+                        line.clear();
+                    }
+                    std::thread::sleep(delay);
+                    let _ = s.write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nabc",
+                    );
+                    let _ = s.shutdown(std::net::Shutdown::Write);
+                    lock(&seen).push((accepted, Instant::now()));
+                });
+            }
+        });
+        (base, log)
+    }
+
+    #[test]
+    fn reenable_waits_for_cancelled_download() {
+        // Task review: a disable cancels the download, but its thread can sit in a read; a
+        // re-enable must not start a second writer on the same `.part`.
+        let (base, log) = slow_server(Duration::from_millis(500));
+        let spec: &'static ModelSpec = Box::leak(Box::new(ModelSpec {
+            base: Box::leak(base.into_boxed_str()),
+            ..*test_spec()
+        }));
+        let r = rig_full(spec, false, Duration::ZERO, || true, true);
+        similar_enable(r.h()).unwrap();
+        r.wait("downloading", |s| s.phase == Phase::Downloading);
+        std::thread::sleep(Duration::from_millis(100));
+        similar_disable(r.h()).unwrap();
+        similar_enable(r.h()).unwrap();
+        let s = r.wait("ready", |s| {
+            s.phase == Phase::Ready || s.phase == Phase::Error
+        });
+        assert_eq!(s.phase, Phase::Ready, "{s:?}");
+        assert_eq!(fs::read(r.model.path().join("m.bin")).unwrap(), b"abc");
+        assert_eq!(r.e.settings().find_similar, FindSimilar::On);
+        let mut conns = lock(&log).clone();
+        conns.sort();
+        assert!(conns.len() >= 2, "{conns:?}");
+        // The second request went out only after the first one's answer.
+        assert!(conns[1].0 >= conns[0].1, "two downloads overlapped");
     }
 
     fn rig() -> Rig {
