@@ -51,11 +51,6 @@ pub fn download(
     cancel: &AtomicBool,
     on: &mut dyn FnMut(DlEvent),
 ) -> Result<(), DlError> {
-    // A marker from an earlier install must not vouch for files being replaced now.
-    match fs::remove_file(dir.join(OK_MARKER)) {
-        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(io_err(e)),
-        _ => {}
-    }
     let total = spec.total_bytes();
     let mut done = 0;
     for f in spec.files {
@@ -64,6 +59,11 @@ pub fn download(
         }
         let dest = dir.join(f.path);
         if !file_matches(&dest, f)? {
+            // A marker from an earlier install must not vouch for a file being replaced now.
+            match fs::remove_file(dir.join(OK_MARKER)) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(io_err(e)),
+                _ => {}
+            }
             fetch(spec, f, &dest, client, cancel, done, total, on)?;
         }
         done += f.size;
@@ -483,6 +483,17 @@ mod tests {
         assert_eq!(r, Ok(()));
         assert!(srv.requests().is_empty(), "{:?}", srv.requests());
         assert_eq!(ev.last(), Some(&DlEvent::Done));
+    }
+
+    #[test]
+    fn cancel_on_installed_model_keeps_marker() {
+        // AGY #2: nothing was replaced, so the model must stay installed.
+        let srv = serve();
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(run(&srv, dir.path()).0, Ok(()));
+        let r = download(srv.spec, dir.path(), &test_agent(), &AtomicBool::new(true), &mut |_| {});
+        assert_eq!(r, Err(DlError::Cancelled));
+        assert!(is_installed(dir.path(), srv.spec));
     }
 
     #[test]
