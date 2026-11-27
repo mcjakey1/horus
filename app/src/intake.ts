@@ -113,7 +113,7 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
         all.duplicates.push(...r.report.duplicates);
         all.skipped.push(...r.report.skipped);
         all.warnings!.push(...(r.report.warnings ?? []));
-        if (r.report.cancelled) {
+        if (r.report.cancelled || progress.cancelled) {
           all.cancelled = true; // the rest of this intake stays out too
           break;
         }

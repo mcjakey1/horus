@@ -127,6 +127,23 @@ describe("intake", () => {
     expect(api.importPaths).not.toHaveBeenCalled();
   });
 
+  it("Cancel during the first file of a two-image paste stops the second (D15, AGY #2)", async () => {
+    let first!: (r: ImportResult) => void;
+    vi.mocked(api.importBytes).mockImplementationOnce(() => new Promise<ImportResult>((r) => (first = r)));
+    const png = (n: string) => new File([new Uint8Array([1])], n, { type: "image/png" });
+    paste(document.body, [{ type: "image/png", file: png("a.png") }, { type: "image/png", file: png("b.png") }]);
+    await flush();
+    await flush();
+    expect(api.importBytes).toHaveBeenCalledTimes(1);
+    document.querySelector<HTMLButtonElement>("#import-notice [data-cancel]")!.click();
+    expect(api.cancelImport).toHaveBeenCalledTimes(1);
+    first(result({ added: ["p1"] }, [ref("p1")])); // the one-file step finished before it saw the cancel
+    await flush();
+    await flush();
+    expect(api.importBytes).toHaveBeenCalledTimes(1); // b.png never starts
+    expect(document.querySelector("#import-notice")!.textContent).toContain("Cancelled: the rest was not imported");
+  });
+
   it("a PNG paste carries the source URL from its text/html", async () => {
     const file = new File([new Uint8Array([1, 2, 3])], "a.png", { type: "image/png" });
     const e = paste(document.body, [{ type: "image/png", file }, { type: "text/html" }], {

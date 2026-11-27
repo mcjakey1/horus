@@ -148,11 +148,20 @@ export function showProgress(root: ParentNode, verb: string, onCancel: () => voi
   };
 }
 
-/** `showProgress` for one import: listens to `import://progress` until `done()`. */
-export function importProgress(root: ParentNode, api: Api): { done(): void } {
-  const prog = showProgress(root, "Importing", () => void api.cancelImport().catch(() => {}));
+/** `showProgress` for one intake: listens to `import://progress` until `done()`. `cancelled`:
+ * Cancel was clicked, so an intake of several steps stops before its next one (a one-file step can
+ * finish before Rust sees the flag). */
+export function importProgress(root: ParentNode, api: Api): { readonly cancelled: boolean; done(): void } {
+  let cancelled = false;
+  const prog = showProgress(root, "Importing", () => {
+    cancelled = true;
+    void api.cancelImport().catch(() => {});
+  });
   const unlisten = api.onImportProgress((p) => prog.update(p.done, p.total));
   return {
+    get cancelled() {
+      return cancelled;
+    },
     done() {
       prog.stop();
       void unlisten.then((f) => f()).catch(() => {});
