@@ -514,7 +514,11 @@ export function mountReference(
       api.recoverOrphans().then(
         (c) => {
           store.apply(c);
-          notify(`<p>Added ${c.references.length} to the Inbox.</p>`);
+          notify(
+            c.references.length
+              ? `<p>Added ${c.references.length} to the Inbox.</p>`
+              : `<p>Horus couldn't read those image files, so nothing was added.</p>`,
+          );
         },
         (err) => notify(`<p>Couldn't add them: ${esc(String(err))}</p>`),
       );

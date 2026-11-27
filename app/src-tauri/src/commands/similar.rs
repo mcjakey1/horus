@@ -1524,14 +1524,33 @@ mod tests {
         x
     }
 
+    /// Until `x`'s embedding is in the store and the phase is Ready. Not `indexed`: a pass's
+    /// progress counts failed images too (`indexer.rs`), until the next pass recounts.
+    fn wait_embedded(r: &Rig, x: &str) {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            let done = {
+                let s = r.similar();
+                s.phase == Phase::Ready && s.store.as_ref().is_some_and(|st| lock(st).has(x))
+            };
+            if done {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "{x} never embedded: {:?}",
+                r.status()
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
     #[test]
     fn rebuilt_thumb_is_indexed() {
         let r = rig();
         let x = open_with_missing_thumb(&r);
-        let s = r.wait("both indexed", |s| {
-            s.phase == Phase::Ready && s.indexed == 2
-        });
-        assert_eq!(s.total, 2);
+        wait_embedded(&r, &x);
+        assert_eq!(r.status().total, 2);
         assert!(!r.similar().failed.contains(&x));
     }
 
@@ -1542,10 +1561,8 @@ mod tests {
         let r = rig_with(Duration::from_millis(1500), || true, true);
         let x = open_with_missing_thumb(&r);
         r.wait("indexing", |s| s.phase == Phase::Indexing);
-        let s = r.wait("both indexed", |s| {
-            s.phase == Phase::Ready && s.indexed == 2
-        });
-        assert_eq!(s.total, 2);
+        wait_embedded(&r, &x);
+        assert_eq!(r.status().total, 2);
         assert!(!r.similar().failed.contains(&x));
         assert!(r.similar().retry.is_empty());
     }

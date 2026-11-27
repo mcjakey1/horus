@@ -387,6 +387,24 @@ describe("boot wiring (Task 9)", () => {
 });
 
 describe("rebuilt thumbnails (Plan 6 Task 2)", () => {
+  it("boot subscribes before the open and unsubscribes on destroy", async () => {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+    const order: string[] = [];
+    const off = vi.fn();
+    let heard: ((ids: string[]) => void) | null = null;
+    const api: Api = {
+      ...fakeApi("C:/lib"),
+      openLibrary: vi.fn(async () => (order.push("open"), heard!(["early"]), { root: "C:/lib", references: [], links: [], boards: [], warning: null, taxonomyReadOnly: false })),
+      getTaxonomy: vi.fn(async () => seedJson as unknown as Taxonomy),
+      onThumbsRebuilt: vi.fn(async (cb) => ((heard = cb), order.push("subscribe"), off)),
+    };
+    const view = await boot(document.body, api);
+    expect(order).toEqual(["subscribe", "open"]);
+    view.destroy();
+    expect(off).toHaveBeenCalledTimes(1);
+  });
+
+
   it("reloadThumbs re-requests only the rebuilt references' images", () => {
     const r = (id: string) => ({ id, title: id, file: `${id}.jpg`, hash: id, width: 1, height: 1, addedAt: "", tags: [], thumb256: `C:/t/256/${id}.jpg`, thumb1024: `C:/t/1024/${id}.jpg` });
     const api = { assetUrl: (p: string) => `asset://${p}` } as unknown as Api;

@@ -379,6 +379,21 @@ describe("Reference view", () => {
     expect($("#import-notice").textContent).toContain("Added 1 to the Inbox.");
   });
 
+  it("integrity_notice_add_them_failures", async () => {
+    vi.mocked(api.recoverOrphans).mockResolvedValueOnce({ references: [], removed: [], canUndo: false, canRedo: false });
+    store.reset({ ...library, integrity }, taxonomy);
+    await settle();
+    $<HTMLButtonElement>("[data-recover]").click();
+    await settle();
+    expect($("#import-notice").textContent).toContain("couldn't read those image files");
+    vi.mocked(api.recoverOrphans).mockRejectedValueOnce("Couldn't save the library.");
+    store.reset({ ...library, integrity }, taxonomy);
+    await settle();
+    $<HTMLButtonElement>("[data-recover]").click();
+    await settle();
+    expect($("#import-notice").textContent).toContain("Couldn't add them: Couldn't save the library.");
+  });
+
   it("clean_open_shows_no_integrity_notice", async () => {
     store.reset({ ...library, integrity: null }, taxonomy);
     await settle();

@@ -104,23 +104,24 @@ pub fn check(lib: &Library) -> IntegrityReport {
             r.missing_thumbs.push(reference.id.clone());
         }
     }
-    let hashes: HashSet<&str> = lib
-        .data
-        .references
-        .iter()
-        .map(|x| x.hash.as_str())
-        .collect();
-    if let Ok(entries) = fs::read_dir(images_dir(root)) {
-        for e in entries.flatten() {
-            let name = e.file_name().to_string_lossy().into_owned();
-            let ours = image_path_in(root, &name).is_ok() && e.path().is_file();
-            let hash = name.split('.').next().unwrap_or_default();
-            if ours && !known.contains(name.as_str()) && !hashes.contains(hash) {
-                r.orphans.push(e.path());
-            }
+    // A hash a reference already has, or a second file of one hash (another extension), is no
+    // orphan to add: one reference per hash. Sorted first, so the kept file is stable.
+    let mut hashes: HashSet<String> = lib.data.references.iter().map(|x| x.hash.clone()).collect();
+    let mut files: Vec<(String, PathBuf)> = fs::read_dir(images_dir(root))
+        .map(|d| {
+            d.flatten()
+                .map(|e| (e.file_name().to_string_lossy().into_owned(), e.path()))
+                .collect()
+        })
+        .unwrap_or_default();
+    files.sort();
+    for (name, path) in files {
+        let ours = image_path_in(root, &name).is_ok() && path.is_file();
+        let hash = name.split('.').next().unwrap_or_default();
+        if ours && !known.contains(name.as_str()) && hashes.insert(hash.to_string()) {
+            r.orphans.push(path);
         }
     }
-    r.orphans.sort();
     let bak = root.join("taxonomy.bak.json");
     if bak.exists() {
         r.taxonomy_backup_invalid = Taxonomy::load(&bak).map_or(true, |t| t.validate().is_err());
@@ -332,6 +333,26 @@ pub(crate) mod tests {
         assert_eq!(r.orphans, vec![orphan]);
         assert!(r.missing_thumbs.is_empty(), "{r:?}");
         assert_eq!(fs::read(lib.root.join("library.json")).unwrap(), before);
+    }
+
+    #[test]
+    fn one_orphan_per_hash() {
+        let (_d, lib) = library(&["small.jpg"]);
+        let known = &lib.data.references[0].hash;
+        let dup = images_dir(&lib.root).join(format!("{known}.png"));
+        fs::copy(fixture("p3_red.png"), &dup).unwrap();
+        let h = "ab".repeat(32);
+        let (jpg, png) = (
+            images_dir(&lib.root).join(format!("{h}.jpg")),
+            images_dir(&lib.root).join(format!("{h}.png")),
+        );
+        fs::copy(fixture("small.jpg"), &jpg).unwrap();
+        fs::copy(fixture("p3_red.png"), &png).unwrap();
+        assert_eq!(
+            check(&lib).orphans,
+            vec![jpg],
+            "a known hash and a second extension are skipped"
+        );
     }
 
     #[test]

@@ -30,6 +30,13 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   // A reload mid-queue leaves Rust's intake flag set, so every close would wait: clear it first,
   // before first run can wait on the artist. It also takes a close owed before the reload.
   void api.intakeBusy(false).catch(() => {});
+  // Plan 6 Task 2: subscribed before any open (its rebuild can end before the views exist);
+  // ids heard that early wait in `early` until the views are up.
+  let early: string[] | null = [];
+  let onRebuilt: (ids: string[]) => void = (ids) => void early?.push(...ids);
+  let destroyed = false;
+  let unThumbs: (() => void) | null = null;
+  void api.onThumbsRebuilt((ids) => onRebuilt(ids)).then((u) => (destroyed ? u() : (unThumbs = u)));
   const settings = await api.getSettings().catch(() => null);
   const dark = settings?.theme === "dark" ||
     (settings?.theme !== "light" && typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -120,14 +127,15 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   });
   if (lastShown) similar.show(lastShown);
   // Plan 6 Task 2: a rebuilt thumbnail replaces the broken image wherever it shows.
-  let unThumbs: (() => void) | null = null;
-  void api.onThumbsRebuilt((ids) => reloadThumbs(root, api, store, ids)).then((u) => (unThumbs = u));
+  onRebuilt = (ids) => reloadThumbs(root, api, store, ids);
+  if (early?.length) reloadThumbs(root, api, store, early);
+  early = null;
   return {
     ...view,
     store,
     source,
     destroy: () =>
-      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), settingsPanel.close(), similar?.destroy(), unThumbs?.(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
+      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), settingsPanel.close(), similar?.destroy(), (destroyed = true), unThumbs?.(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
   };
 }
 

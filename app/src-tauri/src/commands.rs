@@ -705,7 +705,9 @@ fn rebuild<R: Runtime>(app: &AppHandle<R>, root: &Path, items: Vec<(String, Stri
     for item in items {
         let _gate = hold_gate(app);
         if !lock(&st.open).as_ref().is_some_and(|o| o.lib.root == root) {
-            break; // switched meanwhile: that library's open checks its own thumbnails
+            // Switched meanwhile: that library's open checks its own thumbnails, and these
+            // ids and hashes are not its to hear about (AGY #2).
+            return;
         }
         if integrity::has_thumbs(root, &item.1) {
             continue;
@@ -752,7 +754,13 @@ pub fn recover_orphans<R: Runtime>(app: AppHandle<R>) -> Result<Change, String> 
         };
         let refs = refs
             .into_iter()
-            .filter(|r| !o.lib.data.references.iter().any(|x| x.id == r.id))
+            .filter(|r| {
+                !o.lib
+                    .data
+                    .references
+                    .iter()
+                    .any(|x| x.id == r.id || x.hash == r.hash)
+            })
             .collect();
         add_saved(&st, o, refs)?
     };
@@ -3483,6 +3491,17 @@ mod tests {
             recover_orphans(e.handle()).unwrap().references.is_empty(),
             "none left"
         );
+    }
+
+    #[test]
+    fn unreadable_orphans_add_nothing() {
+        let e = created();
+        let root = root_of(&e);
+        let junk = root.join("images").join(format!("{}.png", "c3".repeat(32)));
+        fs::write(junk, b"not an image").unwrap();
+        let c = recover_orphans(e.handle()).unwrap();
+        assert!(c.references.is_empty());
+        assert!(!c.can_undo, "no undo step");
     }
 
     #[test]
