@@ -6,6 +6,7 @@
 //! to encode a save; the write itself happens outside it).
 
 use std::collections::HashSet;
+use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -39,7 +40,8 @@ pub enum IdxEvent {
         total: usize,
     },
     Paused,
-    /// (hash, reason) for every thumbnail that failed to load or encode.
+    /// (hash, reason) for every thumbnail that failed to load or encode. A worker panic
+    /// ends the job with one entry whose hash is empty.
     Finished {
         failed: Vec<(String, String)>,
     },
@@ -71,7 +73,16 @@ impl Indexer {
         };
         let worker = std::thread::Builder::new()
             .name("horus-indexer".into())
-            .spawn(move || w.run(job))
+            .spawn(move || {
+                // A panic (an encoder bug) still ends the job, so the phase never sticks at
+                // Indexing. lock() tolerates the mutexes it poisons.
+                let ran = std::panic::catch_unwind(AssertUnwindSafe(|| w.run(job)));
+                if ran.is_err() && (w.still_current)() {
+                    (w.on)(IdxEvent::Finished {
+                        failed: vec![(String::new(), "The indexer stopped unexpectedly.".into())],
+                    });
+                }
+            })
             .expect("spawn the indexer thread");
         Indexer {
             worker,
@@ -85,6 +96,8 @@ impl Indexer {
     }
 
     /// Stops within one item and joins the worker, saving what was computed first.
+    /// Never call it from the `on` callback: that runs on the worker, which can't join itself
+    /// (it hangs on Windows).
     pub fn stop(self) {
         self.stop.store(true, Ordering::SeqCst);
         let _ = self.worker.join();
@@ -101,7 +114,7 @@ struct Worker {
 }
 
 impl Worker {
-    fn run(self, job: IndexJob) {
+    fn run(&self, job: IndexJob) {
         let todo: Vec<(String, PathBuf)> = {
             let store = lock(&self.store);
             let mut seen = HashSet::new();
@@ -182,6 +195,7 @@ impl Worker {
         let bytes = lock(&self.store).encode();
         if let Err(e) = write_atomic(&embeddings_path(root), &bytes) {
             eprintln!("Find similar: couldn't save embeddings.bin: {e}");
+            *dirty = true; // try again at the next save
         }
         true
     }
@@ -215,11 +229,23 @@ mod tests {
         calls: Arc<AtomicUsize>,
         sleep: Duration,
         fail_red: Option<u8>,
+        /// Call index that waits until `release` is set.
+        block_at: Option<usize>,
+        release: Arc<AtomicBool>,
+        panic_at: Option<usize>,
     }
 
     impl Embedder for Fake {
         fn image(&mut self, rgb: &image::RgbImage) -> Result<Vec<f32>, String> {
-            self.calls.fetch_add(1, Ordering::SeqCst);
+            let i = self.calls.fetch_add(1, Ordering::SeqCst);
+            if Some(i) == self.panic_at {
+                panic!("fake encoder bug");
+            }
+            if Some(i) == self.block_at {
+                while !self.release.load(Ordering::SeqCst) {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }
             std::thread::sleep(self.sleep);
             let red = rgb.get_pixel(0, 0)[0];
             if Some(red) == self.fail_red {
@@ -239,12 +265,23 @@ mod tests {
         dir: tempfile::TempDir,
         items: Vec<(String, PathBuf)>,
         calls: Arc<AtomicUsize>,
+        release: Arc<AtomicBool>,
         embedder: Arc<Mutex<Box<dyn Embedder>>>,
         store: Arc<Mutex<EmbStore>>,
         generation: Arc<AtomicU64>,
     }
 
     fn rig(n: usize, sleep_ms: u64, fail_red: Option<u8>) -> Rig {
+        rig_with(n, sleep_ms, fail_red, None, None)
+    }
+
+    fn rig_with(
+        n: usize,
+        sleep_ms: u64,
+        fail_red: Option<u8>,
+        block_at: Option<usize>,
+        panic_at: Option<usize>,
+    ) -> Rig {
         let dir = tempfile::tempdir().unwrap();
         let items = (0..n)
             .map(|i| {
@@ -256,15 +293,20 @@ mod tests {
             })
             .collect();
         let calls = Arc::new(AtomicUsize::new(0));
+        let release = Arc::new(AtomicBool::new(false));
         let fake = Fake {
             calls: calls.clone(),
             sleep: Duration::from_millis(sleep_ms),
             fail_red,
+            block_at,
+            release: release.clone(),
+            panic_at,
         };
         let store = EmbStore::load(dir.path(), &SIGLIP_B16_Q8);
         Rig {
             items,
             calls,
+            release,
             embedder: Arc::new(Mutex::new(Box::new(fake))),
             store: Arc::new(Mutex::new(store)),
             generation: Arc::new(AtomicU64::new(0)),
@@ -295,6 +337,18 @@ mod tests {
 
         fn on_disk(&self) -> EmbStore {
             EmbStore::load(self.dir.path(), &SIGLIP_B16_Q8)
+        }
+
+        /// Spins until the embedder has been called `n` times; panics after 5 s.
+        fn wait_calls(&self, n: usize) {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while self.calls.load(Ordering::SeqCst) < n {
+                assert!(
+                    Instant::now() < deadline,
+                    "embedder never reached {n} calls"
+                );
+                std::thread::sleep(Duration::from_millis(1));
+            }
         }
     }
 
@@ -334,9 +388,7 @@ mod tests {
     fn pause_within_one_batch() {
         let r = rig(3 * BATCH, 5, None);
         let (ix, rx) = r.start();
-        while r.calls.load(Ordering::SeqCst) < 3 {
-            std::thread::sleep(Duration::from_millis(1));
-        }
+        r.wait_calls(3);
         ix.pause(true);
         let at_pause = r.calls.load(Ordering::SeqCst);
         loop {
@@ -369,9 +421,7 @@ mod tests {
     fn stop_is_prompt_and_saves() {
         let r = rig(3 * BATCH, 10, None);
         let (ix, _rx) = r.start();
-        while r.calls.load(Ordering::SeqCst) < 5 {
-            std::thread::sleep(Duration::from_millis(1));
-        }
+        r.wait_calls(5);
         let t = Instant::now();
         ix.stop();
         // At most one batch late (BATCH × 10 ms), with slack for the save.
@@ -393,9 +443,7 @@ mod tests {
     fn no_write_after_root_changes() {
         let r = rig(3 * BATCH, 5, None);
         let (ix, rx) = r.start();
-        while r.calls.load(Ordering::SeqCst) < 3 {
-            std::thread::sleep(Duration::from_millis(1));
-        }
+        r.wait_calls(3);
         r.generation.fetch_add(1, Ordering::SeqCst);
         let at_switch = r.calls.load(Ordering::SeqCst);
         ix.stop();
@@ -419,9 +467,7 @@ mod tests {
     fn search_interleaves() {
         let r = rig(BATCH, 30, None);
         let (ix, _rx) = r.start();
-        while r.calls.load(Ordering::SeqCst) < 1 {
-            std::thread::sleep(Duration::from_millis(1));
-        }
+        r.wait_calls(1);
         let t = Instant::now();
         let e = r.embedder.clone();
         let v = std::thread::spawn(move || e.lock().unwrap().text("x").unwrap())
@@ -463,6 +509,31 @@ mod tests {
             [h(1)]
         );
         assert_eq!(r.on_disk().len(), 2);
+    }
+
+    #[test]
+    fn saves_every_8_batches() {
+        let n = SAVE_EVERY_BATCHES * BATCH;
+        let r = rig_with(n + 1, 0, None, Some(n), None);
+        let (ix, rx) = r.start();
+        // Item `n` blocks inside the encoder, after the save at the 8-batch boundary.
+        r.wait_calls(n + 1);
+        assert_eq!(r.on_disk().len(), n);
+        r.release.store(true, Ordering::SeqCst);
+        let (_, failed) = until_finished(&rx);
+        ix.stop();
+        assert!(failed.is_empty());
+        assert_eq!(r.on_disk().len(), n + 1);
+    }
+
+    #[test]
+    fn panic_still_finishes() {
+        let r = rig_with(5, 0, None, None, Some(2));
+        let (ix, rx) = r.start();
+        let (_, failed) = until_finished(&rx);
+        ix.stop();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].0, "");
     }
 
     #[test]
