@@ -57,7 +57,7 @@ Run 2026-11-27 on the development machine (Windows 11, 16 GB RAM, AVX2), with a 
   - at Ready: **78–110 ms**.
 
 **Step 3b: calibrating the cut-offs** (the demo set, 50 references):
-- **Image to image:** all 1,225 pairs, read straight from `embeddings.bin` (the app's own results are already cut at the old 0.5): min 0.282, p10 0.398, median 0.505, p90 0.619, max 0.798. Top-10 lists for ten references (Divan Japonais, Breaker Boys, Melencolia I, Stacks of Wheat, Jane Avril, Paris Street; Rainy Day, See America, The Giant Wheel, Sunlight):
+- **Image to image:** all 1,225 pairs, read straight from `embeddings.bin` (the app's own results are already cut at the old 0.5): min 0.282, p10 0.398, median 0.505, p90 0.619, max 0.798. Top-10 lists for nine references (Divan Japonais, Breaker Boys, Melencolia I, Stacks of Wheat, Jane Avril, Paris Street; Rainy Day, See America, The Giant Wheel, Sunlight):
   - clearly related hits sit at 0.56–0.78: the Lautrec posters, the etchings (Melencolia I, The Sleep of Reason, The Giant Wheel, The Three Crosses at 0.63–0.75), and the photographs (Sunlight, The Manger, Julia Jackson at 0.74–0.78);
   - the unrelated tails of the same lists sit at 0.53–0.54 (Divan Japonais then gets A Sunday on La Grande Jatte and Night Procession of Goblins at 0.540).
   - 0.5 kept half of all pairs. **`sim_min_image` = 0.55.**
