@@ -61,7 +61,10 @@ pub(crate) const OK_MARKER: &str = ".ok";
 impl ModelSpec {
     /// `{base}/{repo}/resolve/{revision}/{path}`
     pub fn url(&self, f: &ModelFile) -> String {
-        format!("{}/{}/resolve/{}/{}", self.base, self.repo, self.revision, f.path)
+        format!(
+            "{}/{}/resolve/{}/{}",
+            self.base, self.repo, self.revision, f.path
+        )
     }
 
     pub fn total_bytes(&self) -> u64 {
@@ -77,10 +80,9 @@ pub fn model_dir(app_local_data: &Path, spec: &ModelSpec) -> PathBuf {
 /// The `.ok` marker is present and every file is in place with its pinned size.
 pub fn is_installed(dir: &Path, spec: &ModelSpec) -> bool {
     dir.join(OK_MARKER).is_file()
-        && spec
-            .files
-            .iter()
-            .all(|f| std::fs::metadata(dir.join(f.path)).is_ok_and(|m| m.is_file() && m.len() == f.size))
+        && spec.files.iter().all(|f| {
+            std::fs::metadata(dir.join(f.path)).is_ok_and(|m| m.is_file() && m.len() == f.size)
+        })
 }
 
 #[cfg(test)]
@@ -92,7 +94,10 @@ mod tests {
         let s = &SIGLIP_B16_Q8;
         assert_eq!(s.base, "https://huggingface.co");
         assert_eq!(s.id, "siglip-b16-224-q8");
-        assert_eq!((s.dim, s.text_len, s.pad_id, s.lowercase), (768, 64, 1, true));
+        assert_eq!(
+            (s.dim, s.text_len, s.pad_id, s.lowercase),
+            (768, 64, 1, true)
+        );
         for f in s.files {
             let url = s.url(f);
             assert!(url.starts_with("https://huggingface.co/"), "{url}");
@@ -103,7 +108,9 @@ mod tests {
             assert!(url.ends_with(f.path), "{url}");
             assert_eq!(f.sha256.len(), 64, "{}", f.path);
             assert!(
-                f.sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+                f.sha256
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
                 "{}",
                 f.path
             );
