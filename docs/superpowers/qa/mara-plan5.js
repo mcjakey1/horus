@@ -245,7 +245,7 @@ async function phaseMain() {
     await openSettings();
     for (let i = 0; i < 6 && (await P.evaluate(() => !!document.activeElement?.closest(".settings"))); i++) await P.keyboard.press("Tab");
     const at = await activeDesc(), ref0 = await focusId(), t0 = await refTitle();
-    if (await P.evaluate(() => !!document.activeElement?.closest(".settings"))) return ok("Focus past the dialog's last control", true, "focus stays inside");
+    if (await P.evaluate(() => !!document.activeElement?.closest(".settings"))) { ok("Focus past the dialog's last control", true, "focus stays inside"); await P.keyboard.press("Escape"); await sleep(300); return; }
     await P.keyboard.press("Escape"); await sleep(300);
     const stillOpen = await settingsOpen();
     await P.keyboard.press("Backspace"); await sleep(700);
@@ -657,6 +657,65 @@ async function phaseRecheck() {
   await closeApp();
 }
 
+// ---------------------------------------------------------------- fix (F1/F2 re-verify: Settings keyboard, narrow window)
+function resizeWin(w, h) {
+  execSync(`powershell -NoProfile -Command "Add-Type -Name U -Namespace W -MemberDefinition '[DllImport(\\"user32.dll\\")] public static extern bool MoveWindow(System.IntPtr h,int x,int y,int w,int ht,bool r);'; $p=Get-Process -Id ${proc.pid}; [W.U]::MoveWindow($p.MainWindowHandle,40,40,${w},${h},$true) | Out-Null"`);
+}
+async function phaseFix() {
+  await launch("fix");
+  await firstRun("on");
+  await waitPhase(["ready"], 180000);
+  await searchGo("Divan Japonais"); await openSimTab();
+  const rows = await simRows();
+  await jsClick(`#pane-similar [data-ref-id="${rows[0].id}"]`); await sleep(800); // Back now has somewhere to go
+  const ref0 = await focusId(), t0 = await refTitle();
+  const inside = () => P.evaluate(() => !!document.activeElement?.closest(".settings"));
+  await P.click("#settings"); await P.waitForSelector('.settings [role="switch"]'); await sleep(400);
+  const out = [];
+  for (let i = 0; i < 9; i++) { await P.keyboard.press("Tab"); if (!(await inside())) out.push(`Tab ${i + 1}: ${await activeDesc()}`); }
+  for (let i = 0; i < 9; i++) { await P.keyboard.press("Shift+Tab"); if (!(await inside())) out.push(`Shift+Tab ${i + 1}: ${await activeDesc()}`); }
+  ok("F2: Tab x9 and Shift+Tab x9 stay inside Settings", out.length === 0, out.join(", ") || "inside");
+  await P.click("#fs-desc"); await sleep(200);
+  const onText = await activeDesc();
+  await P.keyboard.press("Tab");
+  ok("F2: after a click on text, Tab goes to a control inside", await inside() && (await activeDesc()) !== "div[dialog]", `after click ${onText}; after Tab ${await activeDesc()}`);
+  // Focus forced out to <body> (as on the old build): keys must not reach the view; Esc closes.
+  await P.evaluate(() => document.activeElement?.blur()); await sleep(150);
+  const at = await activeDesc();
+  await P.keyboard.press("Backspace"); await sleep(700);
+  await P.keyboard.press("v"); await sleep(400);
+  const behind = { ref: (await focusId()) === ref0 ? "unchanged" : `changed to ${await refTitle()}`, value: await P.evaluate(() => document.querySelector('input[type="checkbox"]#value-view, #value-view')?.checked ?? null) };
+  ok("F2: with focus on body, Backspace and v don't reach the view behind", (await settingsOpen()) && (await focusId()) === ref0, `focus ${at}; ${JSON.stringify(behind)}; dialog open ${await settingsOpen()}`);
+  await P.keyboard.press("Tab");
+  ok("F2: Tab from body comes back into the dialog", await inside(), await activeDesc());
+  await P.evaluate(() => document.activeElement?.blur());
+  await P.keyboard.press("Escape"); await sleep(400);
+  ok("F2: Esc from body closes Settings; focus back on the gear", !(await settingsOpen()) && (await activeDesc()) === "button#settings", await activeDesc());
+  await P.click("#settings"); await P.waitForSelector('.settings [role="switch"]'); await sleep(300);
+  await P.click('.settings [data-act="remove"]'); await sleep(300);
+  await P.keyboard.press("Escape"); await sleep(300);
+  const c1 = { dialog: await settingsOpen(), confirm: await has(".fs-confirm"), focus: await activeDesc() };
+  await P.keyboard.press("Escape"); await sleep(300);
+  ok("F2: Esc in the Remove confirmation cancels only it; a second Esc closes", c1.dialog && !c1.confirm && !(await settingsOpen()), `${JSON.stringify(c1)}; then dialog open ${await settingsOpen()}`);
+  ok("F2: the view behind never moved", (await focusId()) === ref0, `"${t0}" -> "${await refTitle()}"`);
+  // Narrow window: the zone shows only during a drag.
+  resizeWin(720, 800); await sleep(1200);
+  const iw = await P.evaluate(() => innerWidth);
+  const c0 = await count(); let n0 = ipcLog.length;
+  let fin = await dropAt([path.join(FX, "poster drop.jpg")], [200, 300]);
+  const zc = await zoneCenter();
+  await shot("narrow-drag");
+  await fin(zc || [200, 300]); await sleep(2500);
+  const g = await groupState();
+  ok("F1 narrow (<760 px): drop on the drag-only zone searches, no import", iw < 760 && zc && ipcSince(n0, "similar_by_file") === 1 && ipcSince(n0, "import_paths") === 0 && (await count()) === c0 && g?.rows.length > 0, `innerWidth ${iw}; zone ${JSON.stringify(zc)}; by_file ${ipcSince(n0, "similar_by_file")}, import_paths ${ipcSince(n0, "import_paths")}; rows ${JSON.stringify(g?.rows.map((r) => r.t.replace("reference · looks alike", "")))}`);
+  await shot("narrow-result");
+  await P.keyboard.press("Escape"); await sleep(300);
+  n0 = ipcLog.length;
+  fin = await dropAt([path.join(FX, "outside drop.png")], [300, 500]); await fin(); await noticeDone(60000).catch(() => {}); await sleep(600);
+  ok("Narrow: a drop elsewhere still imports", ipcSince(n0, "import_paths") === 1 && ipcSince(n0, "similar_by_file") === 0, `notice "${await noticeText()}"`);
+  await closeApp();
+}
+
 // ---------------------------------------------------------------- dark (the app's own theme toggle)
 async function phaseDark() {
   await launch("dark");
@@ -681,7 +740,7 @@ async function phaseDark() {
     fs.rmSync(LIB, { recursive: true, force: true }); fs.mkdirSync(LIB, { recursive: true });
   }
   try {
-    await ({ main: phaseMain, restart: phaseRestart, notnow: phaseNotNow, download: phaseDownload, damaged: phaseDamaged, recheck: phaseRecheck, dark: phaseDark })[PHASE]();
+    await ({ main: phaseMain, restart: phaseRestart, notnow: phaseNotNow, download: phaseDownload, damaged: phaseDamaged, recheck: phaseRecheck, dark: phaseDark, fix: phaseFix })[PHASE]();
   } catch (e) {
     ok(`${PHASE}: phase ran to the end`, false, String(e && e.stack || e).split("\n").slice(0, 3).join(" | "));
     if (B) { await shot("fatal"); await closeApp().catch(() => {}); }

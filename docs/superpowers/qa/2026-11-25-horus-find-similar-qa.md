@@ -3,9 +3,47 @@
 QA session: `design-second-brain-b5`. Controller: `design-second-brain-02`. Persona and method: `QA-PERSONA.md`.
 Cross-check: AGY #3 (`9639ac0d-afd6-4032-905f-456e5be2c893`), through `agent-logs/agy-run.sh`.
 
-**Verdict: PASS WITH FIXES. Not a PASS yet: do not merge until F1 is fixed and re-verified.** There is 1 Important finding (F1) and 1 Minor (F2). The rest of the plan works for Mara on the real app, including the download drill that Task 8 left unchecked. After the fixes, QA re-verifies on the fix SHA (the `main` drop block and the Plan 4 baseline), and the plan closes as PASS after AGY #3 signs off (method step 11). I first labelled this FAIL; AGY #3 recommended PASS WITH FIXES, citing the Plan 2 precedent (1 Important + 1 Minor). I checked that precedent and adopted the label. The findings are unchanged.
+**Final verdict: PASS on `8efd665`** (re-verified 2026-11-27; see "Re-verify on 8efd665"). F1 and F2 are fixed and pass on the real app, wide and narrow. The Plan 4 baseline is unchanged. AGY #3 sign-off is below.
 
-**F1 (Important):** if Mara drags an image onto the drop zone while the search field is empty, Horus imports the image into her library instead of searching with it. Dropping onto the same zone while the dropdown is open works.
+**First pass (fa42df5 / bac92d1): PASS WITH FIXES.** That pass found 1 Important finding (F1) and 1 Minor (F2). Everything else in the plan worked for Mara on the real app, including the download drill that Task 8 left unchecked. I first labelled it FAIL; AGY #3 recommended PASS WITH FIXES, citing the Plan 2 precedent (1 Important + 1 Minor), and I adopted that label. The first-pass report follows unchanged, apart from this header.
+
+## Re-verify on 8efd665
+
+The fixes: `44b67bc` and `95177dc`, merged as `8efd665`. The diff touches only TypeScript: `intake.ts` (a shared `dropHit()` that hit-tests with `is-drag` held on), `similar-ui.ts`, `settings/panel.ts` (a Tab/Shift+Tab trap, plus a document capture listener that stops stray keys and closes on Esc from `body`), and their tests.
+
+The debug exe was built in the foreground (`CARGO_BUILD_JOBS=1`, shared target); SHA-256 `438346ab…cbb2`. The Rust is unchanged since bac92d1, where `cargo test` gave 320 pass.
+
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | clean |
+| `npx vitest run` | **48 files, 659 pass** (656 + 3 new) |
+| `mara-plan5.js fix` (new phase) | **9 pass, 0 fail** |
+| `mara-plan5.js main` (full rerun) | **52 pass, 0 fail, 1 note** (fa42df5: 49 / 3) |
+| Plan 4 regression (`mara-plan4.js`) | **50 pass, 3 fail, 1 note**: the same Plan 4 F1, F2 and J3 as before, all deferred to Plan 6 |
+
+**F1: fixed.**
+- **Wide window**, empty field, dropdown closed, a drag shows the zone at (622, 84): a drop there gives `similar_by_file` ×1, `import_paths` ×0, an unchanged count and 4 Lautrec rows.
+- **Narrow window** (resized to 704 CSS px, under 760): the zone shows under the field only during the drag, at (374, 84). A drop there searches: `by_file` ×1, `import_paths` ×0, and rows Ambassadeurs, Moulin Rouge La Goulue, Jane Avril and Divan Japonais.
+- **Unchanged and still passing:** a drop elsewhere still imports, at both widths. The dropdown-open drop, non-image and too-large copy, and "off: no zone, drop imports" all pass.
+
+**F2: fixed.**
+- Tab ×9 and Shift+Tab ×9 stay inside Settings.
+- After a click on the description text, focus sits on the dialog itself, and Tab goes to a control inside.
+- With focus forced onto `body`: Backspace and `v` don't reach the view (the reference stays "Jane Avril"), and the dialog stays open. Tab comes back in. Esc closes it, with focus back on the gear.
+- In the Remove confirmation, Esc cancels only the confirmation (focus on Remove model), and a second Esc closes the dialog.
+- The data-changing shortcuts I left unprobed in the first pass can no longer reach the view: the capture listener stops every key aimed outside the dialog.
+
+**Harness note:** in the first `main` rerun, the focus-leak block returned without closing Settings, because focus now correctly stays inside. The still-open dialog then swallowed the debounce check's keys (`search` ×0). I fixed that in the harness; the clean rerun is 52/0.
+
+**Galaxy pan on this run:** frame gaps p50 6.1 ms while indexing (max 6.6) and at ready (max 6.2). The first pass gave about 17.7 ms. The display now reports 60 Hz, yet WebView2's frame rate differed between sessions, and the fix touched nothing in the Galaxy. So the numbers aren't comparable, but both runs show no stutter while indexing.
+
+Still NOT CHECKED: a native Explorer drag (Tauri drag events were emitted instead), plus the first pass's "Not covered" list.
+
+---
+
+## First pass (fa42df5 / bac92d1)
+
+**Verdict then: PASS WITH FIXES. Not a PASS yet: do not merge until F1 is fixed and re-verified.**
 
 ## Target
 
