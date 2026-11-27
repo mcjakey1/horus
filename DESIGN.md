@@ -21,7 +21,7 @@ colors:
   differentiate-amber: "#B87F00"
   differentiate-amber-text: "#7D5600"
   differentiate-amber-on: "#161616"
-  group-green: "#1E8E5A"
+  group-green: "#1E915C"
   group-green-text: "#156B43"
   group-green-on: "#161616"
   sequence-blue: "#2563D0"
@@ -226,8 +226,8 @@ Operations are data: an artist can add up to nine. The four seed operations keep
 
 | Theme | Ink | base | `-text` | `-on` | `-on` / base | `-text` / panel | Min ΔE2000 (nearest) |
 |---|---|---|---|---|---|---|---|
-| light | teal | `#089B9B` | `#066B6B` | `#161616` | 5.32 | 6.05 | 18.5 (group) |
-| light | olive | `#6A7A1A` | `#455011` | `#FFFFFF` | 4.76 | 8.35 | 18.9 (group) |
+| light | teal | `#089B9B` | `#066B6B` | `#161616` | 5.32 | 6.05 | 18.3 (group) |
+| light | olive | `#6A7A1A` | `#455011` | `#FFFFFF` | 4.76 | 8.35 | 19.2 (group) |
 | light | rose | `#BC4E7B` | `#9B3B63` | `#FFFFFF` | 4.65 | 6.28 | 24.2 (infer) |
 | light | indigo | `#8C84DB` | `#675DD0` | `#161616` | 5.55 | 4.96 | 18.3 (seq) |
 | light | umber | `#815637` | `#5D3E28` | `#FFFFFF` | 6.33 | 9.20 | 18.8 (infer) |
@@ -239,7 +239,7 @@ Operations are data: an artist can add up to nine. The four seed operations keep
 
 Contrast is WCAG 2 against light panel `#FAFAF9` and dark panel `#1B1B1B`; ΔE2000 is against the other eight bases of the same theme, seed inks included. The floor is 15; the smallest pair is 18.3 in light (Sequence Blue / Indigo) and 18.1 in dark (Group Green / Teal). `app/src/inks.test.ts` checks every value from `styles.css`.
 
-**Delta (ruling B7, carried to Plan 6).** Light Group Green's `-on` (`#161616` on `#1E8E5A`) measures 4.37:1, under AA's 4.5:1. The other seed `-on` values pass (light 5.23 amber, 5.56 blue, 4.52 vermilion; dark 8.20, 6.63, 5.56, 5.81), and every seed `-text` is 6.25 to 9.14 on the panel. It is not changed yet, because that is a visible change to a seed ink: Plan 6 decides.
+**Group Green's numeral (D17, closing ruling B7).** Light Group Green moved from `#1E8E5A` to `#1E915C`: the red channel is unchanged, it is ΔE2000 1.05 from the old value, and it is the smallest base change with margin that lifts its near-black numeral (`#161616`) to AA, now 4.53:1 (was 4.37). Every seed `-on` now passes AA (light 5.23 amber, 4.53 green, 5.56 blue, 4.52 vermilion; dark 8.20, 6.63, 5.56, 5.81). Every seed `-text` is unchanged at 6.25 to 9.14 on the panel. `app/src/inks.test.ts` asserts every `-on`, seed and extra, at 4.5:1 or more.
 
 ### Neutral
 - **Bench Shell** (shell / shell-dark): the application ground, plus the fill of callout cards, link cards and the search field.
@@ -264,7 +264,7 @@ Contrast is WCAG 2 against light panel `#FAFAF9` and dark panel `#1B1B1B`; ΔE20
 **Character:** a catalogue entry typed up by a careful hand, with readings stamped beside it by a machine. The native UI face keeps the controls from competing with either.
 
 ### Hierarchy
-- **Wordmark** (Source Serif 4 600, 22px, line-height 1, -0.01em): the Horus name in the top bar only.
+- **Wordmark** (Source Serif 4 600, 22px, line-height 1, -0.01em): the Horus name in the top bar, and at 64px (48px at 760px and below, -0.015em) on the intro card.
 - **Record** (Source Serif 4 500, 21px, line-height 1.2): operation, technique and reference values in the record header. The reference title is set in italic. The domain value is set in the interface face at 18px. Values drop to 18px/16px/14px at 1100px and below.
 - **Title** (Source Serif 4 500, 17px, line-height 1.25): the technique name on a callout card.
 - **Item** (Source Serif 4 500, 15px, line-height 1.25): reference titles in ranked rows, links and search results.
@@ -313,7 +313,7 @@ Hairline rules and flat tonal panels do almost all the work. Shadow is reserved 
 
 ## Shapes
 
-Data containers are square: the specimen card, callout cards, thumbnails, rows, record cells and panels all have 0 radius. The only softened corner is the 2px search field. Circles are reserved for markers: numbered callout badges (26px) and operation swatches in search results (10px). Curves belong to connectors, the cubic leader lines that run from a badge to its callout card.
+Data containers are square: the specimen card, callout cards, thumbnails, rows, record cells and panels all have 0 radius. The only softened corner is the 2px search field. Circles are reserved for markers: numbered callout badges (26px) and operation swatches in search results (10px). Curves belong to connectors, the cubic leader lines that run from a badge to its callout card. The link-drag leader is the exception: a straight 2px dashed ink line that tracks the pointer while you drag a link, because it is a gesture in progress, not a connection. Tree and Radial draw straight hierarchy lines; curves are for connectors between related references (leaders, Galaxy edges).
 
 Region boxes are 1.5px outlines whose line style encodes tag state: **solid** for a full tag, **dashed** for a partial tag, and **dotted** (2px) for a region tag. A tag on the whole image draws no outline until it is hot, and then outlines the plate 10px outside its edge.
 
@@ -327,6 +327,7 @@ Quiet and native.
 - **Style:** the panel fill with a hairline bottom rule. Tabs are full-height text buttons with 12px side padding, set in body 500 and secondary ink.
 - **Active:** ink colour plus a 2px inset ink underline. **Disabled:** tertiary ink. Counts sit beside the label in score mono.
 - **Mobile:** the tabs move to their own 40px horizontally scrolling row.
+- **Order:** the wordmark leads the bar, then the view tabs. Library (an app-level menu) sits with the search field, Theme and Settings on the right.
 
 ### Search field
 - **Style:** 32px tall, a strong-hairline border, a 2px radius, the shell fill and 12px side padding. The placeholder is in tertiary ink. The native clear glyph is replaced by a masked SVG cross in secondary ink.
@@ -371,6 +372,9 @@ One easing curve throughout: `cubic-bezier(.16, 1, .3, 1)`, an expo-out.
 - A specimen swap fades and scales to 0.985 over 0.35s.
 - Leader lines draw in 0.55s.
 - Under `prefers-reduced-motion: reduce`, every transition and animation runs at 0s.
+
+### Intro card
+"The first specimen". It plays on first launch and from Help > Play intro, at z 55, on the shell. The wordmark (64px) and an italic serif line ("Your references, and why they connect.") sit above an empty Grey Card N5 (4:3, up to 400px). Four region boxes rest on the card in card-ink, one in each tag-state stroke. Each lights in turn in its seed operation's ink with its numbered badge, and the operation's plain label appears under the card in its `-text` ink beside a 10px swatch, captioned "A starting set. Rename them or add your own." There is no text on the card. The whole sequence uses `var(--ease)`: entrances by 3.7s, the contents fade to the shell from 5.3s to 5.9s, and `INTRO_MAX_MS` (6000) removes it. Any key, pointer press or wheel skips it. The resting CSS is the final frame, so under reduced motion it is a still frame with no animation, held until input. It never shows an operation count, an eye, or Iris's name or marks.
 
 ## Do's and Don'ts
 

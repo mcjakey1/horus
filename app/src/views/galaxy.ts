@@ -90,7 +90,8 @@ export function mountGalaxy(
     for (const e of byRef.get(focus) ?? []) {
       const other = e.a === focus ? e.b : e.a;
       if (!s.inScope(other) || !positions[other]) continue;
-      out.push({ from: focus, to: other, width: EDGE_W0 + EDGE_W1 * e.score, color: "var(--ink-2)" });
+      // Curved: a connector between related references (DESIGN.md Shapes; Task 4 design pass).
+      out.push({ from: focus, to: other, width: EDGE_W0 + EDGE_W1 * e.score, color: "var(--ink-2)", curve: true });
     }
     scene.setEdges(out);
   }

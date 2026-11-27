@@ -3,7 +3,7 @@
   --ink: #161616; --ink-2: #545452; --ink-3: #6E6E6C;
   --card: #777776; /* N5 grey card: constant in both themes */
   --card-ink: #F4F4F3;
-  --diff: #B87F00; --group: #1E8E5A; --seq: #2563D0; --infer: #D2462A;
+  --diff: #B87F00; --group: #1E915C; --seq: #2563D0; --infer: #D2462A;
   --diff-text: #7D5600; --group-text: #156B43; --seq-text: #1D4FA8; --infer-text: #A8341C;
   --diff-on: #161616; --group-on: #161616; --seq-on: #FFFFFF; --infer-on: #FFFFFF;
   /* Extra operation inks (DESIGN.md): only ever an added operation's ink. */
@@ -96,7 +96,7 @@ button:disabled { cursor: default; }
 .lab { position: relative; margin: 20px 0 20px 20px; background: var(--card); display: grid; place-items: center; min-height: 0; overflow: hidden; }
 .specimen { position: relative; margin: 0; max-width: calc(100% - 120px); max-height: calc(100% - 96px); aspect-ratio: var(--ar, 3/4); height: calc(100% - 96px); transition: opacity .35s var(--ease), transform .35s var(--ease); }
 .specimen.is-leaving { opacity: 0; transform: scale(.985); }
-.plate { position: absolute; inset: 0; box-shadow: 0 1px 2px rgb(0 0 0 / .25), 0 14px 34px rgb(0 0 0 / .22); background: #ddd; }
+.plate { position: absolute; inset: 0; box-shadow: 0 1px 2px rgb(0 0 0 / .25), 0 14px 34px rgb(0 0 0 / .22); background: var(--card); }
 .plate img, .plate svg { width: 100%; height: 100%; display: block; object-fit: contain; }
 body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); }
 .boxes { position: absolute; inset: 0; }
@@ -304,9 +304,10 @@ body[data-view="galaxy"] > [data-view-host="galaxy"],
 body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 /* Task 9: the Inbox, intake notices and the Library menu */
 .top { position: relative; }
-.lib-btn { height: 32px; padding: 0 10px; margin-left: -10px; color: var(--ink-2); font-weight: 500; }
+.lib { position: relative; }
+.lib-btn { height: 32px; padding: 0 10px; color: var(--ink-2); font-weight: 500; }
 .lib-btn[aria-expanded="true"] { color: var(--ink); }
-.lib-menu { position: absolute; top: 46px; left: 10px; z-index: 25; min-width: 240px; padding: 6px 0; background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); }
+.lib-menu { position: absolute; top: 36px; right: 0; z-index: 25; min-width: 240px; padding: 6px 0; background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); }
 .lib-menu [role="menu"] { display: grid; }
 .lib-menu [role="menuitem"] { padding: 8px 14px; text-align: left; }
 .lib-menu [role="menuitem"]:hover, .lib-menu [role="menuitem"]:focus-visible { background: var(--shell); }
@@ -392,11 +393,11 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .insp-crumb .v, .insp-crumb .v.serif { font-size: 16px; }
 .insp-body { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 24px; }
 .insp-title { margin: 0; font: 500 21px/1.2 var(--serif); }
-.insp-plain { margin: 0; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.insp-plain { margin: -6px 0 0; font-size: 12px; color: var(--ink-2); } /* a subline under .insp-title */
 .insp-desc, .insp-syn { margin: 0; font-size: 14px; color: var(--ink-2); }
 .insp-syn { font-style: italic; }
 .insp-count { margin: 0; font-size: 12px; color: var(--ink-2); }
-.insp-h { margin: 6px 0 0; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.insp-h { margin: 6px 0 0; font: 400 12px/1.4 var(--sans); color: var(--ink-2); }
 .insp-list { display: grid; gap: 6px; }
 .insp-sel { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); background: var(--shell); text-align: left; font: 500 15px/1.25 var(--serif); }
 .insp-sel:hover, .insp-sel:focus-visible { border-color: var(--line-2); }
@@ -429,7 +430,7 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .tx-dialog { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; background: rgb(0 0 0 / .28); }
 .tx-sheet { width: min(460px, calc(100vw - 40px)); max-height: 80vh; overflow: auto; display: grid; gap: 10px; padding: 18px 20px; background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); font-size: 14px; }
 .tx-title { margin: 0; font: 500 19px/1.25 var(--serif); }
-.tx-h { margin: 0; font: 500 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.tx-h { margin: 0; font: 400 12px/1.4 var(--sans); color: var(--ink-2); }
 .tx-list { margin: 0; padding: 0; list-style: none; max-height: 40vh; overflow: auto; display: grid; gap: 2px; }
 .tx-list li[hidden] { display: none; }
 .tx-actions { display: flex; gap: 14px; align-items: center; }
@@ -479,7 +480,7 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .lb-box.is-hot .lb-tag, .lb-box:focus-visible .lb-tag { display: block; }
 .lb-note { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 4px 8px; background: var(--panel); color: var(--ink-2); font-size: 12px; pointer-events: none; }
 .lb-note[hidden] { display: none; }
-.lb-zoom, .lb-size { color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lb-zoom, .lb-size { color: var(--ink-2); font: 500 12px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .lb-bar .lb-hint { flex: 1 1 auto; min-width: 0; } /* the zoom and size readouts keep their room */
 
 /* ---------- Plan 4 Task 4: links you draw yourself ---------- */
@@ -502,7 +503,7 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .le-actions { display: flex; justify-content: flex-end; gap: 12px; align-items: center; }
 .le-save { padding: 5px 12px; border: 1px solid var(--line-2); color: var(--ink); font-weight: 500; }
 .le-save:disabled { color: var(--ink-3); }
-.group-head { margin: 12px 0 2px; font: 500 12px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
+.group-head { margin: 12px 0 2px; font: 400 12px/1.4 var(--sans); color: var(--ink-2); }
 .row.linked .sc small { font: 12px var(--sans); color: var(--ink-2); }
 .link-new { margin: 4px 0 10px; }
 .links-msg { margin: 0; font-size: 13px; color: var(--ink); }
@@ -529,7 +530,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .bd-tile { position: relative; width: 160px; height: 160px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2); touch-action: none; cursor: grab; }
 .bd-plate, .bd-plate img { display: block; width: 100%; height: 100%; }
 .bd-plate img { object-fit: contain; } /* the true aspect ratio, letterboxed on the N5 card */
-.bd-title { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 6px; background: var(--panel); font: 12px/1.4 var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bd-title { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 6px; background: var(--panel); font: 500 15px/1.25 var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bd-tools { position: absolute; top: 4px; right: 4px; display: none; gap: 6px; padding: 0 4px; background: var(--panel); }
 .bd-tile:hover .bd-tools, .bd-tile:focus-within .bd-tools { display: flex; }
 .bd-ghost { position: fixed; left: var(--x); top: var(--y); width: 96px; height: 96px; transform: translate(-50%, -50%); opacity: .8; pointer-events: none; z-index: 50; background: var(--card); box-shadow: 0 0 0 1px var(--line-2); }
@@ -551,7 +552,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 /* Plan 4 Task 5, fix round 1: no native image drag on board tiles (I1); the focus's boards (S1). */
 .bd-tile img { -webkit-user-drag: none; }
 .ref-boards { margin: 0; padding: 10px 16px 0; font-size: 13px; color: var(--ink); }
-.ref-boards .k { font: 500 12px var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-2); }
+.ref-boards .k { font: 400 12px/1.4 var(--sans); letter-spacing: normal; text-transform: none; color: var(--ink-2); }
 .ref-boards[hidden] { display: none; }
 
 /* ---------- Plan 4 Task 7: Compare ---------- */
@@ -561,7 +562,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .cmp-top { display: flex; align-items: baseline; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .cmp-link { margin: 0; font: italic 15px/1.4 var(--serif); }
 .cmp-link[hidden] { display: none; }
-.cmp-score { margin: 0 auto 0 0; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.cmp-score { margin: 0 auto 0 0; color: var(--ink-2); font: 500 12px var(--mono); font-variant-numeric: tabular-nums; }
 .cmp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 260px) minmax(0, 1fr); gap: 24px; padding-top: 16px; }
 .cmp-title { margin: 0 0 10px; font: 500 18px/1.3 var(--serif); }
 .cmp-tile { position: relative; width: min(420px, 100%); height: auto; aspect-ratio: 1; background: var(--card); } /* the plate is placed in % of it (final review I5) */
@@ -570,7 +571,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .cmp-tile.is-value img { filter: grayscale(1); }
 .cmp-out { position: absolute; border: 2px dotted var(--c); box-shadow: 0 0 0 1px rgb(0 0 0 / .35); pointer-events: none; } /* a region: dotted, in its operation ink */
 .cmp-out[hidden] { display: none; }
-.cmp-h { margin: 16px 0 6px; color: var(--ink-2); font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+.cmp-h { margin: 16px 0 6px; font: 400 12px/1.4 var(--sans); color: var(--ink-2); }
 .compare ul { margin: 0; padding: 0; list-style: none; font-size: 14px; line-height: 1.6; }
 .compare li .text { color: var(--t, var(--ink)); font-weight: 500; }
 .compare li[data-tech] { cursor: default; }
@@ -631,13 +632,43 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
   .search.is-drag .q-results { display: none; }
 }
 
-/* Plan 6 Task 4: the intro card (above Settings 45 and first run 50). A placeholder frame, the
-   wordmark centred, until the design pass; its look stays in this block and its tokens. */
-.intro { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; background: var(--shell); color: var(--ink); }
-.intro-mark { margin: 0; font: 600 56px/1 var(--serif); letter-spacing: -.01em; animation: intro-in 1.2s ease-out both; }
-.intro.is-still .intro-mark { animation: none; }
-@media (prefers-reduced-motion: reduce) { .intro-mark { animation: none; } }
-@keyframes intro-in { from { opacity: 0; transform: translateY(6px); } }
+/* Plan 6 Task 4: the intro card, "The first specimen" (DESIGN.md "Intro card"). z 55: above
+   Settings (45) and first run (50). The resting styles ARE the final frame and every entrance
+   keyframe is from-only, so .is-still (reduced motion) is that frame with nothing animating.
+   The tail fades the contents (never .intro, so the bare app shell never shows through) by
+   5.9 s, before intro.ts removes the card at INTRO_MAX_MS (6000 ms): keep the two in step. */
+.intro { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 40px 20px; overflow: hidden; background: var(--shell); color: var(--ink); }
+.intro-frame { display: grid; justify-items: center; text-align: center; animation: intro-out .6s var(--ease) 5.3s forwards; }
+.intro-mark { margin: 0; font: 600 64px/1 var(--serif); letter-spacing: -.015em; animation: intro-up .7s var(--ease) both; }
+.intro-line { margin: 14px 0 0; font: italic 400 17px/1.4 var(--serif); color: var(--ink-2); animation: intro-up .7s var(--ease) .25s both; }
+.intro-card { position: relative; margin-top: 36px; width: min(400px, 76vw, calc(40vh * 4 / 3)); aspect-ratio: 4 / 3; background: var(--card); animation: intro-card .5s var(--ease) .45s both; }
+/* a region box, lit in its operation's ink with the Hot ring; its badge as .num */
+.intro-box { position: absolute; border: 2px solid var(--c); box-shadow: 0 0 0 1px rgb(0 0 0 / .35);
+  animation: intro-fade .4s var(--ease) calc(.8s + var(--i) * .1s) both, intro-hot .45s var(--ease) calc(1.5s + var(--i) * .4s) both; }
+.intro-num { position: absolute; top: -13px; left: -13px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 500 13px var(--mono); color: var(--on); background: var(--c); box-shadow: 0 0 0 2px var(--card); }
+.intro-ops { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; margin: 28px 0 0; padding: 0; list-style: none; }
+.intro-ops li { display: flex; align-items: center; gap: 8px; font: 500 15px/1.25 var(--serif); color: var(--t); animation: intro-up .45s var(--ease) calc(1.5s + var(--i) * .4s) both; }
+.intro-ops li::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+.intro-note { margin: 12px 0 0; font-size: 12px; color: var(--ink-2); animation: intro-up .5s var(--ease) 3.2s both; }
+/* each operation's inks and its place in the sequence */
+.intro [data-op="diff"]  { --c: var(--diff);  --t: var(--diff-text);  --on: var(--diff-on);  --i: 0; }
+.intro [data-op="group"] { --c: var(--group); --t: var(--group-text); --on: var(--group-on); --i: 1; }
+.intro [data-op="seq"]   { --c: var(--seq);   --t: var(--seq-text);   --on: var(--seq-on);   --i: 2; }
+.intro [data-op="infer"] { --c: var(--infer); --t: var(--infer-text); --on: var(--infer-on); --i: 3; }
+/* four regions of an imagined specimen; the stroke says the state: solid full, dashed partial, dotted region */
+.intro-box[data-op="diff"]  { left: 10%; top: 14%; width: 34%; height: 40%; }
+.intro-box[data-op="group"] { left: 54%; top: 10%; width: 36%; height: 30%; border-style: dashed; }
+.intro-box[data-op="seq"]   { left: 48%; top: 52%; width: 42%; height: 36%; border-style: dotted; border-width: 2px; }
+.intro-box[data-op="infer"] { left: 14%; top: 64%; width: 24%; height: 24%; }
+/* the still frame: no animation or transition anywhere inside (reduced motion, intro.ts) */
+.intro.is-still *, .intro.is-still *::before, .intro.is-still *::after { animation: none; transition: none; }
+@media (prefers-reduced-motion: reduce) { .intro *, .intro *::before, .intro *::after { animation: none !important; } }
+@media (max-width: 760px) { .intro-mark { font-size: 48px; } .intro-card { margin-top: 28px; } }
+@keyframes intro-up { from { opacity: 0; transform: translateY(4px); } }
+@keyframes intro-card { from { opacity: 0; transform: scale(.985); } }
+@keyframes intro-fade { from { opacity: 0; } }
+@keyframes intro-hot { from { border-color: color-mix(in srgb, var(--card-ink) 70%, transparent); box-shadow: none; } }
+@keyframes intro-out { to { opacity: 0; } }
 /* About: Settings' dialog and sheet, plus its lists. */
 .ab-version { margin: 0 0 12px; color: var(--ink-2); font-size: 13px; }
 .ab-h { margin: 16px 0 6px; font-size: 13px; font-weight: 600; }

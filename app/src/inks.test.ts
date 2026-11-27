@@ -75,7 +75,7 @@ describe("inks_contrast_and_distinct", () => {
   for (const [theme, v] of Object.entries(THEMES)) {
     it(`${theme}: every ink is defined, legible and distinct`, () => {
       for (const k of [...SEED, ...EXTRA]) for (const s of ["", "-text", "-on"]) expect(v[k + s], `${theme} --${k}${s}`).toMatch(/^#[0-9A-F]{6}$/);
-      for (const k of EXTRA) expect(contrast(v[`${k}-on`], v[k]), `${theme} ${k}-on`).toBeGreaterThanOrEqual(4.5);
+      for (const k of [...SEED, ...EXTRA]) expect(contrast(v[`${k}-on`], v[k]), `${theme} ${k}-on`).toBeGreaterThanOrEqual(4.5);
       for (const k of [...SEED, ...EXTRA]) expect(contrast(v[`${k}-text`], v.panel), `${theme} ${k}-text`).toBeGreaterThanOrEqual(4.5);
       const bases = [...SEED, ...EXTRA];
       for (let i = 0; i < bases.length; i++)
@@ -84,11 +84,11 @@ describe("inks_contrast_and_distinct", () => {
     });
   }
 
-  it("the seed -on values are pinned as they stand (ruling B7)", () => {
-    // Light Group Green -on (#161616 on #1E8E5A) is 4.37:1, under AA. DESIGN.md records it as a
-    // delta carried to Plan 6 for a design decision; it is not changed here.
+  it("light Group Green clears AA for its numeral (D17, closing ruling B7)", () => {
+    // D17: the base moved #1E8E5A -> #1E915C (ΔE2000 1.05), so #161616 on it is 4.53:1 (was 4.37).
+    expect(THEMES.light.group).toBe("#1E915C");
     expect(SEED.map((k) => THEMES.light[`${k}-on`])).toEqual(["#161616", "#161616", "#FFFFFF", "#FFFFFF"]);
     expect(SEED.map((k) => THEMES.dark[`${k}-on`])).toEqual(["#161616", "#161616", "#161616", "#161616"]);
-    expect(contrast(THEMES.light["group-on"], THEMES.light.group)).toBeCloseTo(4.37, 2);
+    expect(contrast(THEMES.light["group-on"], THEMES.light.group)).toBeGreaterThanOrEqual(4.5);
   });
 });

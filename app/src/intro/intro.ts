@@ -15,9 +15,23 @@ export function playIntro(root: HTMLElement, opts: { reducedMotion: boolean }): 
   const el = document.createElement("div");
   el.className = opts.reducedMotion ? "intro is-still" : "intro";
   el.setAttribute("role", "img");
-  el.setAttribute("aria-label", "Horus");
-  // Placeholder frame until the design pass (SPEC §8): the wordmark, centred.
-  el.innerHTML = `<p class="intro-mark">Horus</p>`;
+  el.setAttribute("aria-label", "Horus. Your references, and why they connect.");
+  // "The first specimen" (DESIGN.md "Intro card"; Task 4 design pass, pending the user's
+  // approval). Every ink, place and delay is keyed off data-op in styles.css (no style=: CSP).
+  el.innerHTML = `<div class="intro-frame">
+    <p class="intro-mark">Horus</p>
+    <p class="intro-line">Your references, and why they connect.</p>
+    <div class="intro-card" aria-hidden="true">
+      <span class="intro-box" data-op="diff"><span class="intro-num">1</span></span>
+      <span class="intro-box" data-op="group"><span class="intro-num">2</span></span>
+      <span class="intro-box" data-op="seq"><span class="intro-num">3</span></span>
+      <span class="intro-box" data-op="infer"><span class="intro-num">4</span></span>
+    </div>
+    <ul class="intro-ops">
+      <li data-op="diff">Stand out</li><li data-op="group">Hold together</li><li data-op="seq">Lead the eye</li><li data-op="infer">Make them think</li>
+    </ul>
+    <p class="intro-note">A starting set. Rename them or add your own.</p>
+  </div>`;
   root.append(el);
   return new Promise((resolve) => {
     const life = new AbortController();

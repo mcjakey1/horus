@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// @ts-expect-error type error without @types/node package (as vite.config.ts)
+import { readFileSync } from "node:fs";
 import type { Settings } from "../api";
 import { INTRO_MAX_MS, playIntro, shouldPlayIntro } from "./intro";
 
@@ -54,6 +56,13 @@ describe("the intro card (Plan 6 Task 4)", () => {
     expect(document.querySelector(".intro")).not.toBeNull();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "a" }));
     expect(await p).toBe("skipped");
+  });
+
+  it("the still frame turns off every animation inside the card (styles.css)", () => {
+    // jsdom applies no stylesheet: read the rule itself, as inks.test.ts reads the tokens.
+    const css: string = readFileSync("src/styles.css", "utf8");
+    expect(css).toContain(".intro.is-still *, .intro.is-still *::before, .intro.is-still *::after { animation: none; transition: none; }");
+    expect(css).toMatch(/\.intro \{[^}]*z-index: 55;/);
   });
 
   it("names Horus only, and never claims a fixed operation count", () => {
