@@ -8,6 +8,7 @@ import {
   classifyDrag,
   clipLabel,
   labelsShown,
+  barBoxes,
   LABEL_PX,
   mountCanvasOrFallback,
   nodeRect,
@@ -118,6 +119,22 @@ describe("planFrame", () => {
     ]);
     expect([...shown].sort()).toEqual(["op:o", "tech:d", "tech:f", "tech:sel"]);
     expect(LABEL_PX).toBe(12);
+  });
+
+  it("a name on a Tree connector bar hides; the selected name still shows (quick look 2)", () => {
+    const j = (id: string, x: number, y: number) => [id, { id, kind: "label" as const, x, y, text: "", font: "mono" as const, color: "#000" }] as const;
+    const nodes = new Map<string, SceneNode>([j("j:dn:a", 0, 100), j("j:up:b", 200, 100), j("j:up:c", 0, 300)]);
+    const edges = [
+      { from: "j:dn:a", to: "j:up:b", width: 1, color: "#000" }, // a bar
+      { from: "j:dn:a", to: "j:up:c", width: 1, color: "#000" }, // a stem: vertical, not an obstacle
+    ];
+    const bars = barBoxes(edges, nodes, { x: 0, y: 0, scale: 1 });
+    expect(bars).toEqual([{ id: "bar:j:dn:a>j:up:b", x: 100, y: 99, w: 200, h: 2, rank: 0 }]);
+    const name = (id: string, x: number, y: number, rank: number) => ({ id, x, y, w: 60, h: 19, rank });
+    const shown = labelsShown([name("br:on", 30, 90, 1), name("br:clear", 30, 120, 1), name("tech:sel", 170, 90, -1)], bars);
+    expect(shown.has("br:on")).toBe(false);
+    expect(shown.has("br:clear")).toBe(true);
+    expect(shown.has("tech:sel")).toBe(true);
   });
 
   it("labels are cut at 24 characters (final review I1)", () => {

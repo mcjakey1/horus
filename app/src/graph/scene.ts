@@ -12,6 +12,7 @@ import {
   classifyDrag,
   EdgeGate,
   labelsShown,
+  barBoxes,
   LABEL_PX,
   type LabelBox,
   sameLook,
@@ -364,7 +365,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         }
       }
     }
-    const keep = labelsShown(names);
+    const keep = labelsShown(names, barBoxes(edges, nodes, cam));
     for (const [id, label] of named) label.visible = keep.has(id);
     // By URL, not by node: one reference can be drawn under several techniques (Tree), and a node
     // can drop from thumb to dot while still on screen. Only loads a thumbnail wants stay in flight.
