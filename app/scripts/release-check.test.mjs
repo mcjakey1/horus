@@ -99,6 +99,9 @@ describe("checkCargoMeta", () => {
     expect(checkCargoMeta(cargo.replace('["Jake Manahan"]', '["you"]'))).not.toEqual([]);
     expect(checkCargoMeta(cargo.replace('["Jake Manahan"]', '["Jake Manahan <j@x.org>"]')).join()).toMatch(/email/);
     expect(checkCargoMeta(cargo.replace("A local reference workbench for artists", "A Tauri App"))).not.toEqual([]);
+    // The licence the user chose (2026-11-28): AGPL v3 only.
+    expect(checkCargoMeta(cargo.replace(/^license = .*\r?\n/m, "")).join()).toMatch(/AGPL-3\.0-only/);
+    expect(checkCargoMeta(cargo.replace('"AGPL-3.0-only"', '"AGPL-3.0-or-later"')).join()).toMatch(/AGPL-3\.0-only/);
   });
 });
 

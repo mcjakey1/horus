@@ -365,4 +365,6 @@ For the product design, read [`SPEC.md`](SPEC.md), [`PRODUCT.md`](PRODUCT.md), a
 
 ## License
 
-This repository does not have a license yet. The author keeps all rights.
+Horus is free software under the [GNU Affero General Public License, version 3](LICENSE) (`AGPL-3.0-only`). If you give a copy of Horus to other persons, or let them use a changed version over a network, you must also give them its source code.
+
+The third-party parts keep their own licences. See `app/THIRD_PARTY_NOTICES.md`.

@@ -73,7 +73,7 @@ describe("Find similar section", () => {
     const sw = () => $<HTMLButtonElement>(el, '[role="switch"]');
     expect(sw().getAttribute("aria-checked")).toBe("false");
     expect(el.textContent).toContain(
-      "It downloads a 150–350 MB image model and indexes your library in the background. Recommended for machines with 8 GB of RAM or more.",
+      "It downloads a 213 MB image model and indexes your library in the background. Recommended for machines with 8 GB of RAM or more.",
     );
     expect(el.textContent).not.toContain("Turn on Find similar?");
     const first = sw();

@@ -173,7 +173,7 @@ You asked for *"a way to search an image with the ideas I'm looking for"*. That 
 | | What you type or drop | What you get | Cost |
 |---|---|---|---|
 | **A. Idea search** | Words: "make the product feel like food", "moody", "show one thing as another" | Matches on technique names, synonyms and definitions, plus your notes and "why" links. Results are the techniques and the references tagged with them. You can combine techniques with AND/OR. | Small. Fully local. |
-| **B. Find similar** | An image (from your library or dropped in), **or words** such as "a hand holding something fragile" | References that look alike or show similar content, ranked, even when nothing is tagged yet. | Medium. It uses a local AI model (CLIP, run with ONNX Runtime in Rust; about 150–350 MB). The model is a **one-time optional download** when you first use the feature, not part of the installer. Everything stays offline after that. |
+| **B. Find similar** | An image (from your library or dropped in), **or words** such as "a hand holding something fragile" | References that look alike or show similar content, ranked, even when nothing is tagged yet. | Medium. It uses a local AI model (CLIP, run with ONNX Runtime in Rust; 213 MB, ruled by the user on 2026-11-28). The model is a **one-time optional download** when you first use the feature, not part of the installer. Everything stays offline after that. |
 | **C. Find new images online** | An idea or an image | New references from the web, to bring in | Large. Needs an outside service or API, has costs, and raises copyright questions for each result. |
 
 **What B can and can't do (AGY's correction).** CLIP is good at subject, content, style and mood. It is **not** good at abstract techniques such as Closure or Semantic contrast. So B finds "looks like this", not "works like this".
@@ -184,7 +184,7 @@ To keep the app from sliding into a mood board, B's results are always labelled 
 
 - **A is always on.** It needs no download.
 - **B is optional and off until the artist turns it on**, because some machines aren't powerful enough to run a model comfortably. There are two ways in:
-  - **During first-run setup**, one step asks: *"Turn on Find similar? It downloads a 150–350 MB image model and indexes your library in the background. Recommended for machines with 8 GB of RAM or more."* The choices are **Turn on now** and **Not now**. Neither is pre-selected, and the step shows the download size and the machine's detected RAM.
+  - **During first-run setup**, one step asks: *"Turn on Find similar? It downloads a 213 MB image model and indexes your library in the background. Recommended for machines with 8 GB of RAM or more."* The choices are **Turn on now** and **Not now**. Neither is pre-selected, and the step shows the download size and the machine's detected RAM.
   - **In Settings → Find similar**, the same switch can be flipped at any time. The panel also shows:
     - the download and indexing progress;
     - the disk space used;

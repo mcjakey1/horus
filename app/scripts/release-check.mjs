@@ -128,6 +128,8 @@ export function checkCargoMeta(cargoToml) {
   }
   if (Array.isArray(authors) && authors.some((a) => /<[^>]*@[^>]*>/.test(a))) out.push("Cargo.toml: authors must not hold an email address (Decision 3)");
   else if (JSON.stringify(authors) !== JSON.stringify(["Jake Manahan"])) out.push('Cargo.toml: authors must be ["Jake Manahan"] (Decision 3)');
+  // The licence the user chose (2026-11-28); LICENSE at the repository root holds its text.
+  if (tomlString(pkg.license) !== "AGPL-3.0-only") out.push('Cargo.toml: license must be "AGPL-3.0-only" (the user\'s ruling, 2026-11-28)');
   return out;
 }
 

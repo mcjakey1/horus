@@ -16,6 +16,12 @@ export type AboutInfo = {
 export const PRIVACY =
   "Works offline. No account, no telemetry. Find similar downloads an image model from huggingface.co only if you turn it on.";
 
+/** The user's licence ruling (2026-11-28). The source location must be public, or the source
+ * must ship with the release, before 1.0 (gate G10). */
+export const LICENCE = "Horus is free software under the GNU AGPL v3.";
+// ponytail: shown as text with no scheme, as PRIVACY names huggingface.co: R13 keeps remote URLs out of src.
+export const SOURCE_URL = "github.com/mcjakey1/horus";
+
 /** The families in src/fonts/fonts.css; about.test.ts checks this against that file. */
 export const FONTS: AboutInfo["fonts"] = [
   { family: "Source Serif 4", licence: "SIL Open Font License 1.1" },
@@ -47,6 +53,7 @@ export function aboutHTML(info: AboutInfo): string {
     <div class="st-section ab-body">
       <p class="ab-version">Version ${esc(info.version)}</p>
       <p>${esc(PRIVACY)}</p>
+      <p>${esc(LICENCE)} Source code: ${esc(SOURCE_URL)}</p>
       <h2 class="ab-h">Fonts</h2>
       <ul class="ab-list">${fonts}</ul>
       <p><button type="button" class="text-btn" data-notices>Third-party notices</button></p>
