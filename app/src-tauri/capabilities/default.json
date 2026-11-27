@@ -6,6 +6,10 @@
   "permissions": [
     "core:default",
     "dialog:allow-open",
-    "opener:allow-reveal-item-in-dir"
+    "opener:allow-reveal-item-in-dir",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "$RESOURCE/THIRD_PARTY_NOTICES.md" }]
+    }
   ]
 }

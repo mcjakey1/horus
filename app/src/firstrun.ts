@@ -22,6 +22,12 @@ import { mountScopeStatus } from "./boards/status";
 import { wireSimilar } from "./similar-ui";
 import { CATCH_ALL, FIND_SIMILAR_COPY, fmtBytes } from "./settings/find-similar";
 import { mountSettings } from "./settings/panel";
+import { playIntro, shouldPlayIntro } from "./intro/intro";
+import { demoCredits, FONTS, mountAbout } from "./about";
+import { showProgress } from "./importer";
+
+const reducedMotion = () =>
+  typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export { FIND_SIMILAR_COPY };
 
@@ -41,6 +47,11 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   const dark = settings?.theme === "dark" ||
     (settings?.theme !== "light" && typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme = dark ? "dark" : "light";
+  // Plan 6 Task 4 (R12): once for everyone, before the last library opens and before first run.
+  if (shouldPlayIntro(settings)) {
+    await playIntro(root, { reducedMotion: reducedMotion() });
+    void api.setSettings({ introSeen: true }).catch(() => {});
+  }
   let lib: LibraryView | undefined;
   let error: string | undefined;
   if (settings?.lastLibrary) {
@@ -126,6 +137,28 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
     openSettings: () => settingsPanel.open("find-similar"),
   });
   if (lastShown) similar.show(lastShown);
+  // Plan 6 Task 4: the Help menu. An open Settings closes first: its capture-phase key listener
+  // would eat the intro's skip key and About's Esc.
+  let about: { close(): void } | null = null;
+  let unMenu: (() => void) | null = null;
+  const openAbout = async () => {
+    const [version, noticesPath] = await Promise.all([
+      api.appVersion().catch(() => "unknown"),
+      api.noticesPath().catch(() => ""),
+    ]);
+    if (destroyed) return; // boot was torn down while the version was read
+    about?.close();
+    about = mountAbout(root, { version, fonts: FONTS, noticesPath, demoCredits: demoCredits() }, {
+      openNotices: (p) => api.openPath(p),
+    });
+  };
+  void api.onMenu((id) => {
+    settingsPanel.close();
+    about?.close(); // its holdModal would keep the notice inert and catch the intro's keys
+    if (id === "play-intro") void playIntro(root, { reducedMotion: reducedMotion() }); // introSeen stays
+    else if (id === "about") void openAbout();
+    else if (id === "verify") void verifyImageFiles(root, api, notice);
+  }).then((u) => (destroyed ? u() : (unMenu = u)));
   // Plan 6 Task 2: a rebuilt thumbnail replaces the broken image wherever it shows.
   onRebuilt = (ids) => reloadThumbs(root, api, store, ids);
   if (early?.length) reloadThumbs(root, api, store, early);
@@ -135,8 +168,36 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
     store,
     source,
     destroy: () =>
-      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), settingsPanel.close(), similar?.destroy(), (destroyed = true), unThumbs?.(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
+      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), settingsPanel.close(), similar?.destroy(), (destroyed = true), unThumbs?.(), unMenu?.(), about?.close(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
   };
+}
+
+/** Help > Verify image files…: progress and Cancel in the notice (D15's surface), then one line.
+ * The ids it finds go to "Show them", like a missing original's. */
+let verifying = false;
+
+export async function verifyImageFiles(root: ParentNode, api: Api, notice: (html: string) => void) {
+  if (verifying) return; // one run: a second click would replace the live progress and Cancel
+  verifying = true;
+  const prog = showProgress(root, "Verifying image files", () => void api.cancelVerify().catch(() => {}));
+  const unlisten = api.onVerifyProgress((p) => prog.update(p.done, p.total)).catch(() => null);
+  try {
+    const r = await api.verifyImageFiles();
+    prog.stop();
+    const n = r.changed.length;
+    if (r.checked < r.total) notice(`<p>Verify stopped after ${r.checked} of ${r.total} image files.</p>`);
+    else if (!n) notice(`<p>All ${r.total} image files match the library.</p>`);
+    else
+      notice(
+        `<p>${n} image ${n === 1 ? "file has" : "files have"} changed since ${n === 1 ? "it was" : "they were"} added. <button type="button" class="text-btn" data-show-refs="${esc(r.changed.join(" "))}">Show them</button></p>`,
+      );
+  } catch (err) {
+    prog.stop();
+    notice(`<p>${esc(String(err))}</p>`);
+  } finally {
+    verifying = false;
+    void unlisten.then((u) => u?.());
+  }
 }
 
 /** Re-requests every `<img>` showing one of these references' thumbnails (they 404ed before). */

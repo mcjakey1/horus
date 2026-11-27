@@ -26,6 +26,8 @@ function fakeApi(start: SimilarStatus = st()) {
     similarRemoveModel: vi.fn(async () => st()),
     similarPause: vi.fn(async (p: boolean) => st({ phase: p ? "paused" : "indexing", indexed: 3, total: 10 })),
     onSimilarStatus: vi.fn(async (cb: (s: SimilarStatus) => void) => ((listener = cb), unlisten)),
+    noticesPath: vi.fn(async () => "C:/Horus/THIRD_PARTY_NOTICES.md"),
+    openPath: vi.fn(async () => {}),
   } as unknown as Api & Record<string, ReturnType<typeof vi.fn>>;
 }
 
@@ -46,6 +48,15 @@ describe("Find similar section", () => {
   beforeEach(() => {
     document.body.innerHTML = "<section></section>";
     el = document.querySelector("section")!;
+  });
+
+  it("about_the_model_opens_the_notices (P5-R13, Plan 6 Task 4)", async () => {
+    const api = fakeApi();
+    renderFindSimilar(el, st(), api);
+    $<HTMLButtonElement>(el, '[data-act="about-model"]').click();
+    await tick();
+    await tick();
+    expect(api.openPath).toHaveBeenCalledWith("C:/Horus/THIRD_PARTY_NOTICES.md");
   });
 
   it("switch_calls_enable_disable", async () => {

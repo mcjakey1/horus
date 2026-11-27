@@ -306,7 +306,7 @@
           "#104F33",
           "#156B43",
           "#1A7D50",
-          "#1E8E5A",
+          "#1E915C",
           "#3DB07A",
           "#5CC592",
           "#CBEBDA"
@@ -320,7 +320,7 @@
           "#104F33",
           "#156B43",
           "#1A7D50",
-          "#1E8E5A",
+          "#1E915C",
           "#3DB07A",
           "#5CC592",
           "#CBEBDA"
@@ -334,7 +334,7 @@
           "#104F33",
           "#156B43",
           "#1A7D50",
-          "#1E8E5A",
+          "#1E915C",
           "#3DB07A",
           "#5CC592",
           "#CBEBDA"
@@ -348,7 +348,7 @@
           "#104F33",
           "#156B43",
           "#1A7D50",
-          "#1E8E5A",
+          "#1E915C",
           "#3DB07A",
           "#5CC592",
           "#CBEBDA"
@@ -362,7 +362,7 @@
           "#104F33",
           "#156B43",
           "#1A7D50",
-          "#1E8E5A",
+          "#1E915C",
           "#3DB07A",
           "#5CC592",
           "#CBEBDA"
@@ -672,7 +672,7 @@
       "kind": "chip",
       "refersTo": "callout-badge-differentiate",
       "description": "26px circle in operation ink with an -on numeral and a 2px grey-card halo.",
-      "html": "<div class=\"ds-root ds-card-demo\"><span class=\"ds-num\" style=\"--c:#B87F00;--on:#161616\">1</span><span class=\"ds-num\" style=\"--c:#1E8E5A;--on:#161616\">2</span><span class=\"ds-num\" style=\"--c:#2563D0;--on:#FFFFFF\">3</span><span class=\"ds-num\" style=\"--c:#D2462A;--on:#FFFFFF\">4</span></div>",
+      "html": "<div class=\"ds-root ds-card-demo\"><span class=\"ds-num\" style=\"--c:#B87F00;--on:#161616\">1</span><span class=\"ds-num\" style=\"--c:#1E915C;--on:#161616\">2</span><span class=\"ds-num\" style=\"--c:#2563D0;--on:#FFFFFF\">3</span><span class=\"ds-num\" style=\"--c:#D2462A;--on:#FFFFFF\">4</span></div>",
       "css": ".ds-root{--shell:#F3F3F2;--panel:#FAFAF9;--line:#D9D9D7;--line-2:#C4C4C2;--ink:#161616;--ink-2:#545452;--ink-3:#6E6E6C;--card:#777776;--card-ink:#F4F4F3;--focus:#2563D0;--serif:'Source Serif 4','Iowan Old Style',Georgia,serif;--mono:'Red Hat Mono',ui-monospace,'Cascadia Mono',monospace;--sans:system-ui,-apple-system,'Segoe UI Variable Text','Segoe UI','Helvetica Neue',sans-serif;--ease:cubic-bezier(.16,1,.3,1);}.ds-card-demo{display:flex;gap:14px;padding:20px;background:var(--card)}.ds-num{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:500 13px var(--mono);color:var(--on);background:var(--c);box-shadow:0 0 0 2px var(--card)}"
     },
     {

@@ -4,6 +4,7 @@
 import type { DomainMove, OpMove, TagMove, Tag, Taxonomy } from "../api";
 import type { Snapshot } from "../data";
 import { esc } from "../esc";
+import { holdModal } from "../modal";
 import { opLabel } from "../ops";
 
 /** Plan 2's copy for the seed fallback after a damaged taxonomy.json. */
@@ -88,7 +89,10 @@ function sheet(host: HTMLElement, p: { title: string; options?: { value: string;
   const okBtn = d.querySelector<HTMLButtonElement>(".tx-ok")!;
   (d.querySelector<HTMLElement>(".tx-search, input[type=radio]") ?? okBtn).focus();
   return new Promise((resolve) => {
+    // Settings' hold (D8): inert around it, Tab wraps, and a key that fell to <body> comes back.
+    const release = holdModal(d, () => close(null));
     const close = (v: string | null) => {
+      release();
       d.remove();
       if (opener?.isConnected) opener.focus();
       resolve(v);
@@ -106,6 +110,10 @@ function sheet(host: HTMLElement, p: { title: string; options?: { value: string;
       sync();
     });
     d.addEventListener("keydown", (e) => {
+      // D8: Ctrl/Cmd+Z in the empty search would run WebView2's own undo, refill the field and
+      // move focus out of the dialog; with a typed query it is the field's undo.
+      const t = e.target as HTMLInputElement;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && t.matches?.(".tx-search") && !t.value) return void e.preventDefault();
       if (e.key !== "Escape") return;
       e.preventDefault();
       e.stopPropagation();

@@ -50,6 +50,8 @@ pub struct AppState {
     close_owed: AtomicBool,
     /// The UI's intake queue has work Rust has not seen yet: a close waits for it to drain (R2).
     intake_busy: AtomicBool,
+    /// Plan 6 D15: Cancel on the import notice; the running import stops before its next file.
+    import_cancel: AtomicBool,
     /// Imports queue here for their whole run: thumbnail temp names are fixed per hash.
     import_gate: Mutex<()>,
     /// Serialises the settings read-merge-write.
@@ -67,6 +69,9 @@ pub struct AppState {
     similar_start: Mutex<()>,
     /// One writer per model folder: a re-enable or a remove waits out a cancelled download.
     similar_download: Mutex<()>,
+    /// Plan 6 Task 4: "Verify image files…" runs one at a time; Cancel sets `verify_cancel`.
+    verify_running: AtomicBool,
+    verify_cancel: AtomicBool,
 }
 
 impl AppState {
@@ -82,6 +87,7 @@ impl AppState {
             skip_close_flush: AtomicBool::new(false),
             close_owed: AtomicBool::new(false),
             intake_busy: AtomicBool::new(false),
+            import_cancel: AtomicBool::new(false),
             import_gate: Mutex::new(()),
             settings: Mutex::new(()),
             config_dir,
@@ -91,6 +97,8 @@ impl AppState {
             similar: Mutex::new(similar::SimilarState::default()),
             similar_start: Mutex::new(()),
             similar_download: Mutex::new(()),
+            verify_running: AtomicBool::new(false),
+            verify_cancel: AtomicBool::new(false),
         }
     }
 }
@@ -723,6 +731,74 @@ fn rebuild<R: Runtime>(app: &AppHandle<R>, root: &Path, items: Vec<(String, Stri
     let _ = app.emit("library://thumbs-rebuilt", &ids);
     similar::retry(app, &hashes);
     similar::start_hook(app);
+}
+
+/// Plan 6 Task 4: the open library's folder, for File > "Open library folder".
+pub fn open_root<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
+    let st = app.state::<AppState>();
+    lock(&st.open).as_ref().map(|o| o.lib.root.clone())
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyReport {
+    /// Reference ids whose original no longer matches its hash.
+    pub changed: Vec<String>,
+    pub checked: usize,
+    pub total: usize,
+}
+
+/// Plan 6 Task 4, Help > "Verify image files…": hashes every original on a snapshot, with no
+/// lock held, emitting `verify://progress` `{ done, total }` at most every 100 ms. One run at a
+/// time; `checked < total` means it was cancelled. Never changes the library.
+#[tauri::command(async)]
+pub fn verify_image_files<R: Runtime>(app: AppHandle<R>) -> Result<VerifyReport, String> {
+    let st = app.state::<AppState>();
+    if st.verify_running.swap(true, Ordering::SeqCst) {
+        return Err("Horus is already verifying the image files.".into());
+    }
+    /// Clears `verify_running` on every exit, a panic included.
+    struct Running<'a>(&'a AtomicBool);
+    impl Drop for Running<'_> {
+        fn drop(&mut self) {
+            self.0.store(false, Ordering::SeqCst);
+        }
+    }
+    let _running = Running(&st.verify_running);
+    st.verify_cancel.store(false, Ordering::SeqCst);
+    let snapshot = {
+        let open = lock(&st.open);
+        open.as_ref().map(|o| Library {
+            root: o.lib.root.clone(),
+            data: visible(&o.lib).into_owned(),
+            recovered_from_backup: false,
+        })
+    };
+    let Some(lib) = snapshot else {
+        return Err(NO_LIBRARY.into());
+    };
+    let mut last: Option<Instant> = None;
+    let (changed, checked) = integrity::verify_with(&lib, &st.verify_cancel, &mut |done, total| {
+        if done == total || last.is_none_or(|t| t.elapsed() >= Duration::from_millis(100)) {
+            last = Some(Instant::now());
+            let _ = app.emit(
+                "verify://progress",
+                serde_json::json!({ "done": done, "total": total }),
+            );
+        }
+    });
+    Ok(VerifyReport {
+        changed,
+        checked,
+        total: lib.data.references.len(),
+    })
+}
+
+#[tauri::command]
+pub fn cancel_verify<R: Runtime>(app: AppHandle<R>) {
+    app.state::<AppState>()
+        .verify_cancel
+        .store(true, Ordering::SeqCst);
 }
 
 /// Plan 6 Task 2, "Add them": the open library's orphans (image files no reference points
@@ -1393,6 +1469,22 @@ pub fn demo_examples<R: Runtime>(app: AppHandle<R>) -> Result<Vec<DemoExample>, 
     Ok(demo::examples(&o.tax, &st.demo_dir))
 }
 
+/// The import notice's "Importing N of M" (Plan 6 D15), on `import://progress`.
+#[derive(Serialize, Clone, Copy)]
+pub struct ImportProgress {
+    pub done: usize,
+    pub total: usize,
+}
+const IMPORT_PROGRESS: &str = "import://progress";
+
+/// Plan 6 D15: Cancel. The running import stops before its next file and keeps what it added.
+#[tauri::command]
+pub fn cancel_import<R: Runtime>(app: AppHandle<R>) {
+    app.state::<AppState>()
+        .import_cancel
+        .store(true, Ordering::SeqCst);
+}
+
 /// Runs off the main thread. The state lock is held only to read the known hashes and,
 /// afterwards, to append, save and reindex; never while files are copied.
 #[tauri::command]
@@ -1431,7 +1523,20 @@ fn run_import<R: Runtime>(
             .collect();
         (lib.root.clone(), known)
     };
-    let out = import::import_paths(&root, &known, &paths);
+    // A Cancel from before this import (or for an earlier one) never stops it.
+    st.import_cancel.store(false, Ordering::SeqCst);
+    let mut last: Option<Instant> = None;
+    let out = import::import_paths_with(&root, &known, &paths, &mut |done, total| {
+        // At most ten a second, plus the first and the last.
+        if done == 0
+            || done == total
+            || last.is_none_or(|t| t.elapsed() >= Duration::from_millis(100))
+        {
+            last = Some(Instant::now());
+            let _ = app.emit(IMPORT_PROGRESS, ImportProgress { done, total });
+        }
+        !st.import_cancel.load(Ordering::SeqCst)
+    });
     let (note, source_url) = (clean(note.as_deref()), clean(source_url.as_deref()));
     let refs = out.references.into_iter().map(|mut r| {
         r.note = note.clone();
@@ -1869,7 +1974,7 @@ mod tests {
         let json = serde_json::to_value(&s).unwrap();
         assert_eq!(
             json,
-            serde_json::json!({"lastLibrary": null, "theme": "system", "findSimilar": "unset"})
+            serde_json::json!({"lastLibrary": null, "theme": "system", "findSimilar": "unset", "introSeen": false})
         );
     }
 
@@ -3605,5 +3710,63 @@ mod tests {
             "nothing swept, nothing left to rebuild: {:?}",
             again.integrity
         );
+    }
+
+    // ---------- Plan 6 Task 4: Verify image files ----------
+
+    #[test]
+    fn verify_image_files_reports_changed_and_progress() {
+        let e = created();
+        let id = e.import("small.jpg").unwrap().added[0].clone();
+        e.import("p3_red.png").unwrap();
+        let file = {
+            let st = e.app.state::<AppState>();
+            let open = lock(&st.open);
+            let o = open.as_ref().unwrap();
+            o.lib
+                .data
+                .references
+                .iter()
+                .find(|r| r.id == id)
+                .unwrap()
+                .file
+                .clone()
+        };
+        let path = root_of(&e).join("images").join(file);
+        let mut bytes = fs::read(&path).unwrap();
+        let mid = bytes.len() / 2;
+        bytes[mid] ^= 0xff;
+        fs::write(&path, bytes).unwrap();
+        let heard = Arc::new(Mutex::new(vec![]));
+        let h2 = heard.clone();
+        e.app.listen("verify://progress", move |ev| {
+            h2.lock().unwrap().push(ev.payload().to_string());
+        });
+        let r = verify_image_files(e.handle()).unwrap();
+        assert_eq!((r.changed, r.checked, r.total), (vec![id], 2, 2));
+        let last = heard.lock().unwrap().last().cloned().unwrap();
+        assert_eq!(last, r#"{"done":2,"total":2}"#);
+    }
+
+    #[test]
+    fn verify_runs_one_at_a_time_and_cancel_resets() {
+        let e = created();
+        e.import("small.jpg").unwrap();
+        let st = e.app.state::<AppState>();
+        st.verify_running.store(true, Ordering::SeqCst);
+        assert!(
+            verify_image_files(e.handle())
+                .unwrap_err()
+                .contains("already verifying")
+        );
+        st.verify_running.store(false, Ordering::SeqCst);
+        cancel_verify(e.handle()); // a Cancel left over from an earlier run
+        let r = verify_image_files(e.handle()).unwrap();
+        assert_eq!(
+            (r.checked, r.total),
+            (1, 1),
+            "a new run clears the old Cancel"
+        );
+        assert!(!st.verify_running.load(Ordering::SeqCst));
     }
 }

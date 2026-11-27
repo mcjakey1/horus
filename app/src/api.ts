@@ -2,7 +2,9 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { getVersion } from "@tauri-apps/api/app";
+import { resolveResource } from "@tauri-apps/api/path";
 
 export type Region = { x: number; y: number; w: number; h: number };
 
@@ -55,6 +57,12 @@ export type LibraryView = {
   /** Plan 6 Task 2: what the open found on disk; absent or null when nothing. */
   integrity?: IntegrityReport | null;
 };
+
+/** Plan 6 Task 4: Help > Verify image files… `changed`: reference ids whose file no longer matches. */
+export type VerifyReport = { changed: string[]; checked: number; total: number };
+
+/** Plan 6 Task 4: the Help menu's items, as Rust emits them on `menu://action`. */
+export type MenuId = "play-intro" | "about" | "verify";
 
 /** Plan 6 Task 2. Paths are absolute; ids are reference ids. */
 export type IntegrityReport = {
@@ -144,7 +152,11 @@ export type ImportReport = {
   duplicates: [string, string][];
   skipped: [string, Skip][];
   warnings?: [string, string][];
+  /** Plan 6 D15: Cancel stopped it between files; what was imported before stays. */
+  cancelled?: boolean;
 };
+/** `import://progress`: files done of the import's total (Plan 6 D15). */
+export type ImportProgress = { done: number; total: number };
 /** An import saves at once and is one undo step; `change` holds the new references. */
 export type ImportResult = { report: ImportReport; change: Change };
 /** The background saver's result after each debounced flush. */
@@ -159,6 +171,8 @@ export type Settings = {
   lastLibrary: string | null;
   theme: "system" | "light" | "dark";
   findSimilar: "unset" | "on" | "off";
+  /** Plan 6 Task 4: the intro played once (or was skipped); "Play intro" never changes it. */
+  introSeen: boolean;
 };
 
 /** Plan 5 Find similar. `error` is artist copy from Rust's one copy table, never raw error text. */
@@ -189,7 +203,23 @@ export interface Api {
   recoverOrphans(): Promise<Change>;
   /** Plan 6 Task 2: the reference ids whose thumbnails were rebuilt after an open. */
   onThumbsRebuilt(cb: (ids: string[]) => void): Promise<() => void>;
+  // Plan 6 Task 4: the native menu, About and "Verify image files…".
+  /** A Help menu item was chosen (File > Open library folder is handled in Rust). */
+  onMenu(cb: (id: MenuId) => void): Promise<() => void>;
+  appVersion(): Promise<string>;
+  /** Absolute path of the bundled THIRD_PARTY_NOTICES.md ($RESOURCE). */
+  noticesPath(): Promise<string>;
+  /** The capability allows exactly one path: the notices (R10). */
+  openPath(path: string): Promise<void>;
+  /** Hashes every original; `checked < total` when cancelled. Never changes the library. */
+  verifyImageFiles(): Promise<VerifyReport>;
+  cancelVerify(): Promise<void>;
+  onVerifyProgress(cb: (p: { done: number; total: number }) => void): Promise<() => void>;
   importPaths(paths: string[], meta?: IntakeMeta): Promise<ImportResult>;
+  /** Plan 6 D15: stops the running import before its next file. */
+  cancelImport(): Promise<void>;
+  /** Plan 6 D15: the running import's progress. */
+  onImportProgress(cb: (p: ImportProgress) => void): Promise<() => void>;
   /** A pasted image: `name` is a file name (only its last part is kept). */
   importBytes(name: string, bytes: ArrayBuffer | Uint8Array, meta?: IntakeMeta): Promise<ImportResult>;
   search(q: string): Promise<Hit[]>;
@@ -362,4 +392,13 @@ export const tauriApi: Api = {
   onSimilarStatus: (cb) => listen<SimilarStatus>("similar://status", (e) => cb(e.payload)),
   recoverOrphans: () => invoke("recover_orphans"),
   onThumbsRebuilt: (cb) => listen<string[]>("library://thumbs-rebuilt", (e) => cb(e.payload)),
+  onMenu: (cb) => listen<MenuId>("menu://action", (e) => cb(e.payload)),
+  appVersion: () => getVersion(),
+  noticesPath: () => resolveResource("THIRD_PARTY_NOTICES.md"),
+  openPath: (path) => openPath(path),
+  verifyImageFiles: () => invoke("verify_image_files"),
+  cancelVerify: () => invoke("cancel_verify"),
+  onVerifyProgress: (cb) => listen<{ done: number; total: number }>("verify://progress", (e) => cb(e.payload)),
+  cancelImport: () => invoke("cancel_import"),
+  onImportProgress: (cb) => listen<ImportProgress>("import://progress", (e) => cb(e.payload)),
 };

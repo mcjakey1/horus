@@ -8,6 +8,7 @@ pub mod hooks;
 pub mod import;
 pub mod integrity;
 pub mod library;
+pub mod menu;
 pub mod model;
 pub mod saver;
 pub mod search;
@@ -82,6 +83,9 @@ pub fn run() {
             hooks::register(app.handle(), move |c| {
                 commands::similar::on_change(&handle, c)
             });
+            // Plan 6 Task 4: the native menu, after SimilarEnv and before the Find similar start.
+            app.set_menu(menu::build(app.handle())?)?;
+            app.on_menu_event(menu::on_event);
             commands::similar::resume_on_start(app.handle());
             Ok(())
         })
@@ -110,10 +114,13 @@ pub fn run() {
             commands::create_library,
             commands::open_library,
             commands::recover_orphans,
+            commands::verify_image_files,
+            commands::cancel_verify,
             commands::get_taxonomy,
             commands::related,
             commands::graph_edges,
             commands::import_paths,
+            commands::cancel_import,
             commands::import_bytes,
             commands::search,
             commands::get_settings,
@@ -192,23 +199,32 @@ mod tests {
         );
     }
 
-    /// B3: the opener plugin is back for "Open folder" only; no open-url or open-path grant.
+    /// B3, R10: the opener plugin may reveal a folder, and open exactly one file: the bundled
+    /// THIRD_PARTY_NOTICES.md (About and "About the model"). No open-url grant.
     #[test]
-    fn capability_grants_opener_reveal_only() {
+    fn capability_grants_reveal_and_notices_only() {
         let cap: serde_json::Value =
             serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
-        let perms: Vec<&str> = cap["permissions"]
+        // A permission is a bare identifier or a scoped object `{ identifier, allow }`.
+        let opener: Vec<&serde_json::Value> = cap["permissions"]
             .as_array()
             .unwrap()
             .iter()
-            .filter_map(|p| p.as_str())
+            .filter(|p| {
+                p.as_str()
+                    .or_else(|| p["identifier"].as_str())
+                    .is_some_and(|id| id.starts_with("opener:"))
+            })
             .collect();
-        let opener: Vec<&str> = perms
-            .iter()
-            .copied()
-            .filter(|p| p.starts_with("opener:"))
-            .collect();
-        assert_eq!(opener, ["opener:allow-reveal-item-in-dir"]);
+        assert_eq!(opener.len(), 2, "{opener:?}");
+        assert_eq!(opener[0], "opener:allow-reveal-item-in-dir");
+        assert_eq!(
+            *opener[1],
+            serde_json::json!({
+                "identifier": "opener:allow-open-path",
+                "allow": [{ "path": "$RESOURCE/THIRD_PARTY_NOTICES.md" }]
+            })
+        );
     }
 
     #[test]

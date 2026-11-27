@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import html from "../index.html?raw";
 import seedJson from "../src-tauri/resources/taxonomy.json";
 import type { Api, Board, LibraryView, Link, Reference, SimilarStatus, Taxonomy } from "./api";
+import { demoCredits, FONTS, mountAbout } from "./about";
 import { mountBoards } from "./boards/view";
 import { mountCompare } from "./compare/view";
 import type { Snapshot } from "./data";
@@ -67,7 +68,7 @@ const status = (extra: Partial<SimilarStatus> = {}): SimilarStatus => ({
 let dropCb: ((e: { payload: never }) => void)[] = [];
 function fakeApi(): Api {
   const base: Partial<Api> = {
-    getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "on" as const })),
+    getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "on" as const, introSeen: true })),
     getTaxonomy: vi.fn(async () => taxonomy),
     related: vi.fn(async (id: string) => [{ id: id === "x1" ? "x2" : "x1", score: 0.5, sharedTechniques: ["halo"], sharedBranches: [branch.id] }]),
     search: vi.fn(async () => [{ kind: "technique" as const, id: "halo", operationId: branch.operationId, count: 2 }, { kind: "reference" as const, id: "x1" }]),
@@ -313,4 +314,19 @@ describe("untrusted text renders as text (Plan 6 Task 3)", () => {
     noMarkup();
     expect(unnamed(n)).toEqual([]);
   });
+
+  it("About: a hostile demo credit and version (Plan 6 Task 4)", () => {
+    const about = mountAbout(document.body, {
+      version: TITLE,
+      fonts: FONTS,
+      noticesPath: FILE,
+      demoCredits: demoCredits([{ title: TITLE, credit: CREDIT + NOTE, rights: WHY }]),
+    }, { openNotices: async () => {} });
+    const d = document.querySelector<HTMLElement>(".about")!;
+    readsAsText(d, [TITLE, CREDIT + NOTE, WHY]);
+    noMarkup();
+    expect(unnamed(d)).toEqual([]);
+    about.close();
+  });
 });
+

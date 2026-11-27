@@ -146,7 +146,7 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
   } else if (node.kind === "op") {
     const op = tax.operations.find((o) => o.id === node.opId)!;
     if (!E)
-      body = `<p class="insp-plain">${esc(op.plainLabel)}</p><h2 class="insp-title" tabindex="-1">${esc(op.name)}</h2>
+      body = `<h2 class="insp-title" tabindex="-1">${esc(op.name)}</h2><p class="insp-plain">${esc(op.plainLabel)}</p>
       <p class="insp-desc">${esc(op.description)}</p>`;
     else {
       // Every swatch's ink resolves through opInk: the current one, the seed ink back (I3, sent
@@ -157,7 +157,7 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
       if (Object.prototype.hasOwnProperty.call(SEED_INK, op.id) && inkAs(null) !== cur) swatches.push({ ink: "seed", base: inkAs(null) });
       for (const k of EXTRA_INKS)
         if (k !== op.color && !tax.operations.some((o) => o.id !== op.id && o.color === k)) swatches.push({ ink: k, base: inkAs(k) });
-      body = `<p class="insp-plain">${edit("plainLabel", op.plainLabel)}</p><h2 class="insp-title" tabindex="-1">${edit("name", op.name)}</h2>
+      body = `<h2 class="insp-title" tabindex="-1">${edit("name", op.name)}</h2><p class="insp-plain">${edit("plainLabel", op.plainLabel)}</p>
       ${area("Description", op.description)}
       <div class="insp-inks" role="group" aria-label="Ink">${swatches
         .map((w, i) => `<button class="insp-ink" data-ink="${w.ink}" aria-label="${INK_NAME[w.base] ?? "Neutral"}" aria-pressed="${i === 0}"></button>`)
