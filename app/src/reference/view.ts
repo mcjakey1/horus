@@ -319,7 +319,7 @@ export function mountReference(
           .map((id) => `<li class="chip" data-t="${esc(id)}"><span>${esc(techName(id))}</span><button class="chip-x" data-untoggle="${esc(id)}" aria-label="Remove ${esc(techName(id))} from the filter">×</button></li>`)
           .join("")}</ul>
         <p class="pane-note">${list.length} references · <button class="settings" id="clear-filter">Clear</button></p></div>`
-      : `<p class="pane-note">${list.length} related · strongest first</p>`;
+      : `<p class="pane-note">${list.length} related · strongest first</p>${list.length ? `<p class="pane-tip">Shift-click one to compare it with this reference.</p>` : ""}`; // design judgement, heuristic 6
     // SPEC §4: links the artist drew are always shown (a filter or a board scope never hides
     // them), listed first, never mixed into the score; a linked reference appears once.
     const { linked } = linkedFirst(S.related, linksOf(ref), ref.id);
@@ -377,7 +377,7 @@ export function mountReference(
     const hadFocus = pane.contains(document.activeElement); // innerHTML drops it (a Delete, a save)
     pane.innerHTML =
       `<button type="button" class="text-btn link-new" data-link-new aria-keyshortcuts="k">+ Link to…</button><p class="links-msg" role="status"></p>` +
-      (ls.length ? rows : `<p class="none">No links drawn from this reference yet.</p>`);
+      (ls.length ? rows : `<p class="none">No links drawn from this reference yet. Press <kbd>k</kbd> to draw one.</p>`);
     if (hadFocus) pane.querySelector<HTMLElement>("[data-link-new]")!.focus();
   }
 

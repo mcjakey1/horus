@@ -310,8 +310,16 @@ describe("mountBoards", () => {
     expect(api.deleteBoard).not.toHaveBeenCalled();
   });
 
-  it("says what to do when there are no boards", () => {
-    mount([]);
+  it("says what to do when there are no boards, and New board makes an empty one (design judgement #4)", async () => {
+    mount([], undefined, { createBoard: vi.fn(async () => change({ created: "n", boards: [{ id: "n", name: "Poster", referenceIds: [] }] })) });
     expect($(".bd-list").textContent).toContain("No boards yet.");
+    expect($(".bd-empty").hidden).toBe(false);
+    expect($(".bd-empty").textContent).toContain("press b on any reference");
+    $<HTMLInputElement>(".bd-new-name").value = "Poster";
+    $<HTMLButtonElement>(".bd-new").click();
+    await flush();
+    expect(api.createBoard).toHaveBeenCalledWith("Poster", []);
+    expect($(".bd-empty").hidden).toBe(true);
+    expect($(".bd-name").textContent).toBe("Poster");
   });
 });

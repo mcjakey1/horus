@@ -40,6 +40,11 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
         <header class="bd-head"></header>
         <p class="bd-msg" role="status"></p>
         <div class="bd-grid" role="list" aria-label="References on this board"></div>
+        <div class="bd-empty" hidden>
+          <p class="bd-empty-line">Boards are working sets for one piece.</p>
+          <div class="bd-empty-row"><input class="bd-new-name" type="text" aria-label="New board name" placeholder="Board name"><button type="button" class="fr-btn bd-new">New board</button></div>
+          <p class="bd-empty-hint">or press <kbd>b</kbd> on any reference</p>
+        </div>
       </section>
     </div>`;
   const $ = <T extends Element = HTMLElement>(s: string) => root.querySelector<T>(s)!;
@@ -68,7 +73,7 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
       ? `<ul>${store.boards
           .map((b) => `<li><button type="button" class="bd-pick" data-board="${esc(b.id)}"${b.id === S.board ? ' aria-current="true"' : ""}><span>${esc(b.name)}</span> <span class="count">${members(b).length}</span></button></li>`)
           .join("")}</ul>`
-      : `<p class="none">No boards yet. Press b on a reference to put it on a board.</p>`;
+      : `<p class="none">No boards yet.</p>`; // the main area says how to start one (design judgement #4)
   }
 
   /** Rewrites the header; keyboard focus stays on the control it was on (by its data-act), or
@@ -105,6 +110,7 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
     if (S.board !== before) msg(""); // a delete prompt (or an error) belongs to the board it was for
     renderList();
     renderHead();
+    $(".bd-empty").hidden = store.boards.length > 0;
     grid.update(members(board()));
     if (S.focusAfter != null) {
       $(`.bd-tile[data-i="${S.focusAfter}"]`)?.focus({ preventScroll: true }); // D19: the grid stays where it is
@@ -177,8 +183,23 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
     );
   }
 
+  /** The empty state's New board (design judgement #4): an empty board, named as typed. */
+  function createEmpty() {
+    const name = $<HTMLInputElement>(".bd-new-name").value;
+    msg("");
+    api.createBoard(name, []).then(
+      (c) => {
+        $<HTMLInputElement>(".bd-new-name").value = "";
+        if (c.created) S.board = c.created;
+        store.apply(c);
+      },
+      (err) => msg(boardErrorCopy(err, store, name)),
+    );
+  }
+
   root.addEventListener("click", (e) => {
     const t = e.target as Element;
+    if (t.closest(".bd-new")) return createEmpty();
     const pick = t.closest<HTMLElement>(".bd-pick");
     if (pick) {
       S.board = pick.dataset.board!;
@@ -209,6 +230,7 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
 
   root.addEventListener("keydown", (e) => {
     const t = e.target as HTMLElement;
+    if (t.classList.contains("bd-new-name") && e.key === "Enter" && !e.isComposing) return createEmpty();
     if (t.classList.contains("bd-rename")) {
       if (e.key === "Enter" && !e.isComposing) rename((t as HTMLInputElement).value);
       else if (e.key === "Escape") {
