@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // Plan 6 Task 1: the release check. No dependencies. Each check returns a list of problems
-// ([] means pass). CLI: `node scripts/release-check.mjs [--final]` prints them and exits 1 if
-// any; open release gates are warnings until `--final`.
+// ([] means pass). CLI: `node scripts/release-check.mjs [--final] [--bundles]` prints them and exits 1
+// if any; open release gates are warnings until `--final`; `--bundles` (after the build) adds
+// ONNX Runtime, the VC++ DLLs and the installer budgets.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { BINARIES, VC_DLLS } from "./fetch-ort.mjs";
 
 /** The one allowed policy (C5), compared token for token. No 'unsafe-eval', no 'unsafe-inline'.
  * worker-src: the Galaxy's same-origin module worker, no blob: (R1). connect-src: no asset:,
@@ -263,7 +265,99 @@ export function resourceFiles(tauriDir, resources) {
   return Object.assign(files, { empty });
 }
 
-export function run(appDir, final) {
+// ---------- Plan 6 Task 5 ----------
+
+/** Glyphs (Task 5): every icon string in the bundled taxonomy and DOMAIN_ICONS (plus the
+ * "a plain square" default) has an SVG; placeholder art fails only a final run, because the real
+ * set comes from the design pass and needs the user's approval. */
+export function checkGlyphs(taxonomy, domainIcons, set, final) {
+  const icons = new Set(
+    [...(taxonomy.operations ?? []), ...(taxonomy.domains ?? []), ...(taxonomy.techniques ?? [])]
+      .map((x) => x.icon)
+      .filter(Boolean)
+      .concat(domainIcons, ["a plain square"]),
+  );
+  const out = [];
+  for (const icon of icons) {
+    if (!set[icon]) out.push(`glyph: no SVG for "${icon}"`);
+    else if (final && set[icon].includes("data-placeholder")) out.push(`glyph: placeholder art for "${icon}" (the design pass, approved by the user)`);
+  }
+  return out;
+}
+
+const TARGETS = ["nsis", "msi", "dmg", "app", "appimage", "deb"];
+
+/** The major file version in a PE's VS_FIXEDFILEINFO (its 0xFEEF04BD signature, then
+ * dwFileVersionMS 8 bytes on), or null when there is none. */
+export function peMajorVersion(bytes) {
+  const at = bytes.indexOf(Buffer.from([0xbd, 0x04, 0xef, 0xfe]));
+  return at < 0 || at + 12 > bytes.length ? null : bytes.readUInt32LE(at + 8) >>> 16;
+}
+
+/** The bundle config (Task 5): the targets, every resource resolving (R2), no third-party
+ * material, the icons. With `bundles` (after the build), also ONNX Runtime at its pinned size
+ * (R8) and, on Windows, the four VC++ DLLs at version 14 or later (B4). */
+export function checkBundle(conf, { tauriDir, platform = process.platform, arch = process.arch, pins = BINARIES, bundles = false }) {
+  const dir = tauriDir instanceof URL ? fileURLToPath(tauriDir) : tauriDir;
+  const b = conf?.bundle ?? {};
+  const out = [];
+  if (JSON.stringify(b.targets) !== JSON.stringify(TARGETS)) out.push(`bundle.targets must be ${JSON.stringify(TARGETS)}`);
+  for (const icon of b.icon ?? []) if (!existsSync(join(dir, icon))) out.push(`bundle.icon: ${icon} is missing`);
+  const files = resourceFiles(dir, b.resources);
+  out.push(...files.empty.map((from) => `bundle.resources: "${from}" matches no file (name files or use a "dir/*" glob)`));
+  out.push(...checkNoThirdParty(Object.entries(b.resources ?? {}).flat().filter((x) => typeof x === "string")));
+  if (!bundles) return out;
+  const pin = pins[`${platform}-${arch}`];
+  if (!pin) out.push(`no pinned ONNX Runtime build for ${platform}-${arch}`);
+  else {
+    const name = pin.path.split("/").pop();
+    const file = join(dir, "ort", name);
+    if (!existsSync(file)) out.push(`ort/${name} is missing: run npm run fetch:ort (R8)`);
+    else if (statSync(file).size !== pin.size) out.push(`ort/${name} has size ${statSync(file).size}, pinned ${pin.size} (R8)`);
+  }
+  if (platform === "win32") {
+    for (const dll of VC_DLLS) {
+      const file = join(dir, "ort", dll);
+      if (!existsSync(file)) {
+        out.push(`ort/${dll} is missing: run npm run fetch:ort (B4)`);
+        continue;
+      }
+      const v = peMajorVersion(readFileSync(file));
+      if (v === null || v < 14) out.push(`ort/${dll} is version ${v}, under 14 (B4)`);
+    }
+  }
+  return out;
+}
+
+/** R9: each installer within its measured budget (`budgetBytes` per kind in release-check.json);
+ * a kind with no budget has no ceiling yet. `files`: `{ kind, name, size }` from the bundle folder. */
+export function checkBudgets(budgets, files) {
+  if (!files.length) return ["--bundles: no installers found under target/release/bundle"];
+  return files
+    .filter((f) => budgets?.[f.kind] && f.size > budgets[f.kind])
+    .map((f) => `${f.kind}/${f.name} is ${f.size} bytes, over its budget of ${budgets[f.kind]} (R9)`);
+}
+
+/** The installers under `bundleDir` (one folder per kind), as `{ kind, name, size }`. */
+export function installers(targetDir) {
+  // A plain build writes target/release/bundle; a --target build (macOS CI) writes
+  // target/<triple>/release/bundle.
+  const dirs = [join(targetDir, "release", "bundle")];
+  if (existsSync(targetDir)) for (const t of readdirSync(targetDir)) dirs.push(join(targetDir, t, "release", "bundle"));
+  return dirs.filter(existsSync).flatMap(bundleFiles);
+}
+
+function bundleFiles(bundleDir) {
+  return readdirSync(bundleDir).flatMap((kind) =>
+    statSync(join(bundleDir, kind)).isDirectory()
+      ? readdirSync(join(bundleDir, kind))
+          .filter((n) => /\.(exe|msi|dmg|AppImage|deb)$/.test(n))
+          .map((name) => ({ kind, name, size: statSync(join(bundleDir, kind, name)).size }))
+      : [],
+  );
+}
+
+export function run(appDir, final, bundles = false) {
   const app = fileURLToPath(appDir);
   const at = (...p) => join(app, ...p);
   const json = (p) => JSON.parse(readFileSync(at(p), "utf8"));
@@ -281,7 +375,7 @@ export function run(appDir, final) {
     ...checkGlobals(conf),
     ...checkCapabilities(caps),
     ...checkCapabilitySources(conf, capNames),
-    ...resources.empty.map((from) => `bundle.resources: "${from}" matches no file (name files or use a "dir/*" glob)`),
+    ...checkBundle(conf, { tauriDir: at("src-tauri"), bundles }),
     ...checkCargoMeta(cargoToml),
     ...checkVersions(json("package.json"), cargoToml, conf),
     ...checkFonts(at("src/fonts")),
@@ -290,6 +384,13 @@ export function run(appDir, final) {
     ...checkNoRemoteUrls(appSources(app)),
     ...checkNoInlineStyle(appSources(app)),
   );
+  // Task 5: the glyphs; DOMAIN_ICONS is read from its TypeScript source.
+  const domainIcons = [...(/export const DOMAIN_ICONS = \[([\s\S]*?)\];/.exec(readFileSync(at("src/views/inspector.ts"), "utf8"))?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const glyphs = json("src/glyphs/glyphs.json");
+  problems.push(...checkGlyphs(json("src-tauri/resources/taxonomy.json"), domainIcons, glyphs, final));
+  const placeholders = Object.values(glyphs).filter((g) => g.includes("data-placeholder")).length;
+  if (!final && placeholders) warnings.push(`${placeholders} glyphs are placeholder art (the design pass; --final refuses them)`);
+  if (bundles) problems.push(...checkBudgets(json("release-check.json").budgetBytes, installers(process.env.CARGO_TARGET_DIR ?? at("src-tauri/target"))));
   const notices = [at("THIRD_PARTY_NOTICES.md"), at("notices/manual.md")].find(existsSync);
   if (notices) problems.push(...checkNotices(readFileSync(notices, "utf8")));
   else problems.push("notices: neither THIRD_PARTY_NOTICES.md nor notices/manual.md exists");
@@ -304,7 +405,7 @@ export function run(appDir, final) {
 
 // ponytail: matched by file name, since D: here is a subst drive and the two paths differ.
 if (process.argv[1]?.endsWith("release-check.mjs")) {
-  const { problems, warnings } = run(new URL("../", import.meta.url), process.argv.includes("--final"));
+  const { problems, warnings } = run(new URL("../", import.meta.url), process.argv.includes("--final"), process.argv.includes("--bundles"));
   for (const w of warnings) console.warn(`warning: ${w}`);
   for (const p of problems) console.error(`problem: ${p}`);
   console.log(problems.length ? `release-check: ${problems.length} problem(s)` : "release-check: pass");

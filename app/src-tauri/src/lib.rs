@@ -32,6 +32,19 @@ fn ort_library_name() -> String {
 /// Absolute path of the bundled ORT library, for `ort::init_from` (Task 0 load rules: never a
 /// bare name). Find similar loads it only when the feature is on.
 pub fn ort_library(app: &tauri::AppHandle) -> tauri::Result<std::path::PathBuf> {
+    // Plan 6 B2: the bundle ships the dylib as a framework (Contents/Frameworks, which Tauri
+    // signs); a dev run has it in ort/ beside the binary.
+    #[cfg(target_os = "macos")]
+    {
+        let framework = app
+            .path()
+            .resource_dir()?
+            .join("../Frameworks")
+            .join(ort_library_name());
+        if framework.exists() {
+            return Ok(framework);
+        }
+    }
     app.path().resolve(
         format!("ort/{}", ort_library_name()),
         BaseDirectory::Resource,

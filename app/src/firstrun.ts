@@ -286,11 +286,28 @@ export function firstRun(
       (gb) => (gb ? `This computer: ${gb} GB of RAM` : "This computer: RAM could not be read"),
       () => "This computer: RAM could not be read",
     );
-    const size = api.similarStatus().then(
+    const known = api.similarStatus();
+    const size = known.then(
       (s) => `Download: ${fmtBytes(s.downloadTotal)} · `,
       () => "",
     );
-    void Promise.all([size, ram]).then(([d, r]) => ($("#fr-ram").textContent = d + r));
+    // B1: a computer that can't run Find similar sees why in place of the choice, which counts
+    // as "off" (Begin saves it).
+    void known.then((s) => {
+      if (!s.unsupported) return;
+      el.querySelector(".fr-ram")?.remove();
+      el.querySelector('[role="group"][aria-label="Find similar"]')?.replaceWith(
+        Object.assign(document.createElement("p"), { className: "fr-unsupported", textContent: s.unsupported }),
+      );
+      S.answered = true;
+      S.findSimilar = "off";
+      sync();
+    }, () => {});
+    // The line is gone when this computer can't run Find similar (B1).
+    void Promise.all([size, ram]).then(([d, r]) => {
+      const line = el.querySelector("#fr-ram");
+      if (line) line.textContent = d + r;
+    });
   }
 
   return new Promise((resolve) => {

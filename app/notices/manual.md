@@ -6635,6 +6635,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ~~~~
 
+## Microsoft Visual C++ runtime (Windows only)
+
+`msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll` and `vcruntime140_1.dll`, from the Microsoft Visual C++ Redistributable for Visual Studio, ship beside `horus.exe` so that ONNX Runtime runs on a computer without the redistributable installed. Copyright Microsoft Corporation. They are distributed under the Microsoft Visual C++ Redistributable licence terms (the Visual Studio licence's distributable code terms). Release gate G9 confirms from the terms that app-local distribution is allowed before a public release.
+
 ## tokenizers
 
 `tokenizers` (Hugging Face), https://github.com/huggingface/tokenizers . Licensed under the Apache License, Version 2.0 (full text above, under SigLIP base).

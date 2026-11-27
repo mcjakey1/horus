@@ -10,6 +10,8 @@ pub const CHECKSUM: &str = "The download didn't finish correctly. Try again.";
 pub const IO: &str = "Couldn't save the model. Check free disk space.";
 pub const CANT_START: &str = "Find similar couldn't start on this computer.";
 pub const NO_AVX2: &str = "This computer's processor can't run Find similar.";
+/// Plan 6 B1: the pinned ORT dylib is built for macOS 14.
+pub const MACOS_14: &str = "Find similar needs macOS 14 or later.";
 pub const UNKNOWN: &str = "Find similar ran into a problem. Try again.";
 
 pub fn download(e: &DlError) -> &'static str {

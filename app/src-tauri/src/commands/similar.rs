@@ -63,6 +63,9 @@ pub struct SimilarStatus {
     pub disk_bytes: u64,
     /// Artist copy from `similar/copy.rs` only.
     pub error: Option<String>,
+    /// Plan 6 B1: why this computer can't run Find similar (no AVX2, or macOS below 14), known
+    /// from start-up, so Settings and first run say so before any enable. Copy only.
+    pub unsupported: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -81,7 +84,8 @@ pub struct SimilarEnv {
     pub model_dir: PathBuf,
     pub spec: &'static ModelSpec,
     pub load: Box<Loader>,
-    pub has_avx2: fn() -> bool,
+    /// Plan 6 B1: set once at start-up (`unsupported_here`); read with no lock.
+    pub unsupported: Option<&'static str>,
     /// `download::agent` (HTTPS only); tests use a plain-http one for a local server.
     pub agent: fn() -> ureq::Agent,
 }
@@ -96,10 +100,32 @@ impl SimilarEnv {
                 SiglipEncoder::load(&ort_lib, dir, &SIGLIP_B16_Q8, INTRA_THREADS)
                     .map(|e| Box::new(e) as Box<dyn Embedder>)
             }),
-            has_avx2,
+            unsupported: unsupported_here(),
             agent: download::agent,
         }
     }
+}
+
+/// R1 and Plan 6 B1: why Find similar can't run here, or None. ORT is never loaded then.
+pub fn unsupported_here() -> Option<&'static str> {
+    if !has_avx2() {
+        return Some(copy::NO_AVX2);
+    }
+    #[cfg(target_os = "macos")]
+    if !macos_supported(sysinfo::System::os_version().as_deref()) {
+        return Some(copy::MACOS_14);
+    }
+    None
+}
+
+/// B1: the pinned ORT dylib needs macOS 14. The major version is parsed as a number, so 26 and
+/// later pass; an unreadable version fails open (Find similar then reports a load error, at worst).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))] // tested everywhere, called on macOS
+pub fn macos_supported(version: Option<&str>) -> bool {
+    version
+        .and_then(|v| v.split('.').next())
+        .and_then(|m| m.trim().parse::<u32>().ok())
+        .is_none_or(|major| major >= 14)
 }
 
 /// R1: ORT's x86_64 builds may need AVX2, and an illegal instruction can't be caught.
@@ -194,6 +220,10 @@ fn build_status<R: Runtime>(app: &AppHandle<R>) -> SimilarStatus {
         total,
         disk_bytes: disk_bytes(model_dir.as_deref(), root.as_deref()),
         error,
+        unsupported: app
+            .try_state::<SimilarEnv>()
+            .and_then(|e| e.unsupported)
+            .map(String::from),
     }
 }
 
@@ -245,7 +275,8 @@ fn set_find_similar(st: &AppState, v: FindSimilar) -> Result<(), String> {
 enum Failure {
     Download(DlError),
     Load(LoadError),
-    NoAvx2,
+    /// No AVX2, or macOS below 14 (B1): the copy itself.
+    Unsupported(&'static str),
     Other(String),
 }
 
@@ -261,9 +292,9 @@ fn record_failure<R: Runtime>(app: &AppHandle<R>, run: u64, f: Failure) {
             eprintln!("Find similar: the model couldn't load: {e:?}");
             copy::load(e)
         }
-        Failure::NoAvx2 => {
-            eprintln!("Find similar: this processor has no AVX2");
-            copy::NO_AVX2
+        Failure::Unsupported(why) => {
+            eprintln!("Find similar: unsupported here: {why}");
+            why
         }
         Failure::Other(e) => {
             eprintln!("Find similar: {e}");
@@ -325,8 +356,8 @@ fn pipeline<R: Runtime>(app: &AppHandle<R>, run: u64, cancel: &AtomicBool) {
         );
     };
     // R1: before the download as well as the load.
-    if !(env.has_avx2)() {
-        return record_failure(app, run, Failure::NoAvx2);
+    if let Some(why) = env.unsupported {
+        return record_failure(app, run, Failure::Unsupported(why));
     }
     // A cancelled download from an earlier run may still sit in a read: wait it out, so two
     // writers never share one `.part` (task review).
@@ -1040,7 +1071,7 @@ mod tests {
                     Err(LoadError::Lib("LoadLibraryExW failed: raw ORT text".into()))
                 }
             }),
-            has_avx2: avx2,
+            unsupported: (!avx2()).then_some(copy::NO_AVX2),
             agent: download::local_test_agent,
         });
         let h = e.handle();
@@ -1215,11 +1246,28 @@ mod tests {
     #[test]
     fn no_avx2_turns_off() {
         let r = rig_with(Duration::ZERO, || false, true);
+        // B1: known before any enable, so Settings and first run can say so.
+        assert_eq!(r.status().unsupported.as_deref(), Some(copy::NO_AVX2));
         similar_enable(r.h()).unwrap();
         let s = r.wait("error", |s| s.phase == Phase::Error);
         assert_eq!(s.error.as_deref(), Some(copy::NO_AVX2));
         assert_eq!(r.loads.load(Ordering::SeqCst), 0);
         assert_eq!(r.e.settings().find_similar, FindSimilar::Off);
+    }
+
+    #[test]
+    fn macos_guard_by_version() {
+        // B1: 13 is too old; 14 and 26 run; an unreadable version fails open.
+        assert!(!macos_supported(Some("13.6.1")));
+        assert!(macos_supported(Some("14.0")));
+        assert!(macos_supported(Some("26.1")));
+        assert!(macos_supported(None));
+        assert!(macos_supported(Some("unknown")));
+    }
+
+    #[test]
+    fn a_supported_computer_says_nothing() {
+        assert_eq!(rig().status().unsupported, None);
     }
 
     /// Every status the app emits from now on, as JSON.
@@ -1578,7 +1626,8 @@ mod tests {
                 Failure::Load(LoadError::Model(raw.into())),
                 copy::CANT_START,
             ),
-            (Failure::NoAvx2, copy::NO_AVX2),
+            (Failure::Unsupported(copy::NO_AVX2), copy::NO_AVX2),
+            (Failure::Unsupported(copy::MACOS_14), copy::MACOS_14),
             (Failure::Other(raw.into()), copy::UNKNOWN),
         ];
         for (f, want) in cases {

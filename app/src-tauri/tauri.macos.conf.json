@@ -1,0 +1,14 @@
+{
+  "bundle": {
+    "macOS": {
+      "frameworks": [
+        "ort/libonnxruntime.dylib"
+      ]
+    },
+    "resources": {
+      "ort/*": null,
+      "ort/ThirdPartyNotices.txt": "ort/ThirdPartyNotices.txt",
+      "ort/LICENSE": "ort/LICENSE"
+    }
+  }
+}
