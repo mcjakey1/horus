@@ -186,6 +186,12 @@ fn io_err(e: io::Error) -> DlError {
     DlError::Io(e.to_string())
 }
 
+/// For other modules' tests: the real settings, no proxy, plain http (a local server).
+#[cfg(test)]
+pub(crate) fn local_test_agent() -> ureq::Agent {
+    config().proxy(None).https_only(false).build().into()
+}
+
 /// `<path>.part`, appended (not `with_extension`, which would eat `.onnx`).
 fn part_path(dest: &Path) -> PathBuf {
     let mut s = dest.as_os_str().to_owned();

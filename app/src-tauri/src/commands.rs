@@ -25,6 +25,7 @@ use std::sync::{Condvar, Mutex, MutexGuard, PoisonError, TryLockError};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
+pub mod similar;
 pub mod taxonomy_edit;
 
 /// The open library and everything that lives and dies with it.
@@ -58,6 +59,12 @@ pub struct AppState {
     seed_taxonomy: PathBuf,
     /// The bundled demo set: `manifest.json` and `images/`.
     demo_dir: PathBuf,
+    /// Plan 5 Find similar (lock order: gate, `similar_start`, settings, state, `similar`).
+    similar: Mutex<similar::SimilarState>,
+    /// Single-flight for the indexer start hook (B4).
+    similar_start: Mutex<()>,
+    /// One writer per model folder: a re-enable or a remove waits out a cancelled download.
+    similar_download: Mutex<()>,
 }
 
 impl AppState {
@@ -79,6 +86,9 @@ impl AppState {
             cache_dir,
             seed_taxonomy,
             demo_dir,
+            similar: Mutex::new(similar::SimilarState::default()),
+            similar_start: Mutex::new(()),
+            similar_download: Mutex::new(()),
         }
     }
 }
@@ -101,6 +111,16 @@ impl ReferenceView {
             thumb1024: thumb_path_in(root, &r.hash, 1024)?,
             reference: r,
         })
+    }
+
+    /// The image hash (R9): Find similar's embedding key.
+    pub fn hash(&self) -> &str {
+        &self.reference.hash
+    }
+
+    /// `thumbs/1024/<hash>.jpg` (R9): what Find similar embeds.
+    pub fn thumb1024(&self) -> &Path {
+        &self.thumb1024
     }
 }
 
@@ -500,7 +520,19 @@ pub fn create_library<R: Runtime>(
     path: String,
     seed_demo: bool,
 ) -> Result<LibraryView, String> {
-    let root = absolute(&path)?;
+    let r = create_inner(&app, &path, seed_demo);
+    // B4: with no lock held, Ok or Err, for whichever library is open now.
+    similar::start_hook(&app);
+    r
+}
+
+fn create_inner<R: Runtime>(
+    app: &AppHandle<R>,
+    path: &str,
+    seed_demo: bool,
+) -> Result<LibraryView, String> {
+    let app = app.clone();
+    let root = absolute(path)?;
     let st = app.state::<AppState>();
     let _gate = hold_gate(&app);
     // Before anything is created on disk, so a refused switch leaves no new library behind.
@@ -528,7 +560,17 @@ pub fn create_library<R: Runtime>(
             Err(e) => seed_warnings.push(format!("The demo set was not added: {e}")),
         }
     }
-    let mut view = install(&app, &mut lock(&st.open), lib, seed_warnings)?;
+    // B4: under the state guard, right before the swap (state then `similar`); the join waits
+    // for the guard to drop.
+    let (installed, old) = {
+        let mut open = lock(&st.open);
+        let old = similar::detach_indexer(&st);
+        (install(&app, &mut open, lib, seed_warnings), old)
+    };
+    if let Some(i) = old {
+        i.stop();
+    }
+    let mut view = installed?;
     remember(&st, &mut view);
     Ok(view)
 }
@@ -537,9 +579,25 @@ pub fn create_library<R: Runtime>(
 /// existing library" and the Library menu pick either).
 #[tauri::command(async)]
 pub fn open_library<R: Runtime>(app: AppHandle<R>, path: String) -> Result<LibraryView, String> {
-    let root = absolute(&path)?;
+    let mut old = None;
+    let r = open_inner(&app, &path, &mut old);
+    // B4: an install that failed after the stop point still joins the old indexer here.
+    if let Some(i) = old {
+        i.stop();
+    }
+    // B4: with no lock held, Ok or Err, for whichever library is open now.
+    similar::start_hook(&app);
+    r
+}
+
+fn open_inner<R: Runtime>(
+    app: &AppHandle<R>,
+    path: &str,
+    old: &mut Option<similar::Indexer>,
+) -> Result<LibraryView, String> {
+    let root = absolute(path)?;
     let st = app.state::<AppState>();
-    let _gate = hold_gate(&app);
+    let _gate = hold_gate(app);
     let mut view = {
         // The state lock is held from the flush to the swap: reopening the same library must
         // read what the flush wrote, and no edit may land in between.
@@ -550,8 +608,14 @@ pub fn open_library<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Libra
             other => other,
         }
         .map_err(library_error)?;
-        install(&app, &mut open, lib, vec![])?
+        // B4: state then `similar` is the legal order; the join waits for the state guard.
+        *old = similar::detach_indexer(&st);
+        install(app, &mut open, lib, vec![])?
     };
+    // Joined with no lock held, before remember().
+    if let Some(i) = old.take() {
+        i.stop();
+    }
     remember(&st, &mut view);
     Ok(view)
 }
@@ -1498,7 +1562,7 @@ mod tests {
         fn import(&self, name: &str) -> Result<ImportReport, String> {
             import_with(self.handle(), name).map(|r| r.report)
         }
-        fn settings(&self) -> Settings {
+        pub(super) fn settings(&self) -> Settings {
             get_settings(self.handle()).unwrap()
         }
     }
