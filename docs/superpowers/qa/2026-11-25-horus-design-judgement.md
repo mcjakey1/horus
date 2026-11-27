@@ -258,3 +258,44 @@ Agreement with the review: the detector finds almost nothing, which matches the 
 1. **Scope:** fix only the two P1s before release (760 graph stacking, F3), or also items 3–9 (empty states, Compare, Lightbox, chips on the card)?
 2. **Copy:** may the SPEC §5a sentence change to "a 213 MB image model" (finding 12)?
 3. **Icon:** keep the four-dot icon as is, or revisit later toward region boxes (§2a)?
+
+**Answered (via -02):** you ruled that all 15 findings get fixed before the build. The icon stays, and the "213 MB" copy is approved.
+
+## 7. Final look (40af415, before the build)
+
+I made one short pass on `qa-shots\plan6-final\`.
+- **Opened:** tree (light and dark 1280, light 760), galaxy (1280, 760), radial 760, reference (1280, 760), compare, lightbox, boards (1280, 760), search-dropdown, picker and settings.
+- **Spot-checked in code:** `styles.css:253` (`.fr-error`), `:693` (`.sim-drop`) and `settings/find-similar.ts:9`.
+
+**Verdict: BUILD OK.** No must-fix items.
+
+| # | Finding | Status | Evidence |
+|---|---|---|---|
+| 1 | Graph views at ≤760 | **Resolved** | Tree, galaxy and radial at 760: the tabs sit on their own row, the canvas is full width with the inspector under it, and nothing overlaps. |
+| 2 | F3, Tree at fit | **Resolved** (see residue below) | tree-light/dark-1280: bands about twice as deep, haloed labels, circle markers, no line through a name. |
+| 3 | Galaxy idle and untagged ring | **Resolved** | Idle inspector shows the hint, "50 tagged · 121 untagged" and the keys. Untagged nodes are dimmed (dots at 760), and the tagged core leads. |
+| 4 | Boards empty state | **Resolved** | Centred "Boards are working sets for one piece.", a name field, New board, and "or press b". |
+| 5 | Compare | **Resolved** | 0.40 as the readout heads the Shared column; full op › domain › technique paths. |
+| 6 | Lightbox | **Resolved** | The stage is full width and carries no blue ring on open. |
+| 7 | Chips on the card | **Resolved** | They are in a hairline toolbar above the card, the card is clean, and the readout is unobstructed (the earlier F1 is kept). |
+| 8 | Ranked titles | **Resolved** | 2-line clamp with an ellipsis. A "Shift-click one to compare" hint was added. |
+| 9 | Drop zone | **Resolved** | No menu shadow; top aligned with the list. |
+| 10 | Glyphs | **Resolved** | c3bef3b; the picker shows Chiaroscuro and Pop-out at set weight. |
+| 11 | Picker | **Resolved** | Operation names are in the UI caption face, not mono. |
+| 12 | 213 MB copy | **Resolved** | Settings: "It downloads a 213 MB image model…". |
+| 13 | Square nodes | **Resolved** | Tree operation markers are now ink circles. |
+| 14 | `.fr-error` stripe | **Resolved in code** | `styles.css:253`; hairlines all round. Not in any shot. |
+| 15 | Icon | Kept (user ruling) | |
+
+**The drop-zone border (-bb kept it solid): I agree.** DESIGN.md's Line Says the State Rule gives dashed to partial tags. A dashed drop zone next to the specimen would read as a partial tag. The solid hairline without the shadow is enough. My dashed suggestion is withdrawn.
+
+**-b5's note (Tree ticks behind the lower domain labels): not a blocker.**
+- At fit, the third stagger row of domain labels ("Feature", "Social", "Space", "Cultural", about y 477 in tree-light-1280) sits in the band where the technique connectors drop. The ticks stop at the labels' shell halo, so nothing strikes through, but the row reads busy.
+- **Cause:** the domain labels' 3-row stagger (up to 48 px) reaches the technique connector bar, which sits mid-band.
+- **Fix after the build (P2-low):** cap the domain band at 2 stagger rows, or move the technique connector bar to about 8 px above the technique nodes in the Tree's edge drawing.
+
+**New, all P2-low, after the build:**
+- **Compare:** the Shared path wraps mid-name in the narrow middle column ("Genre / quotation"). Fix: `white-space: nowrap` on the technique name, or a wider middle column.
+- **Narrow fit:** at 760 the Tree and Radial fit to a canvas about 245 px tall, so they show only 4–8 names. That is expected at this size; zoom recovers it. Optional: a taller canvas row (`minmax(50vh, 1fr)`).
+- **Boards at 760:** the 220 px list column does not stack. It still fits, so this is cosmetic.
+- **Drop zone:** it still covers the "03 Technique" key of the record header while the list is open. It is transient (only while the list is open), so acceptable.
