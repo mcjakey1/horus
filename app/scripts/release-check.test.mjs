@@ -260,7 +260,7 @@ describe("checkNotices", () => {
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkBudgets, checkBundle, checkGlyphs, peMajorVersion } from "./release-check.mjs";
+import { checkBudgets, checkBundle, checkGlyphs, installers, peMajorVersion } from "./release-check.mjs";
 
 describe("checkGlyphs", () => {
   const tax = { operations: [{ icon: "a" }], domains: [{ icon: "b" }], techniques: [{ icon: "c" }, { icon: "" }] };
@@ -342,6 +342,17 @@ describe("checkBundle", () => {
   it("passes the real configuration before the build", () => {
     const real = JSON.parse(readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
     expect(checkBundle(real, { tauriDir: new URL("../src-tauri/", import.meta.url), bundles: false })).toEqual([]);
+  });
+});
+
+describe("installers", () => {
+  it("finds the bundles of a plain build and of a --target build (macOS CI, AGY #2)", () => {
+    const target = mkdtempSync(join(tmpdir(), "horus-target-"));
+    for (const [dir, name] of [["release/bundle/nsis", "Horus.exe"], ["aarch64-apple-darwin/release/bundle/dmg", "Horus.dmg"]]) {
+      mkdirSync(join(target, dir), { recursive: true });
+      writeFileSync(join(target, dir, name), "x");
+    }
+    expect(installers(target).map((f) => `${f.kind}/${f.name}`).sort()).toEqual(["dmg/Horus.dmg", "nsis/Horus.exe"]);
   });
 });
 

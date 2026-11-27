@@ -59,8 +59,11 @@ function copyVcRuntime() {
   const vs = execFileSync(vswhere, ["-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"], { encoding: "utf8" }).trim();
   if (!vs) throw new Error("vswhere found no Visual Studio with the C++ tools");
   const redist = join(vs, "VC", "Redist", "MSVC");
-  // The newest MSVC version that has an x64 CRT folder.
-  for (const ver of readdirSync(redist).sort().reverse()) {
+  if (!existsSync(redist)) throw new Error(`no ${redist}: install the MSVC redistributable component`);
+  // The newest MSVC version (numerically: 14.42 after 14.9; not the v143 alias folder) that
+  // has an x64 CRT folder (AGY #2).
+  const versions = readdirSync(redist).filter((v) => /^\d+\./.test(v)).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+  for (const ver of versions) {
     const x64 = join(redist, ver, "x64");
     const crt = existsSync(x64) && readdirSync(x64).find((n) => /^Microsoft\.VC14\d*\.CRT$/.test(n));
     if (!crt) continue;

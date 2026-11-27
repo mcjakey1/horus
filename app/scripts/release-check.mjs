@@ -339,8 +339,15 @@ export function checkBudgets(budgets, files) {
 }
 
 /** The installers under `bundleDir` (one folder per kind), as `{ kind, name, size }`. */
-function installers(bundleDir) {
-  if (!existsSync(bundleDir)) return [];
+export function installers(targetDir) {
+  // A plain build writes target/release/bundle; a --target build (macOS CI) writes
+  // target/<triple>/release/bundle.
+  const dirs = [join(targetDir, "release", "bundle")];
+  if (existsSync(targetDir)) for (const t of readdirSync(targetDir)) dirs.push(join(targetDir, t, "release", "bundle"));
+  return dirs.filter(existsSync).flatMap(bundleFiles);
+}
+
+function bundleFiles(bundleDir) {
   return readdirSync(bundleDir).flatMap((kind) =>
     statSync(join(bundleDir, kind)).isDirectory()
       ? readdirSync(join(bundleDir, kind))
@@ -383,7 +390,7 @@ export function run(appDir, final, bundles = false) {
   problems.push(...checkGlyphs(json("src-tauri/resources/taxonomy.json"), domainIcons, glyphs, final));
   const placeholders = Object.values(glyphs).filter((g) => g.includes("data-placeholder")).length;
   if (!final && placeholders) warnings.push(`${placeholders} glyphs are placeholder art (the design pass; --final refuses them)`);
-  if (bundles) problems.push(...checkBudgets(json("release-check.json").budgetBytes, installers(join(process.env.CARGO_TARGET_DIR ?? at("src-tauri/target"), "release", "bundle"))));
+  if (bundles) problems.push(...checkBudgets(json("release-check.json").budgetBytes, installers(process.env.CARGO_TARGET_DIR ?? at("src-tauri/target"))));
   const notices = [at("THIRD_PARTY_NOTICES.md"), at("notices/manual.md")].find(existsSync);
   if (notices) problems.push(...checkNotices(readFileSync(notices, "utf8")));
   else problems.push("notices: neither THIRD_PARTY_NOTICES.md nor notices/manual.md exists");
