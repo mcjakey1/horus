@@ -208,6 +208,9 @@ describe("Galaxy", () => {
     expect(cell("tech")).toBe("Chiaroscuro");
     expect(cell("ref")).toBe("Plate a");
     expect(cell("op")).not.toBe("");
+    // One live line outside the re-rendered inspector says the selection (design review).
+    expect(t.host.querySelector("[data-gx-live]")!.textContent).toBe("Plate a");
+    expect(t.host.querySelector(".gx-insp [aria-live]")).toBeNull();
     t.host.querySelector<HTMLButtonElement>("[data-open-ref]")!.click();
     expect(t.openReference).toHaveBeenCalledWith("a");
   });

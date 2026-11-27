@@ -83,7 +83,7 @@ export function integrityHTML(r?: IntegrityReport | null): string {
   if (!r) return "";
   let html = "";
   if (r.orphans.length)
-    html += `<p>Recovered ${n(r.orphans.length, "image", "images")} to the Inbox. <button type="button" class="text-btn" data-recover>Add them</button></p>`;
+    html += `<p>${n(r.orphans.length, "image file isn't", "image files aren't")} in the library. <button type="button" class="text-btn" data-recover>${r.orphans.length === 1 ? "Add it to the Inbox" : "Add them to the Inbox"}</button></p>`;
   if (r.missingOriginals.length)
     html += `<p>${n(r.missingOriginals.length, "reference is", "references are")} missing ${r.missingOriginals.length === 1 ? "its image file" : "their image files"}. <button type="button" class="text-btn" data-show-missing>Show them</button></p>`;
   if (r.taxonomyBackupInvalid) html += `<p>The taxonomy backup (taxonomy.bak.json) is damaged. Horus left it as it is.</p>`;

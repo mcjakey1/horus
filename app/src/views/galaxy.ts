@@ -36,9 +36,12 @@ export function mountGalaxy(
   host.innerHTML = `<div class="gx">
     <div class="gx-canvas" data-label="Galaxy of references"></div>
     <aside class="gx-insp"></aside>
+    <p class="sr-only" aria-live="polite" data-gx-live></p>
   </div>`;
   const canvasEl = host.querySelector<HTMLElement>(".gx-canvas")!;
   const insp = host.querySelector<HTMLElement>(".gx-insp")!;
+  /** Says the selected reference: the inspector re-renders, so its own nodes can't be the live region. */
+  const live = host.querySelector<HTMLElement>("[data-gx-live]")!;
 
   let scene: Scene | null = null;
   let destroyed = false;
@@ -122,7 +125,7 @@ export function mountGalaxy(
       t?.techniqueId ? techName(t.techniqueId) : undefined,
       sel.title,
     ]);
-    insp.innerHTML = `${crumb}<div class="insp-body"><h2 class="gx-title" aria-live="polite">${esc(sel.title)}</h2>
+    insp.innerHTML = `${crumb}<div class="insp-body"><h2 class="gx-title">${esc(sel.title)}</h2>
       <button class="gx-open" data-open-ref>Open in Reference view</button>
       ${rows.length ? `<ol class="gx-neighbours">${rows.map((r) => `<li><button data-ref="${esc(r.id)}">
         <span class="gx-name">${esc(s.refs.get(r.id)?.title ?? r.id)}</span>
@@ -134,6 +137,7 @@ export function mountGalaxy(
   async function select(id: string | null) {
     if (id && !data.get().inScope(id)) return void scene?.select(selected); // out of the board scope: keep what was selected
     selected = id;
+    live.textContent = id ? (data.get().refs.get(id)?.title ?? "") : "";
     related = null;
     scene?.select(id);
     renderInsp();

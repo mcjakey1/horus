@@ -87,12 +87,14 @@ describe("integrityHTML (Plan 6 Task 2)", () => {
   });
   it("counts in singular and plural, with one action each", () => {
     const one = integrityHTML({ ...base, orphans: ["o"], missingOriginals: ["m"] });
-    expect(one).toContain("Recovered 1 image to the Inbox.");
+    expect(one).toContain("1 image file isn't in the library. ");
+    expect(one).toContain(">Add it to the Inbox<");
     expect(one).toContain("1 reference is missing its image file.");
     expect(one).toContain("data-recover");
     expect(one).toContain("data-show-missing");
     const many = integrityHTML({ ...base, orphans: ["o", "p"], missingOriginals: ["m", "n"], taxonomyBackupInvalid: true });
-    expect(many).toContain("Recovered 2 images to the Inbox.");
+    expect(many).toContain("2 image files aren't in the library. ");
+    expect(many).toContain(">Add them to the Inbox<");
     expect(many).toContain("2 references are missing their image files.");
     expect(many).toContain("taxonomy.bak.json");
   });

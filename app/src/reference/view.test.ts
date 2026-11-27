@@ -358,7 +358,7 @@ describe("Reference view", () => {
     await settle();
     const n = $("#import-notice");
     expect(n.hidden).toBe(false);
-    expect(n.textContent).toContain("Recovered 2 images to the Inbox.");
+    expect(n.textContent).toContain("2 image files aren't in the library. Add them to the Inbox");
     expect(n.textContent).toContain("1 reference is missing its image file.");
     expect(n.textContent).not.toContain(".tmp1"); // housekeeping says nothing
     $<HTMLButtonElement>("[data-show-missing]").click();
