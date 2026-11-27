@@ -239,4 +239,26 @@ describe("Settings panel", () => {
     expect(unlisten).toHaveBeenCalled();
     s.close();
   });
+
+  it("a late reply from an earlier open is dropped, and its listener removed", async () => {
+    const api = fakeApi();
+    const subs: { cb: (s: SimilarStatus) => void; done: (u: () => void) => void }[] = [];
+    vi.mocked(api.onSimilarStatus).mockImplementation(
+      (cb: (s: SimilarStatus) => void) => new Promise<() => void>((done) => subs.push({ cb, done })),
+    );
+    const s = mountSettings(document.body, api);
+    s.open();
+    s.close();
+    s.open();
+    const [u1, u2] = [vi.fn(), vi.fn()];
+    subs[0].done(u1);
+    subs[1].done(u2);
+    await tick();
+    expect(u1).toHaveBeenCalled(); // the first open's listener is gone at once
+    expect(u2).not.toHaveBeenCalled();
+    subs[0].cb(st({ phase: "ready", indexed: 7, total: 7 }));
+    expect(document.querySelector(".settings")!.textContent).not.toContain("7 references"); // dropped
+    s.close();
+    expect(u2).toHaveBeenCalled();
+  });
 });

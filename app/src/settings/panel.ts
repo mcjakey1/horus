@@ -9,11 +9,11 @@ export function mountSettings(root: HTMLElement, api: Api): { open(section?: "fi
   let shell: HTMLElement[] = [];
   let opener: HTMLElement | null = null;
   let unlisten: (() => void) | null = null;
-  let gone = false;
+  let gen = 0; // bumped by every open and close, so a late reply from an earlier open is dropped
 
   function close() {
     if (!el) return;
-    gone = true;
+    gen++;
     unlisten?.();
     unlisten = null;
     el.remove();
@@ -24,7 +24,8 @@ export function mountSettings(root: HTMLElement, api: Api): { open(section?: "fi
 
   function open(section?: "find-similar") {
     if (el) return;
-    gone = false;
+    const id = ++gen;
+    const gone = () => id !== gen;
     opener = document.activeElement as HTMLElement | null;
     shell = ([...root.children] as HTMLElement[]).filter((x) => !x.inert);
     shell.forEach((x) => (x.inert = true));
@@ -57,13 +58,13 @@ export function mountSettings(root: HTMLElement, api: Api): { open(section?: "fi
     });
     sheet.querySelector<HTMLElement>("[data-close]")!.focus();
     void api.similarStatus().then((s) => {
-      if (gone) return;
+      if (gone()) return;
       renderFindSimilar(fs, s, api);
       if (section === "find-similar") fs.querySelector<HTMLElement>('[role="switch"]')?.focus();
     });
     void api
-      .onSimilarStatus((s) => !gone && renderFindSimilar(fs, s, api))
-      .then((u) => (gone ? u() : (unlisten = u)));
+      .onSimilarStatus((s) => !gone() && renderFindSimilar(fs, s, api))
+      .then((u) => (gone() ? u() : (unlisten = u)));
   }
 
   root.querySelector<HTMLElement>("#settings")?.addEventListener("click", () => open());
