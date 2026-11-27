@@ -11,6 +11,7 @@
   - The intro card is one DOM module, and its look comes from a separate design pass.
   - A GitHub Actions matrix builds the three platforms with `tauri-apps/tauri-action` and publishes to GitHub Releases. Signing and notarisation are **deferred**: Task 7 is optional, and plugs in later through secrets once the user has the accounts.
 - **Taxonomy editing is not here.** It moved to Plan 3.
+- **Amended 27 Nov 2026** per `docs/superpowers/plans/plan6-preflight-rulings.md` (from `plan6-preflight-scan.md`: 4 BLOCK, 13 REWORK, 9 COS, 24 deferred items). Plan 6 code starts after Plan 5 merges to main; `plan6-release` is then rebased or re-created on the new main. Plan 5 finding IDs are written `P5-…`.
 
 **Tech Stack:**
 - Plans 1–5's stack, plus `tauri-plugin-single-instance` 2 (a Rust-only plugin) and the Tauri v2 bundler: NSIS and MSI (WiX), DMG and `.app`, AppImage and `.deb`.
@@ -33,7 +34,7 @@
 - Plan 1 Task 10 ships a **temporary** `style-src 'self' 'unsafe-inline'`. Task 1 here removes `'unsafe-inline'`, once the inline styles are converted, and `checkCsp` fails while it remains.
 - Where Plan 1 Task 10 already made a change, this plan's check only verifies it.
 - **Owned rows of `CROSS-PLAN-AUDIT.md`**, applied here:
-  - #3 (Task 1: Pixi texture loading under the CSP);
+  - #3 (Task 1: Pixi texture loading under the CSP; resolved by Plan 3's `HTMLImageElement` route, so `connect-src` drops `asset:`, R1);
   - #4 (Task 1: release-check scans the app sources);
   - #12 (Task 2: the order of steps in `open_library`);
   - #13 (Task 4: `intro_seen` in the settings patch);
@@ -58,15 +59,15 @@
   - It never deletes or rewrites `taxonomy.bak.json`. That file is only validated (Task 2).
 - **The intro** plays once on first launch, can be replayed from a menu, and any key or click skips it (SPEC §5). It is never longer than 6 seconds, and it shows as a still frame under `prefers-reduced-motion: reduce` (DESIGN.md Motion, SPEC §11 anti-goal).
 - **The three platforms:**
-  - Windows 10 1809+ and 11 (x64);
-  - macOS 11+ (universal: arm64 and x86_64);
-  - Linux x86_64 on glibc 2.35+, which means building on Ubuntu 22.04, with WebKitGTK 4.1.
-- **No inline style attributes in HTML strings.** UI code sets styles through classes, the CSSOM, or `data-css` with `applyCss` (Task 1), so the CSP can keep `style-src 'self'`.
+  - Windows 10 1809+ and 11 (x64). Find similar's ONNX Runtime needs the Visual C++ runtime, which ships app-local (B4, Task 5); the app itself links it statically;
+  - macOS 11+ on **Apple Silicon only** (`aarch64-apple-darwin`; no Intel and no universal build, Plan 5 P5-B2, user ruling "Do the silicon version only", R7). **Find similar needs macOS 14 or later**, because the pinned ORT 1.31.1 dylib is built for macOS 14.0; on macOS 11–13 it is shown as unavailable and ORT is never loaded (B1, Task 5);
+  - Linux x86_64 on glibc 2.35+, which means building on Ubuntu 22.04, with WebKitGTK 4.1. (The ORT `.so` needs glibc 2.28 at most.)
+- **No inline style attributes in HTML strings.** UI code sets styles through classes, the CSSOM, or `data-css` with `applyCss` (Task 1), so the CSP can keep `style-src 'self'`. The source scans skip `*.test.ts`, which never ship (R13).
 - **One version number** in `app/package.json`, `app/src-tauri/Cargo.toml` and `app/src-tauri/tauri.conf.json`.
-- **Size budget:** this is set from measurements, not guessed.
-  - The budget is Plan 1 Task 10's measured installer size, plus the ONNX Runtime size that Plan 5 Task 2 Step 3 records, plus the demo set, plus 10% headroom.
-  - Task 5 records the number and `checkBundle` enforces it.
-  - Until both measurements exist, the provisional ceiling is 60 MB.
+- **Size budget:** this is set from measurements, not guessed, **per platform** (R9).
+  - Each artefact's budget is its measured Task 5/6 build size plus 10% headroom. The inputs: Plan 1 Task 10's installers (under 20 MB with the demo set), and Plan 5 Task 0's ONNX Runtime sizes (uncompressed: `onnxruntime.dll` 17,253,728 B, `libonnxruntime.dylib` 44,830,288 B, `libonnxruntime.so` 29,345,384 B), plus the four VC++ DLLs on Windows.
+  - Task 5 records `budgetBytes` per artefact in `app/release-check.json`, and `checkBundle` enforces it.
+  - Until the measurements exist there is no ceiling; 60 MB is not assumed for the DMG.
 
 ## Review Focus
 
@@ -80,6 +81,7 @@
 3. **Untrusted text is shown in the UI.** File-name titles such as `<img src=x onerror=alert(1)>.jpg`, notes, link "why" notes, custom technique names and manifest credits all render as text and never as HTML. Tested in Task 3.
 4. **The intro on first launch:** the machine is slow, reduced motion is on, or the user presses a key while it loads. Skipping works on the first input. The intro never blocks the first-run setup, never replays after it has been seen or skipped, and "Play intro" replays it on demand. Tested in Task 4.
 5. **Installing on a machine without the platform's web runtime**, for example Windows 10 LTSC without WebView2, or a minimal Linux without WebKitGTK 4.1. The installer installs the runtime or states plainly what is missing; it never fails silently. Tested in Tasks 5 and 8.
+6. **Find similar on a machine that can't run it:** Windows without the Visual C++ redistributable (the app-local DLLs must cover it), macOS 11–13 (unavailable, with its fixed line, and ORT never loaded), or a CPU without AVX2. The rest of the app works. Tested in Tasks 5 and 8.
 
 ---
 
@@ -90,44 +92,47 @@
   - `app/src/css.ts` (`applyCss`) and `app/src/css.test.ts`;
   - `app/scripts/release-check.mjs`;
   - `app/scripts/release-check.test.mjs` (Vitest);
-  - `app/scripts/fixtures/`, with small fake `tauri.conf.json`, `Cargo.toml` and `dist/` trees.
+  - `app/scripts/fixtures/`, with small fake `tauri.conf.json`, `Cargo.toml` and `dist/` trees;
+  - `app/release-check.json`, holding `{ "textures": "img-element" }` (R1); Task 5 adds `budgetBytes`.
 - Modify:
   - `app/src-tauri/tauri.conf.json`;
   - `app/src-tauri/capabilities/default.json`;
   - `app/src-tauri/Cargo.toml`;
   - `app/package.json`, adding the `"release-check": "node scripts/release-check.mjs"` script;
-  - `app/src/fonts/`: the full `OFL.txt` for each family, with its copyright line.
+  - nothing in `app/src/fonts/`: Plan 1 already ships `OFL-RedHatMono.txt` and `OFL-SourceSerif4.txt` (each with the licence line and its copyright line), bundled to `licenses/`. Step 3 only verifies them (R3).
 
 **Interfaces:**
 - Produces:
   ```js
   // each returns string[] of problems; [] means pass
   export function checkCsp(conf)                 // tauri.conf.json object
-  export function checkGlobals(conf)             // app.withGlobalTauri === false
+  export function checkGlobals(conf)             // app.withGlobalTauri === false, set explicitly (an absent key fails, C6)
   export function checkCapabilities(caps)        // only the ALLOWED_PERMISSIONS below
   export function checkCargoMeta(cargoToml)      // description != "A Tauri App"; authors == ["Jake Manahan"] (no email)
   export function checkVersions(pkg, cargoToml, conf)
-  export function checkFonts(fontDir)            // every .ttf/.woff2 family has OFL.txt containing "SIL OPEN FONT LICENSE Version 1.1" and a "Copyright" line
+  export function checkFonts(fontDir)            // families read from fonts.css @font-face font-family; each needs OFL-<Family>.txt (spaces removed)
+                                                 // containing "SIL OPEN FONT LICENSE Version 1.1" and a "Copyright" line (R3)
   export function checkNoThirdParty(paths)       // dist/ and bundle resources contain none of the excluded paths
   export function checkNoForeignMarks(files)     // no /\bIris\b|Taxonomy of Visuals|Modern Art Direction/i in shipped text
-  export function checkNoRemoteUrls(files)       // app sources only: app/src/**/*.{ts,js,css,html} + app/index.html; no http(s):// (SVG xmlns allowed)
-  export function checkNoInlineStyle(files)      // app sources only (same set); no `style="` or `style=${` in TS/JS template strings or HTML; CSS files exempt
+  export function checkNoRemoteUrls(files)       // app sources only: app/src/**/*.{ts,js,css,html} + app/index.html, minus *.test.ts; no http(s)://
+                                                 // allowed: SVG xmlns, http://asset.localhost, http://ipc.localhost (R13)
+  export function checkNoInlineStyle(files)      // app sources only (same set, minus *.test.ts); no `style="` or `style=${` in TS/JS template strings or HTML; CSS files exempt
   // Both scan our own sources, never dist/ (vendor chunks such as PixiJS carry documentation URLs) and never
   // src-tauri/resources/demo/ (manifest.json legitimately holds ~100 https source URLs). The CSP enforces both at runtime.
   export function checkGates(markdown, final)    // final: every "- [ ]" in RELEASE-GATES.md is a failure (G1–G8)
-  export function checkNotices(noticesMd)        // SigLIP Apache-2.0 NOTICE present (gate G8, Task 9)
+  export function checkNotices(noticesMd)        // names google/siglip-base-patch16-224 and "Apache License, Version 2.0", and holds either the upstream
+                                                 // NOTICE text or a dated "NOTICE: none" line with its evidence (gate G8, Task 9; R5)
   // CLI: node scripts/release-check.mjs [--final]  → prints problems, exit 1 if any
   ```
-- The CSP is exactly this, with no `'unsafe-eval'` and no `'unsafe-inline'`:
+- The CSP is exactly this string (`checkCsp` compares it exactly, C5), with no `'unsafe-eval'` and no `'unsafe-inline'`:
   ```
   default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self';
-  img-src 'self' asset: http://asset.localhost data: blob:; connect-src ipc: http://ipc.localhost asset: http://asset.localhost;
-  worker-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+  img-src 'self' asset: http://asset.localhost data: blob:; connect-src ipc: http://ipc.localhost;
+  worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   ```
-  - `worker-src` is there for Plan 3's Galaxy layout, which runs `d3-force` in a Web Worker, and for Pixi's worker-based texture loader.
-  - `connect-src` includes `asset:` and `http://asset.localhost`, because PixiJS v8 loads textures with `fetch()`, which `connect-src` governs, not `img-src` (audit #3). These are local protocols, so the app is still offline.
-    - The alternative, if a reviewer prefers the tighter policy: Plan 3 loads textures from an `HTMLImageElement` (`Texture.from(img)`, with `preferWorkers: false`), and `connect-src` drops `asset:`.
-    - Either way, Step 4 checks that the canvas views show thumbnails, not dots.
+  - `worker-src 'self'` is for Plan 3's Galaxy layout, which runs `d3-force` in a same-origin module Worker (`views/galaxy.ts`). No `blob:` is needed (R1).
+  - `connect-src` has no `asset:`: Plan 3 already loads textures from an `HTMLImageElement` (`img.crossOrigin = "anonymous"`, then `PIXI.Texture.from(img)`, `graph/scene.ts`), which `img-src` governs (audit #3's alternative route, R1). `app/release-check.json` records `"textures": "img-element"`.
+  - Step 4 still checks that the canvas views show thumbnails, not dots.
   - Setting styles through the CSSOM (`el.style.cssText = …` and `el.style.setProperty(…)`) is fine under `style-src 'self'`. A `style="…"` attribute inside HTML that goes through `innerHTML` is **blocked**.
   - Plan 1 Task 8 currently emits such attributes, in `view.ts` (region boxes, badges, callout inks), `tile.ts` (plate and outline boxes), `leaders.ts` (`--hot`) and `search.ts` (swatches).
   - **The fix:** templates emit `data-css="…"` instead of `style="…"`. A helper, `applyCss(root: ParentNode): void` in `app/src/css.ts`, runs after each `innerHTML` assignment and copies each `data-css` value to `el.style.cssText`, then removes the attribute.
@@ -137,27 +142,27 @@
   - `core:default`;
   - `dialog:allow-open`;
   - `opener:allow-reveal-item-in-dir`, kept because Plan 4's "Open folder" uses it;
-  - `opener:allow-open-path`, scoped to `$RESOURCE/THIRD_PARTY_NOTICES.md` only, because About and Plan 5's "About the model" open the notices file in the default viewer.
+  - `opener:allow-open-path`, scoped to `$RESOURCE/THIRD_PARTY_NOTICES.md` only (the mapped resource target from Task 5, R2), because About and Plan 5's "About the model" (P5-R13) open the notices file in the default viewer. Task 4 adds the grant (R10).
 
   Single-instance focuses the window from Rust, so it needs no capability.
 
   Anything else needs a line in this list together with the reason for it.
 
 - [ ] **Step 1: Write the failing tests.** Each function gets one failing fixture and one passing fixture:
-  - A CSP containing `'unsafe-eval'` fails, and so do a null CSP and the Plan 1 Task 10 interim `style-src 'self' 'unsafe-inline'`.
-  - A CSP whose `connect-src` lacks `asset:` fails, unless `app/release-check.json` sets `"textures": "img-element"`, which records that the alternative route is in use. Tauri v2 rejects unknown keys in `tauri.conf.json`, so the flag never goes there.
-  - `withGlobalTauri: true` fails.
+  - A CSP containing `'unsafe-eval'` fails, and so do a null CSP, the Plan 1 Task 10 interim `style-src 'self' 'unsafe-inline'`, and any string that differs from the exact one above (for example a missing `form-action 'none'`).
+  - With `app/release-check.json` `"textures": "img-element"`, a CSP whose `connect-src` holds `asset:` fails (the tighter policy is required). Tauri v2 rejects unknown keys in `tauri.conf.json`, so the flag never goes there.
+  - `withGlobalTauri: true` fails, and so does an absent `withGlobalTauri` (C6).
   - `opener:default` fails, and `opener:allow-reveal-item-in-dir` passes.
   - `authors = ["you"]` fails, `authors = ["Jake Manahan"]` passes, and an author string containing `<…@…>` fails, because no email was given.
   - `1.0.0` against `0.1.0` fails the version check.
-  - A font directory with a `.ttf` but no `OFL.txt` fails.
+  - A flat font directory whose `fonts.css` names a family with no `OFL-<Family>.txt` fails; the real layout (`OFL-RedHatMono.txt`, `OFL-SourceSerif4.txt`) passes (R3).
   - A `dist/` containing `reference/frame-036s.jpg` fails.
   - The source scans ignore `dist/assets/pixi-*.js` (a fixture with a vendor `https://` string passes) and `resources/demo/manifest.json`.
   - A JS file containing the string "A Taxonomy of Visuals" fails.
-  - `fetch("https://x")` fails, but `xmlns="http://www.w3.org/2000/svg"` passes.
+  - `fetch("https://x")` fails, but `xmlns="http://www.w3.org/2000/svg"`, a comment naming `http://asset.localhost`, and a `*.test.ts` fixture holding `https://ex.org/a.png` pass (R13).
   - `checkGates` with one `- [ ]` passes when not final and fails when final.
-  - `checkNotices` fails on notices without the SigLIP Apache-2.0 NOTICE, and passes on a fixture that names `google/siglip-base-patch16-224`, `Apache License, Version 2.0` and has a `NOTICE` section (gate G8).
-  - A JS file containing `` `<span style="left:${x}px">` `` fails `checkNoInlineStyle`, and `` `<span data-css="left:${x}px">` `` passes.
+  - `checkNotices` fails on notices without the SigLIP Apache-2.0 entry, and passes on a fixture that names `google/siglip-base-patch16-224`, `Apache License, Version 2.0` and a dated `NOTICE: none` line (as Plan 5's `app/notices/manual.md` has), and on one that holds an upstream NOTICE text (gate G8, R5).
+  - A JS file containing `` `<span style="left:${x}px">` `` fails `checkNoInlineStyle`, `` `<span data-css="left:${x}px">` `` passes, and a `*.test.ts` file with `style="…"` is skipped (R13).
   - `applyCss` (in `app/src/css.test.ts`): after `applyCss(root)`, the element's `style.left` is `"12px"`, its CSS variable `--c` resolves, and `data-css` is gone.
 
 - [ ] **Step 2: Run, then implement, then run again.** Run `npm test -- release-check`. It should FAIL, then PASS.
@@ -165,10 +170,10 @@
 - [ ] **Step 3: Harden the real tree until it passes:**
   - convert the inline `style="…"` templates in Plan 1 Task 8's `view.ts`, `tile.ts`, `leaders.ts` and `search.ts`, and in any landed Plan 2–5 module (including Plan 5's `similar-ui.ts` and `settings/`), to `data-css` plus `applyCss`;
   - set the CSP, which removes Plan 1 Task 10's temporary `'unsafe-inline'`;
-  - set `withGlobalTauri: false`;
+  - set `withGlobalTauri: false` explicitly in `tauri.conf.json` (C6);
   - trim the capabilities;
   - set Cargo `description = "A local reference workbench for artists"` and `authors = ["Jake Manahan"]`, with no email (Decision 3);
-  - add the OFL texts.
+  - verify the OFL texts (they are already there, R3).
 
   Then run `npm run build && npm run release-check`. Expected: exit 0, with only gate items listed, as warnings, because the run is not final.
 
@@ -186,52 +191,65 @@
 **Files:**
 - Create: `app/src-tauri/src/integrity.rs`.
 - Modify:
-  - `app/src-tauri/src/lib.rs`, to register `tauri_plugin_single_instance::init` first and focus the main window;
-  - `app/src-tauri/src/commands.rs`, so `open_library` runs the check;
+  - `app/src-tauri/src/lib.rs`, to register `tauri_plugin_single_instance::init` as the **first** plugin (before dialog and opener) and focus the main window. Plan 5's `setup` code (its `SimilarEnv` manage and the Find similar background start) stays as it is;
+  - `app/src-tauri/src/commands.rs`, so `create_library` and `open_library` run the sweep and the check in Plan 5's order (below);
   - `app/src-tauri/src/taxonomy.rs`, to put `NAMES_41`, `OBSERVED` and `validate_seed` behind `#[cfg(test)]`.
 
 **Interfaces:**
 - Consumes:
   - `Library` (Plan 1 Task 2, as hardened in Plan 2 Task 4);
-  - `import::import_paths` and `ImportOutcome` (Plan 1 Task 4);
-  - the shared public helpers `import::decode_srgb` and `import::write_thumbs` (audit #5, added by Plan 4 Task 3; if Plan 4 has not landed, add them to `import.rs` here, so `import.rs` joins this task's Files);
-  - `edit::Edit::AddReferences` and the mutating-command recipe (Plan 2 Tasks 1 and 5).
+  - the shared public helpers `import::decode_srgb`, `import::on_white` and `import::write_thumbs` (audit #5, on main since Plan 4);
+  - `edit::Edit::AddReferences` and the mutating-command recipe (Plan 2 Tasks 1 and 5);
+  - Plan 5's indexer hooks in `create_library` and `open_library`, and `similar::start_hook` (P5-B4).
 - Produces:
   ```rust
   pub struct IntegrityReport {
       pub swept_tmp: Vec<PathBuf>,            // removed
       pub missing_originals: Vec<String>,     // reference ids whose images/<file> is gone (never deleted from library.json)
-      pub rebuilt_thumbs: Vec<String>,        // reference ids whose thumbs were missing and were regenerated
+      pub missing_thumbs: Vec<String>,        // reference ids whose thumbs are missing; rebuilt off-lock after the open (B3)
       pub orphans: Vec<PathBuf>,              // images/<hash>.<ext> that no reference points to
       pub taxonomy_backup_invalid: bool,      // taxonomy.bak.json present but Taxonomy::load or validate() fails; reported, never deleted
   }
   pub fn sweep_tmp(root: &Path) -> Vec<PathBuf>;                 // root, images/, thumbs/256/, thumbs/1024/: names ending ".tmp" or starting ".tmp"
-  pub fn check(lib: &Library) -> IntegrityReport;               // existence checks only, no hashing; rebuilds missing thumbs from the original;
+  pub fn check(lib: &Library) -> IntegrityReport;               // existence checks only: no hashing, no decoding;
                                                                 // if taxonomy.bak.json exists, loads it and runs validate() (Plan 2 Task 3 rotation)
+  pub fn rebuild_thumbs(root: &Path, refs: &[(String, String, String)]) -> Vec<String>;   // (id, hash, file): decode the original
+                                                                // (decode_srgb, on_white, write_thumbs); returns the ids rebuilt
   pub fn verify_hashes(lib: &Library, cancel: &AtomicBool) -> Vec<String>;   // on demand from the menu; ids whose BLAKE3 ≠ hash
   ```
 - `LibraryView` (Plan 1 Task 7) gains `integrity: Option<IntegrityReport>`, which is set when anything was found.
   - In TypeScript it is the optional `integrity?: IntegrityReport | null`.
   - Update every existing fake `LibraryView` in the tests to include it, or leave it absent (audit #24).
-- **Spec delta, to record in the release notes:** `check` rebuilds a missing thumbnail by decoding the original. This is a maintenance exception to SPEC §9's "Originals are decoded only in the lightbox", not a browsing path (audit #27).
+- **Spec delta, to record in the release notes:** `rebuild_thumbs` rebuilds a missing thumbnail by decoding the original. This is a maintenance exception to SPEC §9's "Originals are decoded only in the lightbox", not a browsing path (audit #27).
+- **The rebuild runs off-lock (B3).** After `remember()`, with no lock held, a background thread runs `rebuild_thumbs` for `missing_thumbs`, then emits `library://thumbs-rebuilt` with the ids, and the UI re-renders those tiles. It never runs under the state lock.
 - The UI shows one quiet notice for the report:
-  - "Recovered N images to the Inbox" offers "Add them", which adds the orphans as references through one `Edit::AddReferences`, so the step can be undone. The image files are already in place, and their hashes come from the file names.
+  - "Recovered N images to the Inbox" offers "Add them", which adds the orphans as references through one `Edit::AddReferences`, so the step can be undone. The image files are already in place, and their hashes come from the file names. Each one's title is "Recovered image <first 8 hex digits of its hash>", editable later like any title (C2). This is the Plan 1 QA M4 item (D14).
   - "M references are missing their image file" offers "Show them", which filters the Ranked list to those references. A missing original is never deleted from `library.json`.
 - Single-instance: a second launch passes its arguments to the first copy, which focuses its window and then exits. That is why the sweep can assume it is the only writer.
 - **Taxonomy validation on open uses `taxonomy.validate()`, never `validate_seed()`** (Plan 3 cross-plan impact item 7). An edited taxonomy fails `validate_seed` by design, and `validate_seed` is `#[cfg(test)]`-only after this task anyway. Test: `edited_taxonomy_opens`, where a library whose taxonomy has an added operation, a renamed label and a new domain opens with no integrity warning.
-- **Order inside `open_library` and `create_library`.** This is the single, release-owned pipeline that Plans 2, 4 and 5 plug into (audit #12):
-  1. Stop the previous library's indexer (Plan 5 `Indexer::stop`).
-  2. Flush the previous library (Plan 2 Task 5). On failure, refuse the switch.
-  3. Run `sweep_tmp` on the new root.
-  4. Run `check`.
-  5. Call `asset_protocol_scope().allow_directory(root, true)` (Plan 1 Task 7). Plan 4's lightbox cache directory is allowed once, in `setup`.
-  6. Build the `LibraryView`, including Plan 4's `boards` and this task's `integrity`.
-  7. Install the new `Open` state, clearing the history (Plan 2).
-  8. Start the new library's indexer (Plan 5), if Find similar is on.
+- **Order inside `open_library` and `create_library` (B3).** Plan 6 adopts Plan 5's order (P5-B4, landed with its tests) and adds the sweep and the check to it (audit #12). Lock order stays import gate, then settings, then state, then `similar`.
+  - **`create_library`:**
+    1. Flush the previous library (Plan 2 Task 5). On failure, refuse the switch, before anything is created on disk.
+    2. `Library::create`, then the demo seed (no lock held).
+    3. Run `sweep_tmp` and `check` on the new root (no lock held).
+    4. Stop the previous library's indexer: take it under `similar`, bump the generation, join it with no lock held (Plan 5).
+    5. `install()` under the state lock: the asset scope, the `LibraryView` (with Plan 4's `boards` and this task's `integrity`), the new `Open` state with a fresh history.
+    6. `remember()`.
+    7. Plan 5's start hook, then this task's `rebuild_thumbs` in the background.
+  - **`open_library`:**
+    1. Under the state guard (held from the flush to the swap, on purpose): flush, then `Library::open`.
+    2. Still under it: `sweep_tmp` and `check` on the new root (existence checks only, so the lock is held briefly).
+    3. Take the indexer under `similar` and bump the generation (Plan 5), then `install()`.
+    4. Once the state guard drops, join the old indexer; then `remember()`.
+    5. Plan 5's start hook, then `rebuild_thumbs` in the background.
+  - **One rule for `Ok` and `Err` (Plan 5):** once the switch has returned, the start hook runs for whichever library is open. A refused or failed switch leaves the old library open and indexed.
+  - **The asset scope stays per folder (R4):** `install()` allows `images/` and `thumbs/` only, never the root (the window never needs `library.json`, `embeddings.bin` or the backups). Plan 4's lightbox cache directory is allowed once, in `setup`.
 
-  Steps 3–4 run before anything can write to the new root, so the sweep can never delete a live `.tmp`. Two tests check this:
-  - `open_pipeline_order`: a fake hook records the order of the steps.
-  - A `.tmp` planted by a fake saver or indexer hook after step 7 survives.
+  The sweep and the check run before anything can write to the new root, so the sweep can never delete a live `.tmp`. Tests:
+  - `open_pipeline_order`: a fake hook records the order of the steps in both commands.
+  - A `.tmp` planted by a fake saver or indexer hook after `install()` survives.
+  - Plan 5's `failed_open_keeps_old_indexer`, `start_hook_restarts_after_switch` and `switch_library_stops_indexer` stay green.
+  - `rebuild_is_off_lock`: while `rebuild_thumbs` runs (slow fake decode), an edit command completes.
 
 - [ ] **Step 1: Write the failing tests**
   - `sweep_removes_only_tmp`: plant `images/.tmpAb12`, `images/x.jpg.tmp`, `thumbs/256/.tmpZ` and `library.json.tmp`. All four are removed. `images/<hash>.jpg`, `library.bak.json` and `taxonomy.bak.json` stay.
@@ -240,12 +258,12 @@
     - Writing `{` into it gives `true`, and the file is still there, byte-identical, after `check` and `sweep_tmp`.
     - With no backup present, it gives `false`.
   - `check_finds_orphan_and_missing`: with an extra hash-named file in `images/` and one reference's original deleted, `orphans` and `missing_originals` each hold one entry. `library.json` is unchanged.
-  - `check_rebuilds_missing_thumb`: delete `thumbs/256/<hash>.jpg`. After `check` it exists again, and the reference id is in `rebuilt_thumbs`.
-  - `recover_orphans_is_one_undo_step`: through commands, "Add them" adds 2 references, and one `undo` removes both while the files stay.
+  - `check_lists_missing_thumb`: delete `thumbs/256/<hash>.jpg`. `check` puts the reference id in `missing_thumbs` without decoding; after `rebuild_thumbs` the file exists again and the id is returned.
+  - `recover_orphans_is_one_undo_step`: through commands, "Add them" adds 2 references titled "Recovered image <8 hex>", and one `undo` removes both while the files stay.
   - `verify_hashes_flags_corruption`: flip one byte of an original, and its id is returned. Setting `cancel` stops the run early without panicking.
   - `seed_helpers_are_test_only`: with `NAMES_41`, `OBSERVED` and `validate_seed` behind `#[cfg(test)]`, `cargo build --release` still compiles, which proves no shipped code uses them, and `cargo test taxonomy::` still runs `validate_seed`.
 
-- [ ] **Step 2: Run, then implement, then run again.** Run `cargo test integrity:: commands::`. It should FAIL, then PASS.
+- [ ] **Step 2: Run, then implement, then run again.** Run `cargo test integrity:: commands::`. It should FAIL, then PASS. Plan 5's `commands::similar` tests must stay green.
 
 - [ ] **Step 3: Check single-instance by hand.** Run the built app and launch it a second time. Expected: one window, which comes to the front, and no second process remains (Task Manager or `ps`).
 
@@ -264,8 +282,8 @@
   - `mountReference` (Plan 1);
   - `mountPicker` and `mountInbox` (Plan 2);
   - `mountLinkEditor`, `mountBoards` and `mountCompare` (Plan 4);
-  - the inspector mount function that each Plan 3 graph view exports;
-  - `mountSettings` and `wireSimilar` (Plan 5), the latter with a fake `ready` status and a fake `similarByRef` that returns the fixture reference (audit #14);
+  - Plan 3's inspector, `renderInspector(el, snapshot, sel, opts)` in `views/inspector.ts` (C1);
+  - `mountSettings` (Plan 5 Task 6) and `wireSimilar` (Plan 5 Task 7), the latter with a fake `ready` status and a fake `similarByRef` that returns the fixture reference (audit #14);
   - the About dialog (Task 4 here).
 - Fixture: one reference whose `title` is `<img src=x onerror="window.__xss=1">.jpg`, `note` is `<script>window.__xss=2</script>`, `credit` is `<b>bold</b>`, and link `why` is `"><svg onload=window.__xss=3>`. It also has a custom technique named `<i>Halo</i>`.
 
@@ -281,6 +299,33 @@
 
 ---
 
+### Task 3b: Deferred fixes (Plans 1–5)
+
+The items deferred to Plan 6 that no other task owns (R11). Each is small; group them by file into one or two commits. Each gets a test where one is cheap, otherwise a recorded manual check.
+
+**Files:** the owning modules named per item; `app/src/styles.css` for the CSS items.
+
+- [ ] **Step 1: Focus and Esc**
+  - **D1 (Plan 4 QA F1):** in the lightbox, Esc in the technique picker closes the whole lightbox and loses an unsaved drawn region and the zoom. The picker's Esc branch calls `stopPropagation`. Test: Esc in the picker inside the lightbox closes only the picker.
+  - **D8 (Plan 3 QA F1):** Ctrl+Z with an empty search in the move-tags dialog runs WebView2's native undo, refills `#q` and moves focus out of the `aria-modal` dialog (Esc then dead). The dialog makes the rest of the window `inert` while open, as first run and Settings do. Test: focus stays in the dialog and Esc closes it.
+- [ ] **Step 2: The notice and copy pass** (one pass, with Task 5's notices copy)
+  - **D3 (Plan 4 QA J1):** the Boards status text goes stale after undo of a scoped board delete. It re-renders on the undo's change.
+  - **D9 (Plan 3 QA F2, Plan 2 N2):** `#import-notice` covers the inspector's "Delete technique…" at 1280×800, and still says "Added 1 to the Inbox" after undo. Move or shrink it clear of the inspector controls, and clear or update it when an undo reverses what it reports.
+  - **D6 (Plan 4 ledger):** remap the raw-ish `UnknownTag` edit error to artist copy.
+  - **D13 (Plan 2 QA N1):** the save-failure message shows raw OS text ("Access is denied. (os error 5)"). It gets a plain hint, for example "Check that the library folder is not read-only", and the raw text goes to stderr only.
+  - **D15 (Plan 1 QA M3):** the import notice shows "Importing N of M" and a Cancel text button. The same surface serves Task 4's "Verify image files…" (C3).
+- [ ] **Step 3: CSS and small behaviour**
+  - **D2 (Plan 4 QA F2):** Boards `.bd-tools` is clipped on a first-column tile (`styles.css:533`).
+  - **D12 (Plan 3 T10 M1–M3):** the inline field freezes when `run()` returns false (busy never reset); only op and domain `InUse` refusals get the O3 sentence; the last-link test can no longer pass vacuously.
+  - **D18 (Plan 4 ledger):** exports are `0600` on macOS and Linux (NamedTempFile); set `0o644` under `cfg(unix)`.
+  - **D19 (Plan 4 fix wave):** a hand-edited board naming an absent id fails reorder and remove with generic copy (`set_board_members` drops absent ids); grid refocus by index uses `preventScroll`.
+- [ ] **Step 4: Plan 1 carries (C8).** Check each against main and close what Plan 3 already did: thin `validate()` negative tests (add table-driven mutations), missing vs `null` optional keys, and a serde default for `BranchTechnique` `source`/`rationale`.
+- [ ] **Step 5: Run and commit.** Run `npm test`, `npm run build`, `cargo test` and `cargo clippy --all-targets -- -D warnings`. Commit message: `fix: deferred fixes from Plans 1-5 (focus, notices, copy, export permissions)`.
+
+Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgment row; D14 to Task 2; D17 to Task 4's design pass; D20–D24 to R7, R8/R9, B4, R10 and B3.
+
+---
+
 ### Task 4: The intro card, the app menu and About
 
 **Files:**
@@ -292,8 +337,11 @@
 - Modify:
   - `app/src-tauri/src/settings.rs`: add `intro_seen: bool` to `Settings`, with a default of `false`. **Also** add `intro_seen: Option<bool>` to `SettingsPatch` and one branch to `merge()`, because the real `set_settings` takes a patch (audit #13);
   - `app/src/api.ts`: add `introSeen: boolean` to `Settings`. `setSettings` takes `Partial<Settings>`, the Plan 1 Task 9 integration per the ledger ruling; make that change here if it has not landed;
-  - `app/src-tauri/src/lib.rs`: build the native menu;
-  - `app/src/firstrun.ts` (Plan 1 Task 9): play the intro before step 1.
+  - `app/src-tauri/src/lib.rs`: build the native menu inside `setup`, after Plan 5's `SimilarEnv` manage and before the Find similar background start. Also rename and adjust the test `capability_grants_opener_reveal_only`, so it allows exactly reveal plus the one scoped `open-path` (R10);
+  - `app/src-tauri/capabilities/default.json`: add `opener:allow-open-path` scoped to `$RESOURCE/THIRD_PARTY_NOTICES.md` (R10);
+  - `app/src/firstrun.ts`: `boot()` plays the intro (R12). Plan 5 Task 6 already changed this file (`enableInBackground`, `mountSettings`, `FIND_SIMILAR_COPY` re-exported from `settings/find-similar.ts`);
+  - `app/src/settings/find-similar.ts`: Plan 5's credit line gains the "About the model" link, which opens the notices (P5-R13);
+  - `app/src/styles.css` and `DESIGN.md` (Step 3, D17).
 
 **Interfaces:**
 - Consumes `get_settings` and `set_settings`, which take the partial patch from the Plan 1 Task 8 carry ruling, and `firstrun.ts`.
@@ -308,10 +356,11 @@
   ```
 - **The menu** uses `tauri::menu`, and is native on all three systems:
   - **Help:** "Play intro", "About Horus" and "Verify image files…", which runs `verify_hashes` from Task 2 with progress and cancel.
-  - **File:** "Open library folder", which uses the opener's reveal permission.
+  - **File:** "Open library folder", which reveals the open library's folder in the file manager through the opener's reveal permission. It complements the in-app Library menu (Open, New) rather than repeating it (C3).
+  - **"Verify image files…"** shows its progress and a Cancel text button in the import notice, the same surface as Task 3b's import progress (D15, C3).
   - On macOS, the standard app menu holds About.
 - **Behaviour:**
-  - The intro plays on first launch, before the first-run steps.
+  - The intro plays on first launch, from `boot()`: `boot()` awaits `playIntro` when `shouldPlayIntro(settings)`, **before** the `lastLibrary` branch and before `firstRun()`, so it plays once for everyone, including users who already have a library (R12). It sits above Settings (z 45) and first run (z 50).
   - The first `keydown`, `pointerdown` or `wheel` resolves it as `"skipped"`, within one frame.
   - It resolves as `"done"` by `INTRO_MAX_MS` at the latest.
   - When it resolves either way, `set_settings({ introSeen: true })` is called.
@@ -326,7 +375,7 @@
   - the version;
   - "Works offline. No account, no telemetry. Find similar downloads an image model only if you turn it on.";
   - the font licences;
-  - a "Third-party notices" link, which opens the bundled `THIRD_PARTY_NOTICES.md` through `opener` (`openPath`);
+  - a "Third-party notices" link, which opens the bundled `THIRD_PARTY_NOTICES.md` through `opener` (`openPath`), the same target as Plan 5's "About the model" link (P5-R13);
   - the demo set credits, taken from the manifest's `credit` and `rights` fields.
 
 - [ ] **Step 1: Write the failing tests**
@@ -339,12 +388,14 @@
   - With `reducedMotion: true`, no CSS animation or transition is set on the intro elements. It stays open until a key, and resolves `"skipped"`.
   - The intro DOM's text has no "Taxonomy of Visuals" or "Iris" (SPEC §8).
   - `no_fixed_operation_count`: neither the intro's nor About's text matches `/\b(four|4) operations\b/i`.
-  - First run: after the intro resolves, the first-run step 1 is shown, and `setSettings` was called with `{ introSeen: true }`. A second first-run with `introSeen` set never shows the intro.
+  - `boot()`: after the intro resolves, the first-run step 1 is shown, and `setSettings` was called with `{ introSeen: true }`. A second boot with `introSeen` set never shows the intro. A boot **with** a `lastLibrary` and no `introSeen` plays the intro once, then opens the library (R12).
+  - `capability_grants_reveal_and_notices_only` (renamed, Rust): the capability grants reveal and exactly one scoped `open-path` (R10).
   - About lists every font family that `checkFonts` finds, and one demo credit per manifest record.
 
 - [ ] **Step 2: Run, then implement, then run again.** Run `npm test -- intro about`. It should FAIL, then PASS.
 
 - [ ] **Step 3: The design pass (with the user).** Run the `impeccable` skill on the intro surface in its showcase register. Write the result into `intro.ts` and `styles.css`, keeping the Step 1 tests green. Record the approved concept as a short "Intro card" section in `DESIGN.md`.
+  - **D17 in the same pass:** light Group Green's `-on` measures 4.37:1, under AA's 4.5:1. The design reviewer picks the smallest seed-ink change that reaches 4.5:1, `DESIGN.md` records it, and `inks.test.ts` asserts it.
 
 - [ ] **Step 4: Commit.** Commit message: `feat(ui): skippable intro card, native menu and About with licences and credits`.
 
@@ -356,11 +407,14 @@
 - Create:
   - `app/src-tauri/icons/source/app-icon.svg` and `app-icon-1024.png`, from the design pass;
   - `app/src/glyphs/glyphs.ts`, `app/src/glyphs/*.svg` and `app/src/glyphs/glyphs.test.ts`: the in-app glyph set (see below);
-  - `app/notices/manual.md`: Plan 5's hand-written entries, which Plan 5 writes there directly: the SigLIP model (`google/siglip-base-patch16-224`, Apache-2.0) **with the Apache-2.0 NOTICE text**, ONNX Runtime (MIT) and `tokenizers` (Apache-2.0);
-  - `app/THIRD_PARTY_NOTICES.md`, **generated**. This is the same file name and location as Plan 5's, so there is one notices file.
+  - `app/THIRD_PARTY_NOTICES.md`, **generated**. This is the same file name and location as Plan 5's, so there is one notices file;
+  - `app/src-tauri/tauri.macos.conf.json` and `app/src-tauri/tauri.windows.conf.json`, the per-platform overrides (B2, B4).
 - Modify:
+  - `app/notices/manual.md` (created by Plan 5 Task 1, R5): it already holds SigLIP (the full Apache-2.0 text and a dated "NOTICE: none" line), ONNX Runtime 1.31.1 (its `LICENSE` and `ThirdPartyNotices.txt`) and `tokenizers`. This task adds the Visual C++ redistributable licence line for the app-local DLLs (B4);
   - `app/src-tauri/tauri.conf.json`, the `bundle` section;
-  - `app/scripts/release-check.mjs`, adding `checkBundle(conf)`.
+  - `app/scripts/release-check.mjs`, adding `checkBundle(conf)`;
+  - `app/scripts/fetch-ort.mjs` (Plan 5): on Windows it also copies the four VC++ DLLs (B4);
+  - Find similar's platform guards and loading (B1, B4), in Plan 5's code: `app/src-tauri/src/commands/similar.rs`, `app/src-tauri/src/similar/encoder.rs`, `app/src-tauri/src/similar/copy.rs`, `app/src/api.ts`, `app/src/settings/find-similar.ts` and `app/src/firstrun.ts`.
 
 **Interfaces:**
 - **The in-app glyph set (Plan 3 cross-plan impact item 6).** Plans 2 and 3 show each technique, domain and operation `icon` as its description text "until Plan 6 draws the glyphs". This task draws them.
@@ -378,19 +432,30 @@
 - The icon:
   - Run `npm run tauri icon src-tauri/icons/source/app-icon-1024.png`. It generates `32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.icns`, `icon.ico` and the Windows Store logos into `src-tauri/icons/`.
   - It is designed in the same `impeccable` pass as the intro, legible at 16 px, with no eye motif (recommended) and no Iris marks.
-- `bundle`:
+- `bundle` (the existing `resources` **map** stays, R2; Plan 5 added `ort/*`):
   ```json
   {
     "active": true, "targets": ["nsis", "msi", "dmg", "app", "appimage", "deb"],
     "publisher": "Jake Manahan", "copyright": "© 2026 Jake Manahan", "category": "GraphicsAndDesign",
     "shortDescription": "A local reference workbench for artists",
-    "resources": ["resources/taxonomy.json", "resources/demo/**/*", "../THIRD_PARTY_NOTICES.md"],
+    "resources": {
+      "resources/taxonomy.json": "resources/taxonomy.json",
+      "resources/demo/manifest.json": "resources/demo/manifest.json",
+      "resources/demo/images/*": "resources/demo/images/",
+      "../src/fonts/OFL-*.txt": "licenses/",
+      "ort/*": "ort/",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+    },
     "windows": { "webviewInstallMode": { "type": "embedBootstrapper" },
                  "nsis": { "installMode": "currentUser" }, "digestAlgorithm": "sha256" },
     "macOS": { "minimumSystemVersion": "11.0", "signingIdentity": "-" },
     "linux": { "deb": { "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"] }, "appimage": { "bundleMediaFramework": false } }
   }
   ```
+  - A `..` source mapped to an explicit target keeps the notices at `$RESOURCE/THIRD_PARTY_NOTICES.md`, which Task 4's scoped `open-path` names (R2, R10).
+  - **macOS (`tauri.macos.conf.json`, B2):** the dylib ships as a framework by default: `"frameworks": ["ort/libonnxruntime.dylib"]` (it lands in `Contents/Frameworks`, which Tauri signs), and `"ort/*": null` drops it from the resources. Plan 5's `lib.rs` resolves the dylib from `Contents/Frameworks` on macOS. Resources would be used only if Task 6's spike proves that a dylib there signs and notarises.
+  - **Windows (`tauri.windows.conf.json`, B4):** the four VC++ DLLs map to the resource root, which on Windows is beside `horus.exe` (always searched): `"ort/vc/msvcp140.dll": "msvcp140.dll"`, and the same for `msvcp140_1.dll`, `vcruntime140.dll` and `vcruntime140_1.dll`.
+  - Step 2 checks that Tauri merges these per-platform files as described (a `null` key removes, a new key adds).
   - **Why NSIS with `currentUser`:** artists usually install without admin rights. MSI stays for managed studio machines.
   - **Why `embedBootstrapper`:** it installs WebView2 when it is missing, and costs about 1.8 MB (Review Focus 5).
   - The hardened runtime is enabled by default when Tauri signs with a Developer ID, so no key is set for it.
@@ -398,23 +463,33 @@
   - No contact field (an email or URL) is set anywhere, because none was given (Decision 3).
 - `checkBundle` checks:
   - the targets list;
-  - that every `resources` glob resolves;
+  - that every `resources` source in the map resolves;
   - that no resource path matches the third-party exclusions;
   - that the icon files exist;
-  - that each installer is within the measured size budget (Global Constraints), read from `budgetBytes` in `app/release-check.json`, which this task writes from the measurements. The same file holds `textures` (Task 1).
+  - **that ONNX Runtime is really there (R8):** this OS's file (`onnxruntime.dll`, `libonnxruntime.dylib` or `libonnxruntime.so`) is in `src-tauri/ort/` with the size pinned in `fetch-ort.mjs` (the one source of the pins). Plan 5's `.gitkeep` keeps the `ort/*` glob resolving on a fresh clone, so without this check a build that skipped `npm run fetch:ort` would silently ship no ORT;
+  - on Windows, that the four VC++ DLLs are in `src-tauri/ort/vc/` with a PE file version of at least 14.x. They have no SHA-256 pin, because the build machines' copies change (B4);
+  - that each artefact is within its measured size budget (Global Constraints, R9), read from `budgetBytes` (per artefact) in `app/release-check.json`, which this task writes from the measurements. The same file holds `textures` (Task 1).
+- **Find similar on each platform (B1, B4).** These change Plan 5's code, so they sit here with the platform config:
+  - **The macOS 14 guard (B1).** Beside Plan 5's AVX2 guard, at start-up and before any load: on macOS, read `sysinfo::System::os_version()`, parse the major version as a `u32` (so 26 and later work), and if it is below 14, Find similar is unavailable. If `os_version()` returns `None`, the guard fails open. ORT is never `dlopen`ed when the guard fails.
+  - **`SimilarStatus.unsupported: Option<String>`** (Rust and `api.ts`) is set at start-up when either guard fails (AVX2, or macOS below 14), so Settings and first run can render it before any enable. Its copy is fixed, from `similar/copy.rs`: "Find similar needs macOS 14 or later." (and Plan 5's processor line for AVX2).
+  - **Settings:** one muted line in place of the switch, with no "Try again". **First run:** the same line instead of the choice, and `find_similar` is recorded as `"off"`.
+  - **Windows pre-load (B4).** `ort::init_from` calls `LoadLibraryExW(..., 0)`, which doesn't search `ort/` for dependencies. So before `init_from`, Plan 5's loader pre-loads `onnxruntime.dll` with `LoadLibraryExW(path, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)` and keeps the `HMODULE` alive. That way dev runs (DLLs in `ort/`) work too.
+  - **Sourcing the VC++ DLLs (B4):** `fetch-ort.mjs` on Windows copies `msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll` and `vcruntime140_1.dll` from the build machine's Visual Studio `VC\Redist\MSVC\<ver>\x64\Microsoft.VC14*.CRT\` (found through `vswhere`) into `src-tauri/ort/vc/`. Microsoft's Visual C++ redistributable terms allow app-local copies; `notices/manual.md` records the licence line.
+  - **Tests:** `macos_guard_by_version` with an injected version: 13 is unsupported, 14 and 26 are supported, `None` is supported. `unsupported_is_set_before_enable`: the status carries the line, and enabling never loads the encoder. TS: Settings shows the muted line and no switch; first run shows the line instead of the choice and records `"off"`.
 - `app/THIRD_PARTY_NOTICES.md` is generated from three parts, in this order:
   1. `app/notices/manual.md`;
   2. `cargo about generate about.hbs` (with `app/src-tauri/about.toml` accepting MIT, Apache-2.0, BSD-2/3-Clause, ISC, Zlib, Unicode-3.0 and MPL-2.0);
   3. `npx --yes license-checker-rseidelsohn --production --plainVertical`.
 
-  Both tools run at build time only. An unaccepted licence fails the build. **Tell the Plan 5 owner:** Plan 5 keeps the file name, and its hand-written section now lives in `notices/manual.md`.
+  Both tools run at build time only. An unaccepted licence fails the build. Plan 5 already writes its hand-written section to `notices/manual.md` under the same file name (R5).
 
-- [ ] **Step 1: Write the failing test.** `checkBundle` should fail on each of these fixtures: a missing icon, a resource glob matching nothing, and a `resources` entry under `reference/`. It should pass the real config.
+- [ ] **Step 1: Write the failing tests.** `checkBundle` should fail on each of these fixtures: a missing icon, a resource source matching nothing, a `resources` entry under `reference/`, an `ort/` with only `.gitkeep`, an ORT file of the wrong size, and (Windows) a missing or pre-14 VC++ DLL. It should pass the real config. Plus the B1 and B4 tests above.
 
-- [ ] **Step 2: Implement, generate the icons and notices, then run.** Run `npm test -- release-check && npm run tauri build`. Expected on Windows:
+- [ ] **Step 2: Implement, generate the icons and notices, then run.** Run `npm run fetch:ort && npm test -- release-check && npm run tauri build`. Expected on Windows:
   - both `.exe` (NSIS) and `.msi` are produced;
-  - each is within the measured budget, recorded in `app/release-check.json` (provisionally 60 MB or less);
-  - the NSIS installer installs without an admin prompt.
+  - each is within the budget measured and recorded here in `app/release-check.json`;
+  - the NSIS installer installs without an admin prompt;
+  - the four VC++ DLLs sit beside `horus.exe` after install, and Find similar loads on a clean Windows VM or Sandbox without the redistributable (the B4 spike: if it doesn't, fall back to loading with `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR` from `ort/` only, and record the outcome).
 
 - [ ] **Step 3: Commit.** Commit message: `chore(release): app icon, per-platform bundle config and third-party notices`.
 
@@ -429,11 +504,11 @@
 - Triggers: `workflow_dispatch`, and pushes of tags matching `v*`.
 - The matrix:
   - `windows-latest`;
-  - `macos-latest`, with `--target universal-apple-darwin` and both rust targets added;
+  - `macos-latest` (an arm64 runner), with `--target aarch64-apple-darwin` only (R7);
   - `ubuntu-22.04`, with `sudo apt-get install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`, per the Tauri v2 Linux prerequisites.
 - Each job runs these steps in order:
   1. Check out the code. Set up Node 24 and stable Rust, then restore the cargo and npm caches.
-  2. Run `npm ci`, `cargo test`, `npm test` and `npm run build`.
+  2. Run `npm ci`, then `npm run fetch:ort` (Plan 5; it caches the nupkg by its SHA-256, and on Windows also copies the VC++ DLLs), then `cargo test`, `npm test` and `npm run build`. CI never runs `--ignored` or `--include-ignored` (Plan 5 rule) (R8).
   3. Run `npm run release-check`. On tag pushes, run `npm run release-check -- --final`, so a tag can't publish while a gate is open.
   4. Run `tauri-apps/tauri-action@v0` with:
      - `projectPath: app`;
@@ -443,10 +518,11 @@
      - `releaseDraft: true`;
      - `prerelease: true`.
   5. Compute `SHA256SUMS` over every artefact and upload it to the same draft release.
+  6. **macOS only, the signing spike (B2):** after the build, run `codesign --verify --deep --strict` on `Horus.app` and `codesign -dv` on the bundled ORT dylib. Either failing fails the job. The quarantined launch with Find similar on is a Task 8 manual row.
 - **Hosting (Decision 4):** GitHub Releases, built by GitHub Actions on all three systems.
 - **Unsigned (Decision 2):** no signing secrets are set, so the artefacts are unsigned. Each release is a draft **prerelease** labelled "unsigned beta" until Task 7 is done.
 
-- [ ] **Step 1: Run it.** Run the workflow by hand with `workflow_dispatch` on a branch. Expected: all three jobs pass, and the artefacts include `.exe`, `.msi`, `.dmg`, `.app.tar.gz`, `.AppImage` and `.deb`.
+- [ ] **Step 1: Run it.** Run the workflow by hand with `workflow_dispatch` on a branch. Expected: all three jobs pass, the macOS `codesign` checks pass, and the artefacts include `.exe`, `.msi`, the `aarch64` `.dmg` and `.app.tar.gz`, `.AppImage` and `.deb`.
 
 - [ ] **Step 2: Test the gate.** Push a test tag `v0.0.0-gatecheck` while `RELEASE-GATES.md` has open items. Expected: every job fails at `release-check --final`. Then delete the tag.
 
@@ -496,9 +572,9 @@
 **Files:**
 - Create: `docs/release/qa-matrix.md`, which records the results; it is not code.
 
-**Interfaces:** each of the three CI artefacts from Task 6 or Task 7 is installed on a clean machine or VM for its platform: Windows 11, Windows 10 22H2, macOS 14 on arm64, macOS 12 on x86_64 if available, and Ubuntu 22.04 and 24.04.
+**Interfaces:** each of the three CI artefacts from Task 6 or Task 7 is installed on a clean machine or VM for its platform: Windows 11, Windows 10 22H2, macOS 14 and 15 on Apple Silicon (plus macOS 13 on Apple Silicon if available, for the B1 guard), and Ubuntu 22.04 and 24.04. There is no Intel Mac row (R7).
 
-- [ ] **Step 1: Run the matrix.** For each platform, record pass or fail and a note for each of these 14 checks:
+- [ ] **Step 1: Run the matrix.** For each platform, record pass or fail and a note for each of these checks:
   1. Installs, without admin on Windows. On Windows 10, temporarily remove WebView2 in a VM; the bootstrapper must install it (Review Focus 5).
   1a. **The unsigned-beta install path works exactly as `docs/release/INSTALL-UNSIGNED.md` says:**
       - **Windows:** SmartScreen shows "Windows protected your PC", then More info, then Run anyway.
@@ -514,14 +590,25 @@
   7. The lightbox opens a TIFF preview (Plan 4).
   8. A board export to a folder opens in the system file manager through "Open folder".
   9. Offline: with networking disabled in the VM, everything above works except the Find similar download (Plan 5), which reports that it is offline.
+  9a. **Find similar where it can't or may not run (B1, B2, B4):**
+      - Windows without the Visual C++ redistributable (a clean VM or Sandbox): turning Find similar on downloads, loads and indexes;
+      - macOS 13 (if available): Settings and first run show "Find similar needs macOS 14 or later." and no switch;
+      - macOS 14 and 15: a quarantined download, opened through Gatekeeper, turns Find similar on and indexes (the B2 manual half).
   10. A second launch focuses the existing window (Task 2).
   11. After killing the process while an import runs, the next start shows "Recovered N images" or a clean report, and `library.json` opens (Task 2).
-  12. Uninstalling leaves the user's library folder untouched.
+  12. Uninstalling leaves the user's library folder untouched. Record what the uninstaller does with app data, including Plan 5's 213 MB model folder under `app_local_data_dir()/models/` (NSIS offers a "delete app data" checkbox), and say it in `INSTALL-UNSIGNED.md` (C7).
   13. **Accessibility (WCAG 2.2 AA, PRODUCT.md; audit #17):**
       - a keyboard-only pass through first run, tagging an Inbox item, the Tree, Compare and Settings;
       - the axe-core DevTools scan on each view, with no serious or critical issues;
-      - focus is always visible.
-- [ ] **Step 2: Fix and record.** Fix every failure in the owning plan's code, re-run that row, and record it. A platform passes only when all 14 rows pass.
+      - focus is always visible;
+      - the full "Op > Technique" hover label is live (D4).
+  14. **Deferred checks:**
+      - **D5:** the QA harness relaunches the app on a first-run pick miss;
+      - **D7:** measure the lightbox's Lanczos3 peak at 20000×6000 (about 780 MB recorded); decide whether to resample differently;
+      - **D10:** Galaxy at 2,500 references: record the overlapping pairs after settle (1,255 recorded) and decide;
+      - **D16:** on macOS, Cmd+Q while a save is failing still shows the save-failure dialog (`ExitRequested`);
+      - **D11 (judgment row):** graph label cosmetics (names at about 8 px, faint outlines at fit, crumb ellipsis, Tree down-connector, the Radial fit hiding names, the label floor, `clipLabel`'s space before "…"). Fix only what the design review calls P1.
+- [ ] **Step 2: Fix and record.** Fix every failure in the owning plan's code, re-run that row, and record it. A platform passes only when every row passes.
 - [ ] **Step 3: Commit.** Commit message: `docs(release): cross-platform QA matrix results`.
 
 ---
@@ -559,17 +646,16 @@ These are checkable sign-offs, not code. A gate closes only with **evidence and 
     - QA row 1a passes on all three systems.
 
   `RELEASE-GATES.md` records which route was taken and why.
+- **G7. The privacy statement is accurate.** About's text matches behaviour: `checkNoRemoteUrls` passes, and QA row 9 passes. The Plan 5 model host (`huggingface.co`) is named in About. Owned by the release engineer.
 - **G8. Licence of the Find similar model export** (Plan 5, Decision 1). The owner is the USER, or counsel.
   - **The issue:** the weights `google/siglip-base-patch16-224` are Apache-2.0, but the ONNX export that Plan 5 downloads, `Xenova/siglip-base-patch16-224` at commit `4649052661e53c7000355844105f8a1792088239`, carries no licence tag.
   - **Pass criteria:** one of the two routes below, recorded with its evidence.
     - **(a) Confirmed:** written confirmation (from the repo owner, or a licence file added at a pinned commit) that the export is redistributable under Apache-2.0. If the commit changes, Plan 5's `SIGLIP_B16_Q8` revision and its SHA-256 values are updated, and Plan 5's download tests pass.
-    - **(b) Self-converted:** the model is converted from `google/siglip-base-patch16-224` with Hugging Face Optimum (int8, the same inputs and outputs as Plan 5's encoder expects) and hosted on a Horus-owned location. Plan 5's model table then gets the new files, sizes, SHA-256 values and host. Plan 5's parity test `quantized_close_to_reference` passes against the new files, and the About privacy line names the new host (G7).
-  - **On either route:** `app/notices/manual.md` contains the Apache-2.0 NOTICE for SigLIP, and so does the generated `THIRD_PARTY_NOTICES.md` (G5).
+    - **(b) Self-converted:** the model is converted from `google/siglip-base-patch16-224` with Hugging Face Optimum (int8, the same inputs and outputs as Plan 5's encoder expects) and hosted on a Horus-owned location. Plan 5's `SIGLIP_B16_Q8` then gets the new files, sizes, SHA-256 values and `base` host; Plan 5's ignored `real_model_semantics` test passes against the new files; Plan 5 Task 8 Step 3b re-calibrates the cut-offs; and the About privacy line names the new host (G7). (Plan 5 dropped the fp32 parity test, P5-R18.)
+  - **On either route:** `app/notices/manual.md` carries SigLIP's Apache-2.0 entry with either the upstream NOTICE text or a dated "NOTICE: none" line and its evidence (Plan 5 recorded none on 2026-11-27), and so does the generated `THIRD_PARTY_NOTICES.md` (G5, R5).
   - **The automated part, in `release-check`:**
     - `checkGates` treats G8 like every other gate;
-    - `checkNotices(noticesMd)` fails unless the notices name `google/siglip-base-patch16-224`, `Apache License, Version 2.0` and a `NOTICE` section. Add this function to Task 1's interface list, with one failing and one passing fixture.
-- **G7. The privacy statement is accurate.** About's text matches behaviour: `checkNoRemoteUrls` passes, and QA row 9 passes. The Plan 5 model host is named in About. Owned by the release engineer.
-
+    - `checkNotices(noticesMd)` fails unless the notices name `google/siglip-base-patch16-224` and `Apache License, Version 2.0`, and hold either an upstream NOTICE text or a dated `NOTICE: none` line (Task 1, R5).
 - [ ] **Step 1: Write `RELEASE-GATES.md`** with G1–G8 as unticked boxes, each with all the fields above. Run `npm run release-check -- --final`. Expected: it fails and lists 8 open gates.
 - [ ] **Step 2: Commit.** Commit message: `docs(release): explicit legal, IP, rights and signing gates`.
 
@@ -586,6 +672,8 @@ These are checkable sign-offs, not code. A gate closes only with **evidence and 
   - **macOS 14 and earlier:** Control-click Horus in Applications, choose Open, then confirm.
   - **macOS 15 and later:** open it once and close the warning. Then go to System Settings → Privacy & Security, scroll to Horus, click "Open Anyway" and confirm with your password.
   - **Linux:** `chmod +x Horus_1.0.0_amd64.AppImage`, or `sudo apt install ./horus_1.0.0_amd64.deb`.
+  - **macOS** downloads are for Apple Silicon only (`Horus_1.0.0_aarch64.dmg`); Find similar needs macOS 14 or later (R7, B1).
+  - What uninstalling leaves behind: the library folder always, and the Find similar model folder unless app data is deleted (C7).
   - A closing line that signed builds will follow, and that nothing in the app needs the internet.
 - [ ] **Step 2: Close every gate in `RELEASE-GATES.md`, with evidence.** Run `npm run release-check -- --final`. Expected: exit 0.
 - [ ] **Step 3: Tag and build.** Push the tag `v1.0.0`. CI builds the unsigned artefacts, uploads `SHA256SUMS`, and creates a draft prerelease named "Horus v1.0.0 (unsigned beta)". Check the artefacts and the checksums against Task 8 one more time.
@@ -619,7 +707,13 @@ These are checkable sign-offs, not code. A gate closes only with **evidence and 
 3. **Publisher, copyright and authors:** "Jake Manahan", exactly as given, for `bundle.publisher`, `bundle.copyright` ("© 2026 Jake Manahan") and Cargo `authors`. No email or contact field is set anywhere, because none was given.
 4. **Hosting:** GitHub Releases, built by GitHub Actions on Windows, macOS and Linux (Task 6). Each release is a draft prerelease until the user publishes it.
 
+**Preflight rulings (controller, 2026-11-27, delegated by the user and reversible by them):** see `plan6-preflight-rulings.md`. The platform calls: macOS stays 11+ for the app with Find similar on macOS 14+ (B1); the ORT dylib ships as a macOS framework (B2); the VC++ runtime ships app-local (B4); macOS is Apple Silicon only (R7, the user's own ruling in Plan 5).
+
+**Open with the user:** R27, metadata editing (title, creator, year, credit) in v1. Not ruled; it stays out of v1 unless the user says otherwise.
+
 ## Carried from Plan 2 (user decision, 2026-11-25)
+
+These now have owners: import progress and Cancel is Task 3b Step 2 (D15), the macOS close dialog is a Task 8 row (D16), and the save-failure copy is Task 3b Step 2 (D13).
 
 - **Import progress and Cancel.** Plan 1 QA (M3) found that a long import shows only "Importing…". Add an "N of M" count and a Cancel button to the import notice. The user chose to do this in a later plan rather than in Plan 2.
 - **macOS close dialog.** The Plan 2 final review (M2) found that Cmd+Q may bypass the save-failure dialog (`lib.rs`, `ExitRequested`). Check it on the macOS build.
