@@ -120,6 +120,16 @@ function fakeApi(): Api {
     onSaveStatus: vi.fn(async () => () => {}),
     onSaveFailed: vi.fn(async () => () => {}),
     onCloseWaiting: vi.fn(async () => () => {}),
+    // Plan 5: Find similar stays off in these tests.
+    similarStatus: vi.fn(async () => ({ phase: "off" as const, downloadDone: 0, downloadTotal: 213373093, indexed: 0, total: 0, diskBytes: 0, error: null })),
+    similarEnable: vi.fn(async () => ({ phase: "off" as const, downloadDone: 0, downloadTotal: 213373093, indexed: 0, total: 0, diskBytes: 0, error: null })),
+    similarDisable: vi.fn(async () => ({ phase: "off" as const, downloadDone: 0, downloadTotal: 213373093, indexed: 0, total: 0, diskBytes: 0, error: null })),
+    similarRemoveModel: vi.fn(async () => ({ phase: "off" as const, downloadDone: 0, downloadTotal: 213373093, indexed: 0, total: 0, diskBytes: 0, error: null })),
+    similarPause: vi.fn(async () => ({ phase: "off" as const, downloadDone: 0, downloadTotal: 213373093, indexed: 0, total: 0, diskBytes: 0, error: null })),
+    similarByRef: vi.fn(async () => []),
+    similarByText: vi.fn(async () => []),
+    similarByFile: vi.fn(async () => []),
+    onSimilarStatus: vi.fn(async () => () => {}),
   };
 }
 
@@ -147,6 +157,18 @@ describe("Reference view", () => {
     await settle();
   });
   afterEach(() => view.destroy());
+
+  // ---------- Plan 5 Task 7: the onShow seam (R14) ----------
+  it("calls onShow with every shown reference", async () => {
+    const onShow = vi.fn();
+    view.destroy();
+    view = mountReference(document.body, api, store, { onShow });
+    await view.ready;
+    view.show("a");
+    expect(onShow).toHaveBeenLastCalledWith("a");
+    view.show("b");
+    expect(onShow).toHaveBeenLastCalledWith("b");
+  });
 
   // ---------- Plan 4 Task 7: Compare from the Reference view (C23, R24) ----------
   async function withCompare() {

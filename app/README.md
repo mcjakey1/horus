@@ -3,8 +3,80 @@
 Tauri v2 desktop app (Rust core, TypeScript UI).
 
 - `npm install`
+- `npm run fetch:ort` once (fetches and verifies ONNX Runtime for Find similar into `src-tauri/ort/`; re-running does nothing when the files are in place)
 - `npm run tauri dev`
 - `npm test` (Vitest), `cargo test` in `src-tauri`
+
+## Find similar: ONNX Runtime (Plan 5)
+
+The optional Find similar feature runs Google SigLIP on Microsoft ONNX Runtime 1.31.1. ORT is loaded at run time with `ort::init_from(<absolute path>)` only when the feature is on (`ort` features `load-dynamic` + `api-31`), so the app has no load-time ORT import.
+
+**Getting it.** `npm run fetch:ort` (`scripts/fetch-ort.mjs`) downloads the NuGet package `Microsoft.ML.OnnxRuntime` 1.31.1, checks its SHA-256, extracts this OS's library plus `ThirdPartyNotices.txt` and `LICENSE`, checks each one and writes them to `src-tauri/ort/` (gitignored). `bundle.resources` ships that folder as `ort/`. The binaries are never committed. The pins live in the script only; the test `ort_pins_match_plan` ties them to the plan.
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `microsoft.ml.onnxruntime.1.31.1.nupkg` | 159,626,394 | `6871ccbc97f3d5bdb4095a1dcec33aa78d56f6ed8de5980ef5fa1d9f2e7c679a` |
+| `onnxruntime.dll` (Windows x64) | 17,253,728 | `cb2fa518b18356617f6f9f460c012501da2819ec7e5c1d80bd8f5de20492db0c` |
+| `libonnxruntime.dylib` (macOS arm64) | 44,830,288 | `2685dc296147c47b0dbd8e0615547b12fc0c445d158d1f374cbd0705d9626fdc` |
+| `libonnxruntime.so` (Linux x64) | 29,345,384 | `a96f132e5eb5ca04e23a7d2fc1078fb95aa591e8d71d0f237702ece3a1e0f4ea` |
+
+**Installer growth:** about 16.5 MiB on Windows x64, 42.8 MiB on macOS arm64 and 28 MiB on Linux x64 (the library), plus about 337 KiB of notices. The model itself (213 MB) is never in the installer; it is downloaded on "Turn on".
+
+**Checks (Task 2 Step 3, 2026-11-27, Windows 11, debug build):**
+- `dumpbin /dependents horus.exe` lists only Windows system DLLs and the CRT. There is no `onnxruntime`, `DirectML`, `D3D12` or `DXCORE` import and no delay-load section.
+- `horus.exe` starts and closes normally with ORT never called. The running process has no `onnxruntime`, `DirectML`, `D3D12` or `DXCORE` module loaded.
+- **Real model (`real_model_semantics`, pinned files hand-downloaded and SHA-256-checked, debug test build, ORT 1.31.1 CPU):** passes. "a photo of a cat" scores 0.0956 against `cat.jpg` and 0.0327 against `dog.jpg` (cosine).
+  - Working set with the vision session loaded: about **184 MB**. With both sessions loaded: about **304 MB**, peak seen **317 MB** (sampled every 200 ms with `Get-Process`, so the true peak can be slightly higher).
+  - Seconds per image at `intra_threads = 2`: **0.22–0.24 s** (mean of 10 encodes of a 330×220 JPEG, preprocessing included; two runs).
+
+## Find similar: verification numbers (Plan 5 Task 8)
+
+Run 2026-11-27 on the development machine (Windows 11, 16 GB RAM, AVX2), with a **debug build** (`npx tauri build --debug --no-bundle --features perf`, dev profile at opt-level 1; ONNX Runtime itself is Microsoft's release DLL). The app was driven over WebView2 CDP, with temp libraries in a scratch folder and no proxy except where stated. Numbers from a release build may be better.
+
+**Step 1: clean first run with the real download** (`%APPDATA%\art.horus.app` absent, no `models/` folder):
+- First run shows "Download: 213 MB · This computer: 16 GB of RAM". "Turn on now", then Begin with the demo set (50 references, 7.2 s).
+- The download is the real one from Hugging Face. It reached 213,373,093 bytes. Verifying passed (the phase moved on to indexing and Ready; it is too quick to catch in 2 s samples).
+- Indexing the 50 demo references: about **18 s** (46 of them in 16.6 s), well inside the 120 s allowance.
+- "Looks similar" appears on the Reference view: the tab and the drop zone are in the DOM, and the status bar reads "Find similar: ready".
+- `lautrec-divan-japonais` lists, from the top: Jane Avril 0.669, *Zodiaque* ("La Plume") 0.585, Moulin Rouge, La Goulue 0.573, At the Moulin Rouge 0.563, Laziness 0.560, Ambassadeurs: Aristide Bruant 0.557. So four other Lautrec posters are in the top six.
+
+**Step 2: interruption drill:**
+- **Network error at the start, not mid-transfer.** The app was launched with `HTTPS_PROXY` pointing at a closed local port (the `ureq` agent honours proxy environment variables), so no system network setting was touched. First run's "Turn on now" then gave phase `error` with "Couldn't reach the download. Check your connection and try again." It shows in the status notice with "Open Settings", and in Settings with "Try again". A Wi-Fi drop in the middle of a transfer was **not checked**.
+- **Quit mid-download, then restart.** Quit at about 128 MB, which left `vision_model_quantized.onnx` complete and `text_model_quantized.onnx.part` at 53,468,788 bytes. On the next start the download resumed by itself: the first status read 153,181,812 bytes, not 0. It finished, verified and indexed; it took 22 s from restart to Ready.
+- Observed: after the network error, `findSimilar` is saved as `"off"`, so the next app start does not retry by itself; the artist turns it on again (Settings "Try again"). After a quit mid-download it stays `"on"` and resumes.
+
+**Step 3: 2,500 references** (`scripts/make_perf_library.py OUT --n 2500 --seed 7`, `HORUS_DEMO_DIR`, a fresh first run with "Turn on now"):
+- Seeding the 2,500 references (first run's Begin): 114 s.
+- Indexing: **3.39 images per second (0.295 s per image)**, so **about 12.3 minutes for 2,500** (739 s, an 18 s pause excluded). That is inside the 30-minute limit.
+- **Peak RAM:** `horus.exe` peak working set **363 MB** (both sessions loaded); the WebView2 processes up to **433 MB** together. Sampled every 2 s. The "8 GB of RAM or more" guidance holds with plenty of margin.
+- **Responsiveness while indexing:** `requestAnimationFrame` gaps on the Reference view over 5 s: p50 17.9 ms, p95 18.1 ms, max 18.8 ms (no visible stutter). The Galaxy pan was not measured separately.
+- **Pause:** `similar_pause(true)` at 173 indexed; it stopped at 174 (within one image, so well within one batch), and stayed there for 14 s. Resume continued.
+- **`similar_by_text` latency** (10 queries, IPC request to response):
+  - the first call loads the text session lazily: 363 ms at Ready on the demo set, 875 ms while indexing;
+  - while indexing: 313–359 ms, just over the 300 ms target, because a query waits for the image being encoded;
+  - at Ready: **78–110 ms**.
+
+**Step 3b: calibrating the cut-offs** (the demo set, 50 references):
+- **Image to image:** all 1,225 pairs, read straight from `embeddings.bin` (the app's own results are already cut at the old 0.5): min 0.282, p10 0.398, median 0.505, p90 0.619, max 0.798. Top-10 lists for nine references (Divan Japonais, Breaker Boys, Melencolia I, Stacks of Wheat, Jane Avril, Paris Street; Rainy Day, See America, The Giant Wheel, Sunlight):
+  - clearly related hits sit at 0.56–0.78: the Lautrec posters, the etchings (Melencolia I, The Sleep of Reason, The Giant Wheel, The Three Crosses at 0.63–0.75), and the photographs (Sunlight, The Manger, Julia Jackson at 0.74–0.78);
+  - the unrelated tails of the same lists sit at 0.53–0.54 (Divan Japonais then gets A Sunday on La Grande Jatte and Night Procession of Goblins at 0.540).
+  - 0.5 kept half of all pairs. **`sim_min_image` = 0.55.**
+- **Text to image:** 10 plain-English queries through `similar_by_text` (cut at the old 0.03):
+  - correct top hits: "a ship at sea" gives The Great Wave, Sète (0.056); "a crowd of people" gives Breaker Boys (0.055); "a black and white drawing" gives The Giant Wheel (0.084); "a poster with bold flat colour" gives the WPA posters (0.060–0.076);
+  - clearly unrelated top hits: "a photo of a cat" gives Three Persons Viewing the Gladiator (0.034); "flowers in a vase" gives The Giant Wheel (0.049). The demo set has no cat and no flowers. (Task 2's fixture test also saw a dog at 0.033 for the cat query.)
+  - **`sim_min_text` = 0.05**, which drops both of those and keeps every correct top hit above. ASCII punctuation stripping was not needed.
+- Both values are in `SIGLIP_B16_Q8` (`src/similar/model.rs`). `mode_cutoffs` derives its fake cosines from them, and it passes.
+
+**Step 4: the off state and the installer:**
+- Turning the Settings switch off removes the "Looks similar" tab, the drop zone and the search group from the DOM (not hidden), and the status bar reads "Find similar: off". Settings saves `findSimilar: "off"`, and the status shows `diskBytes` still 221 MB (disable keeps the files).
+- **Release installers** (`npx tauri build`, `CARGO_BUILD_JOBS=1`, LTO): `Horus_0.1.0_x64-setup.exe` (NSIS) **24.39 MiB**, `Horus_0.1.0_x64_en-US.msi` **28.09 MiB**.
+  - Neither contains an `.onnx` file: the MSI's file table names `onnxruntime.dll` and no `.onnx`, and the bundled `ort/` holds only `onnxruntime.dll`, `LICENSE` and `ThirdPartyNotices.txt`.
+  - Plan 1 Task 10 measured both installers under 20 MB with the demo set. With ONNX Runtime (a 17.25 MB DLL, uncompressed), they are within "Plan 1's budget plus the ONNX Runtime library". Plan 6 sets the per-platform budgets from these numbers.
+- **Release build retake** (the 50 demo references, a fresh first run): indexing about **3.7 images per second (0.27 s per image)**, 50 references in about 14 s; `similar_by_text` at Ready 68–95 ms after a first call of 803 ms (the lazy text session). ONNX Runtime dominates, so the debug numbers above are close to release.
+
+**Ignored tests** (CI never runs them; run them on their own, never with `--include-ignored`):
+- `HORUS_ORT_LIB=<abs path to src-tauri/ort/onnxruntime.dll> cargo test similar::encoder -- --ignored`
+- `real_model_semantics` also needs `HORUS_SIGLIP_DIR`, a folder holding the three model files (see `src/similar/model.rs`).
 
 ## Release build (Windows)
 

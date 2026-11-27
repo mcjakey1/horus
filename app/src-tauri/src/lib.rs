@@ -11,11 +11,30 @@ pub mod model;
 pub mod saver;
 pub mod search;
 pub mod settings;
+pub mod similar;
 pub mod taxonomy;
 
 use commands::CloseDecision;
 use tauri::path::BaseDirectory;
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
+
+/// The bundled ONNX Runtime library (Plan 5, B1), as fetched by `npm run fetch:ort`.
+fn ort_library_name() -> String {
+    format!(
+        "{}onnxruntime{}",
+        std::env::consts::DLL_PREFIX,
+        std::env::consts::DLL_SUFFIX
+    )
+}
+
+/// Absolute path of the bundled ORT library, for `ort::init_from` (Task 0 load rules: never a
+/// bare name). Find similar loads it only when the feature is on.
+pub fn ort_library(app: &tauri::AppHandle) -> tauri::Result<std::path::PathBuf> {
+    app.path().resolve(
+        format!("ort/{}", ort_library_name()),
+        BaseDirectory::Resource,
+    )
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -43,6 +62,17 @@ pub fn run() {
             app.manage(commands::AppState::new(config_dir, cache_dir, seed, demo));
             commands::allow_lightbox_cache(app.handle())?;
             commands::start_saver(app.handle());
+            // Plan 5 Find similar (B4): the model's home, the bundled ORT, the index trigger,
+            // and the start-up resume (on its own thread, only when the settings say "on").
+            app.manage(commands::similar::SimilarEnv::new(
+                &app.path().app_local_data_dir()?,
+                ort_library(app.handle())?,
+            ));
+            let handle = app.handle().clone();
+            hooks::register(app.handle(), move |c| {
+                commands::similar::on_change(&handle, c)
+            });
+            commands::similar::resume_on_start(app.handle());
             Ok(())
         })
         // B5: flush before the main window closes; if that fails, keep it open and ask.
@@ -78,6 +108,14 @@ pub fn run() {
             commands::get_settings,
             commands::set_settings,
             commands::system_ram_gb,
+            commands::similar::similar_status,
+            commands::similar::similar_enable,
+            commands::similar::similar_disable,
+            commands::similar::similar_remove_model,
+            commands::similar::similar_pause,
+            commands::similar::similar_by_ref,
+            commands::similar::similar_by_text,
+            commands::similar::similar_by_file,
             commands::add_tags,
             commands::update_tag,
             commands::remove_tag,
@@ -179,5 +217,15 @@ mod tests {
         assert!(!csp.contains("unsafe-eval"));
         assert!(!directive("script-src").contains("unsafe-inline"));
         assert_eq!(directive("default-src"), "default-src 'self'");
+    }
+
+    /// The resolver's file name is the one `fetch-ort.mjs` writes for this OS, and it is bundled.
+    #[test]
+    fn ort_library_matches_fetch_script() {
+        let script = include_str!("../../scripts/fetch-ort.mjs");
+        assert!(script.contains(&format!("native/{}\"", super::ort_library_name())));
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(conf["bundle"]["resources"]["ort/*"], "ort/");
     }
 }

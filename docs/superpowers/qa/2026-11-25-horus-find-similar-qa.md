@@ -1,0 +1,256 @@
+# Plan 5 QA: Find similar (as Mara Okafor)
+
+QA session: `design-second-brain-b5`. Controller: `design-second-brain-02`. Persona and method: `QA-PERSONA.md`.
+Cross-check: AGY #3 (`9639ac0d-afd6-4032-905f-456e5be2c893`), through `agent-logs/agy-run.sh`.
+
+**Final verdict: PASS on `8efd665`** (re-verified 2026-11-27; see "Re-verify on 8efd665"). F1 and F2 are fixed and pass on the real app, wide and narrow. The Plan 4 baseline is unchanged. AGY #3 signed off: **`PASS`** (verbatim, quoted at the end).
+
+**First pass (fa42df5 / bac92d1): PASS WITH FIXES.** That pass found 1 Important finding (F1) and 1 Minor (F2). Everything else in the plan worked for Mara on the real app, including the download drill that Task 8 left unchecked. I first labelled it FAIL; AGY #3 recommended PASS WITH FIXES, citing the Plan 2 precedent (1 Important + 1 Minor), and I adopted that label. The first-pass report follows unchanged, apart from this header.
+
+## Re-verify on 8efd665
+
+The fixes: `44b67bc` and `95177dc`, merged as `8efd665`. The diff touches only TypeScript: `intake.ts` (a shared `dropHit()` that hit-tests with `is-drag` held on), `similar-ui.ts`, `settings/panel.ts` (a Tab/Shift+Tab trap, plus a document capture listener that stops stray keys and closes on Esc from `body`), and their tests.
+
+The debug exe was built in the foreground (`CARGO_BUILD_JOBS=1`, shared target); SHA-256 `438346ab…cbb2`. The Rust is unchanged since bac92d1, where `cargo test` gave 320 pass.
+
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | clean |
+| `npx vitest run` | **48 files, 659 pass** (656 + 3 new) |
+| `mara-plan5.js fix` (new phase) | **9 pass, 0 fail** |
+| `mara-plan5.js main` (full rerun) | **52 pass, 0 fail, 1 note** (fa42df5: 49 / 3) |
+| Plan 4 regression (`mara-plan4.js`) | **50 pass, 3 fail, 1 note**: the same Plan 4 F1, F2 and J3 as before, all deferred to Plan 6 |
+
+**F1: fixed.**
+- **Wide window**, empty field, dropdown closed, a drag shows the zone at (622, 84): a drop there gives `similar_by_file` ×1, `import_paths` ×0, an unchanged count and 4 Lautrec rows.
+- **Narrow window** (resized to 704 CSS px, under 760): the zone shows under the field only during the drag, at (374, 84). A drop there searches: `by_file` ×1, `import_paths` ×0, and rows Ambassadeurs, Moulin Rouge La Goulue, Jane Avril and Divan Japonais.
+- **Unchanged and still passing:** a drop elsewhere still imports, at both widths. The dropdown-open drop, non-image and too-large copy, and "off: no zone, drop imports" all pass.
+
+**F2: fixed.**
+- Tab ×9 and Shift+Tab ×9 stay inside Settings.
+- After a click on the description text, focus sits on the dialog itself, and Tab goes to a control inside.
+- With focus forced onto `body`: Backspace and `v` don't reach the view (the reference stays "Jane Avril"), and the dialog stays open. Tab comes back in. Esc closes it, with focus back on the gear.
+- In the Remove confirmation, Esc cancels only the confirmation (focus on Remove model), and a second Esc closes the dialog.
+- The data-changing shortcuts I left unprobed in the first pass can no longer reach the view: the capture listener stops every key aimed outside the dialog.
+
+**Harness note:** in the first `main` rerun, the focus-leak block returned without closing Settings, because focus now correctly stays inside. The still-open dialog then swallowed the debounce check's keys (`search` ×0). I fixed that in the harness; the clean rerun is 52/0.
+
+**Galaxy pan on this run:** frame gaps p50 6.1 ms while indexing (max 6.6) and at ready (max 6.2). The first pass gave about 17.7 ms. The display now reports 60 Hz, yet WebView2's frame rate differed between sessions, and the fix touched nothing in the Galaxy. So the numbers aren't comparable, but both runs show no stutter while indexing.
+
+Still NOT CHECKED: a native Explorer drag (Tauri drag events were emitted instead), plus the first pass's "Not covered" list.
+
+---
+
+## First pass (fa42df5 / bac92d1)
+
+**Verdict then: PASS WITH FIXES. Not a PASS yet: do not merge until F1 is fixed and re-verified.**
+
+## Target
+
+| | |
+|---|---|
+| Branch | `plan5-similar` |
+| Main pass | `fa42df5` (debug exe SHA-256 `76fa8570…baa0`) |
+| Re-check | `bac92d1` (final-review fixes; debug exe SHA-256 `cef59122…4281`). Re-checked (a) first-run save (both "Turn on now" quit-before-Begin and the full `notnow` phase) and (b) the disk line; ran the Plan 4 regression and all unit tests. |
+| Build | `npx tauri build --debug --no-bundle`, `CARGO_BUILD_JOBS=1`, shared `CARGO_TARGET_DIR` (`.worktrees/p5-t1/app/src-tauri/target`, which held no release build). A release LTO build at JOBS=1 would not fit the 10-minute foreground limit, and the low-memory reaper kills background shells. Task 8 measured that ORT dominates, so debug and release behave about the same here. The exe plus `ort/`, `resources/` and `licenses/` was copied to a scratch folder and driven from there. |
+| Machine | Windows 11, 16 GB RAM, AVX2, DPR 1, window 1280×800 |
+| Model | Pinned files in `%LOCALAPPDATA%\art.horus.app\models\siglip-b16-224-q8`, kept (R17). Moved aside only for the download and damaged-model phases, then restored and checked (`.ok` plus the three pinned sizes). |
+
+## Tests and builds
+
+| Check | Result |
+|---|---|
+| `npm ci`, `npm run fetch:ort` (twice) | OK. The second run says "already in place and verified". |
+| `npx tsc --noEmit` | clean (fa42df5 and bac92d1) |
+| `npx vitest run` | **48 files, 656 pass** (fa42df5 and bac92d1) |
+| `cargo test` (bac92d1) | **320 pass, 4 ignored**; doc and integration targets 0 + 1 pass |
+| `mara-plan5.js` (new; this report) | On fa42df5: main 49 pass, 3 fail (F1; F2 twice), 1 note; restart 4/0; notnow 9/0; download 10 pass, 3 fail; damaged 5/0. On bac92d1: recheck 4/0; notnow 9/0; dark 1/0. Of the 3 download fails, 2 were harness races (status read before the phase changed), and the `damaged` phase re-ran both, settled, and passed. The third was a too-strict text check: the notice also ends in "Dismiss". I fixed that check but did not re-run it; the logged text is correct. |
+| Plan 4 regression: `mara-plan4.js` on bac92d1 | **50 pass, 3 fail, 1 note**, the same as the Plan 4 QA's final pass. The three fails are Plan 4's F1, F2 and J3, all deferred to Plan 6. No regression. |
+
+Harness: `docs/superpowers/qa/mara-plan5.js <work dir> <exe> <main|restart|notnow|download|damaged|recheck|dark>`, CDP port 9335 (not 9336), with its own WebView2 folder and temp libraries. It refuses to run if `%APPDATA%\art.horus.app` exists, and deletes it afterwards.
+
+## Findings
+
+### F1 (Important): a drop on the zone during a drag imports the image instead of searching
+
+**Mara:** she drags a photo from Explorer to find look-alikes. While she drags, the "Drop an image to find similar" zone appears beside the empty search field, and she lets go on it. Nothing is searched. The photo is imported into her library instead ("Added 1 to the Inbox", or "already in your library" for a duplicate). The plan says a dropped image "is decoded once in memory and never copied into the library".
+
+**Repro** (`mara-plan5.js main`, block "drop"; fa42df5, and the code is unchanged at bac92d1):
+1. Find similar is ready, the search field is empty and the dropdown is closed.
+2. A drag enters the window (`tauri://drag-enter`, then `drag-over`). `.search` gets `is-drag`, and the zone shows at (622, 84).
+3. Drop at the zone's centre (`tauri://drag-drop`, position × DPR).
+4. Result: `similar_by_file` ×0, `import_paths` ×1.
+
+The same drop with the dropdown open (type "boat" first) works: `similar_by_file` ×1, `import_paths` ×0, and 4 Lautrec rows.
+
+**Narrow windows make it worse (code reading, not run):** at `max-width: 760px` the zone shows *only* during a drag (`styles.css:629-631` hides it when the list is open). So there F1 leaves no working drop path at all.
+
+**Cause (code reading):** `app/src/similar-ui.ts:168` removes `is-drag` *before* the hit test at `:171`. `styles.css:624` shows `.sim-drop` only under `.search.is-drag` or an open listbox, so the zone is already `display: none` when `elementFromPoint` runs, and the hit test misses. `intake.ts:113` runs the same hit test, which also missed in this run (it imported). The jsdom tests mock `elementFromPoint`, so they can't see the CSS.
+
+**Fix direction (controller's call):** hit-test before clearing `is-drag`, in both listeners. For example, clear the class on the next frame, or have both read one hit decided while the zone is still shown. Then add a test that applies the real `display` rule.
+
+**Evidence limit:** the drag events were the Tauri webview events, emitted through `plugin:event|emit` (the same path the Plan 2 and Plan 4 harnesses use for drops). A native OS drag from Explorer was not run. The cause is in the code order, not in the harness.
+
+### F2 (Minor): Settings focus can leave the dialog, and then Esc doesn't close it and view keys reach the views behind it
+
+**Repro** (`main`, blocks "settings" and "focus-leak"):
+1. Open Settings, then press Tab. Focus goes close → switch → Remove model → **`body`** → close …
+2. With focus on `body`, Esc does nothing: the keydown listener sits on the sheet (`app/src/settings/panel.ts:50`).
+3. Backspace goes through to the Reference view under the open modal: "Jane Avril" → "Divan Japonais". Only Backspace (navigation) was tried. Shortcuts that change data (Ctrl+Z, Delete) were not probed behind the dialog.
+
+The plan asks for "focus trapped, Esc closes". The rest of the shell is `inert`, but nothing wraps focus. This is the same class as Plan 3 F1 and Plan 4 F1 (focus or Esc in modal layers), which are deferred to Plan 6. Mara can recover with the mouse, and the Backspace case loses nothing. Minor, unless a data-changing shortcut also passes through, which was not checked.
+
+## What Mara gets (all PASS on the real app)
+
+**First run** (fa42df5; re-checked on bac92d1):
+- The SPEC §5a question is verbatim.
+- The line reads "Download: 213 MB · This computer: 16 GB of RAM".
+- Neither choice is pre-selected or focused on load.
+- "Turn on now" makes no `similar_enable` call before Begin.
+- **bac92d1 (a):** "Turn on now", then quit before Begin, saves nothing (no `settings.json`) and calls nothing (IPC: `intake_busy`, `get_settings`, `system_ram_gb`, `similar_status`). The next launch asks again. Begin then saves `on` and reaches ready.
+
+**Turn on now with the model installed (fa42df5, main):**
+- **15.7 s** from Begin to ready (27 s from launch), with no download phase. The status bar showed: off → loading → ready → indexing 0…50 of 50 → ready (see N5).
+- `findSimilar: "on"` is saved, and the status bar reads "Find similar: ready".
+
+**Settings:**
+- A click on the status bar opens Settings at Find similar, with focus on the switch. The gear also opens it.
+- Esc returns focus to the opener. This needs a real click; a JS `click()` doesn't focus the button, which was harness pass 1.
+- The section shows: "Ready · 50 references indexed", "Disk space used: 214 MB", the credit as text with no link, and the SPEC sentence without the question.
+- Remove model: the confirmation copy is verbatim; Esc cancels only the confirmation; Cancel makes no call.
+
+**Looks similar tab:**
+- ArrowRight from Ranked reaches the inserted fourth tab.
+- The note reads "Looks alike — not about technique.". Rows are in rank order with no score, and the query reference never appears.
+- **Divan Japonais: 4 Lautrec posters in the top 6** (Jane Avril, Zodiaque, Moulin Rouge La Goulue, At the Moulin Rouge, Laziness, Ambassadeurs).
+- The Ranked pane's HTML is identical before and after. A row opens its reference.
+
+**Search dropdown:**
+- Three fast keys give `search` ×3 and `similar_by_text` ×1 (the 150 ms debounce), with "Searching…" showing meanwhile.
+- The group comes after the technique options, is labelled "Looks similar" with "Works best in English.", has at most 4 rows and shows no score.
+- "a poster with bold flat colour" gives 4 WPA posters; "a ship at sea" gives The Great Wave, Sète.
+- "a photo of a cat" gives "Nothing in this library looks like that yet.", so the 0.05 cut-off holds.
+- A field cleared before the answer shows no late group.
+- ArrowDown into the group, then Enter, opens the row.
+
+**Drop target (apart from F1):**
+- The zone sits beside the open listbox, not inside `#q-results`.
+- A drop with the list open searches without importing; the group has no English hint.
+- A non-image gives "Horus couldn't read that image."
+- A sparse 520 MiB file gives "That image is too large to search with."
+- A drop elsewhere still imports (Plan 2 routing).
+
+**Board scope (R15):**
+- With "Lautrec pitch" (3 members) scoped, the tab lists only members (2 rows, 0 outside). Clearing the scope gives 2 → 6 rows.
+- The dropdown group showed no non-members, but the query returned no member rows either. So group filtering is shown only by absence; the tab check is the strong one.
+
+**Live indexing (171 references after importing 120):**
+- Indexing starts by itself.
+- A new reference shows "This reference isn't indexed yet.", then gets rows after ready.
+- Pause stops at most 1 image after the click. The line, status bar and Resume button all say paused, and focus stays on Pause/Resume. Resume continues.
+- **Galaxy pan while indexing (Task 8 NOT CHECKED):** rAF gaps p50 17.7 ms, p95 18.2 ms, max 18.6 ms. At ready: p50 17.6 ms, p95 18.4 ms, max 18.8 ms (final `main` run). No stutter at this scale.
+
+**Off:**
+- The switch, turned off with the Looks similar tab selected, removes the tab, pane, group and drop zone from the DOM, and Callouts becomes selected.
+- The files are kept (the disk line stays), and `findSimilar: "off"` is saved.
+- Typing calls only `search`. A drag shows no zone, and the drop imports as usual.
+- Turning it on again reaches ready in 0.8 s.
+- First run "Not now" (fa42df5 and bac92d1): nothing in the DOM, and **ORT is not among `horus.exe`'s loaded modules**. A keyboard-only Space on the Settings switch turns it on (ready 50/50, no download), after which ORT is loaded.
+
+**Restart:**
+- Ready in 0.3 s, with no download. `embeddings.bin` is not rewritten (530,832 B).
+- After truncating it to 177,944 B, the app rebuilds it (171/171 in 50.8 s, same size), with no crash.
+
+**Download (model moved aside; app routed through a local CONNECT proxy via `HTTPS_PROXY`):**
+- **No network at first run:** the notice reads "Couldn't reach the download. Check your connection and try again." with Open Settings. `findSimilar` is saved `off`, and the status bar says "needs attention". Open Settings shows the same copy plus Try again.
+- **Cut mid-transfer (Task 8 NOT CHECKED, simulated):**
+  - The proxy killed its sockets after 60.1 MB, with the vision file's `.part` at 59,887,867 B.
+  - While downloading, the line read "Downloading the model · N MB of 213 MB" with a progress bar, and the status bar read "downloading N%".
+  - After the cut: the network copy and Try again.
+  - Try again resumed at 59,972,380 B (not 0) and relayed only 153.7 MB more. It verified, indexed and reached ready in 27 s.
+  - The model passed `.ok` plus the pinned sizes.
+  - Proxy log: only `huggingface.co:443` and `us.aws.cdn.hf.co:443`.
+- **Remove model** (settled): phase `off`, `diskBytes` 0, no disk line. The model folder and `embeddings.bin` are gone, `findSimilar` is off, and the surfaces are gone.
+- **Wrong bytes:** a garbage `tokenizer.json.part` 1 byte short gives "The download didn't finish correctly. Try again.". The `.part` is deleted, and `findSimilar` is off.
+- **Damaged model** (same size, `.ok` present): "Find similar couldn't start on this computer.", `findSimilar` off, and option A search still works.
+
+**Board/library switch (bac92d1 (b)):** the disk line follows the open library. With A open it shows 213,528,341 B. A new empty library B shows 213,373,093 B: A's `embeddings.bin` (155,248 B) is no longer counted, and "Remove model" is still shown. Back to A: 213,528,341 B.
+
+**Light and dark:** I saw the tab, dropdown, Settings, the Remove confirmation and the drag zone in both themes (dark via the app's ◐ toggle; `emulateMedia` doesn't switch it). Everything is readable.
+
+**Errors are artist copy:** every error string seen matched the R11 table or the UI copy exactly. No raw text appeared in `SimilarStatus.error` or the UI.
+
+## Notes (not findings)
+
+- **N1:** `firstrun.ts` (Begin with "Not now") still shows `Could not save that choice: ${String(err)}` on a settings-write failure. bac92d1 moved this line, but it dates from Plan 1. It is the same class as Plan 2's N1 (raw OS text), which Plan 6's copy pass owns.
+- **N2:** during Remove model, the first `off` status still carries the old `diskBytes` (213,528,341). It settles to 0 within about 1 s; the UI shows no disk line afterwards.
+- **N3:** the tab label "Looks similar" wraps onto two lines in the margin tab row at 1280 px (cosmetic).
+- **N4 (ruled):** the plan says "Downloading model · …", but the app says "Downloading the model · …". The status bar adds "downloading N%" and "loading". Both come from the T6 design review (progress.md: Q2, Q3).
+- **N5:** after loading, the status bar shows "Find similar: ready" for a moment, before "indexing 0 of 50". This happened in the main and notnow phases, on both builds. Mara sees "ready" flash and then change to indexing (cosmetic).
+- **H2 (unexplained, did not reproduce):** in the first download attempt, Try again with the proxy up failed at once with 0 MB relayed. The harness then crashed on a proxy-port clash (fixed) before it could log the proxy. The model was restored by hand and checked. The next run relayed normally, and the cause was not found.
+- **H1 (known harness issue):** the CDP dialog route missed the first-run pick 4/4 in one launch of the dark phase; a relaunch picked first time.
+- **Harness races (fixed):** in pass 1, `download` read status before the phase changed. Re-run as `damaged`, all five checks pass. The harness now also restores the model on process exit.
+
+## Not covered
+
+- A native OS drag from Explorer (Tauri drag events were emitted instead; see F1).
+- A physical Wi-Fi drop: simulated with a proxy cut; no system network setting was touched.
+- Quit mid-download, then resume on start: Task 8 covered it; not re-run.
+- Laptop sleep.
+- A CPU without AVX2, and a missing VC++ runtime: covered by the unit tests only.
+- 2,500-reference indexing speed and `similar_by_text` latency: Task 8's numbers stand. I indexed 171 references.
+- Installer contents: Task 8.
+- Plan 3 harness regression: not re-run. The Galaxy pan was measured above.
+- A full audit that the download is the app's only network access: not sniffed. The proxy saw only Hugging Face hosts during the download.
+- macOS and Linux.
+
+## AGY #3
+
+Run through `agent-logs/agy-run.sh` on 2026-11-27 22:51, against ca4426c. **Verdict, verbatim: `PASS WITH FIXES`.** I applied both of its edits (the Galaxy figures and the note count) and adopted its verdict label.
+
+Its answer, verbatim:
+
+> PASS WITH FIXES
+>
+> Strong QA work (real exe, proxy cut/resume, ORT module check, caught a real CSS/hit-test bug jsdom missed). Two small report edits before handing to controller (`line 113` Galaxy numbers; verdict label).
+>
+> ### 1. F1 cause reading
+> Verified exact:
+> - [similar-ui.ts:167-172](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/similar-ui.ts#L167-L172) removes `is-drag` at `:168` before calling `elementFromPoint` at `:171`.
+> - [styles.css:623-624](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/styles.css#L623-L624) hides `.sim-drop` unless `#q-results` is open or `.search.is-drag` is set, so on an empty search box `.sim-drop` is already `display: none` when both [similar-ui.ts:171](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/similar-ui.ts#L171) and [intake.ts:113](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/intake.ts#L113) hit-test — `similar-ui.ts` misses and `intake.ts` imports the file.
+> - Narrow-width rule ([styles.css:628-631](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/styles.css#L628-L631)) confirmed: at `<= 760px`, `.sim-drop` hides whenever `.is-drag` is absent even if `#q-results` is open, leaving zero working drop path.
+>
+> ### 2. Severities
+> - **F1 (`Important`):** Fair. Silently imports into the library when dropping on the search zone, violating Plan 5 Global Constraints ("never copied into the library") and breaking narrow-window drop-to-search completely.
+> - **F2 (`Minor`):** Fair. Verified at [settings/panel.ts:31,50-55](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/settings/panel.ts#L31); same Plan 6 modal focus-trap class as Plan 3 F1 / Plan 4 F1, mouse recovery works, no data loss.
+>
+> ### 3. PASS claims vs results files
+> All numbers, timings, byte counts, and status-bar sequences match the 7 JSON files except one transcription slip:
+> - **[report:113](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/p5-qa/docs/superpowers/qa/2026-11-25-horus-find-similar-qa.md#L113) (Galaxy pan rAF gaps):** report says `p50 17.7 ms, p95 18.5 ms, max 18.9 ms. At ready: p95 18.2 ms.` Actual `results-main.json:221,226`: while indexing `p50 17.7, p95 18.2, max 18.6`; at ready `p50 17.6, p95 18.4, max 18.8`. Fix those two numbers.
+> - Minor: [report:29](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/p5-qa/docs/superpowers/qa/2026-11-25-horus-find-similar-qa.md#L29) lists `main 49 pass, 3 fail` (omits the 1 baseline note); trivial.
+>
+> ### 4. "Not covered" list
+> Honest and complete. Debug-vs-release build, dropdown-scope-by-absence, and unprobed data-mutating shortcuts behind Settings are all transparently disclosed in their respective sections.
+>
+> ### 5. `FAIL` vs `PASS WITH FIXES`
+> Recommend **`PASS WITH FIXES`** rather than `FAIL`:
+> - Matches Plan 2 QA precedent (1 Important + 1 Minor -> `PASS WITH FIXES`, fix, re-verify, close as `PASS`).
+> - Every other Plan 5 workflow (download/resume/checksum, lazy ORT, indexing/pause/Galaxy pan, Looks similar tab & dropdown, board scope, restart/rebuild, Remove model, Plan 4 regression) passed; F1 is a single localized hit-test-order bug, not a systemic failure.
+
+### AGY #3 sign-off on 8efd665
+
+Run through `agent-logs/agy-run.sh` against 69621fb. **Verdict, verbatim: `PASS`.** It asked for no edits.
+
+Its answer, verbatim:
+
+> PASS
+>
+> ### 1. Root-cause fix & regression check (`bac92d1..8efd665`)
+> - **F1 ([intake.ts:29-37,125](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/intake.ts#L29-L37), [similar-ui.ts:168-171](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/similar-ui.ts#L168-L171)):** Root cause fixed for both wide and narrow (`<= 760px`) windows. `dropHit` synchronously holds `is-drag` only when `[data-similar-drop]` exists in the DOM (no-op when Find similar is off), hit-tests, then restores the class — making both listeners order-independent and matching the exact layout visible during the drag. No regression risk.
+> - **F2 ([settings/panel.ts:54-82](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/settings/panel.ts#L54-L82)):** Root cause fixed. `trap` wraps `Tab` / `Shift+Tab` inside `sheet` (including from `tabIndex = -1` on `sheet` itself). The capture `keydown` listener returns immediately when `sheet.contains(e.target)` (`:77`), so keys inside Settings (including Remove confirmation's Esc, or future text/IME/paste inputs) are untouched; only stray keys aimed outside the modal (`body`) are swallowed, routing `Tab` back in and `Escape` to `close()`, and `life.abort()` cleans up on `close()`. No regression risk.
+>
+> ### 2. Re-verify claims vs results files
+> Exact match against `results-fix.json` (9 pass, 0 fail, 0 console errors) and `results-main.json` (52 pass, 0 fail, 1 baseline note, 0 console errors) — wide drop `(622, 83.5)` and narrow drop `(374.25, 84)` at `704 px` both call `similar_by_file` ×1 / `import_paths` ×0, Galaxy pan `p50 6.1 / max 6.6` vs `6.2`, and all F2 focus/Esc/Backspace/`v` checks match verbatim.
+>
+> ### 3. Close Plan 5 QA as `PASS` on `8efd665`?
+> Yes. Both findings are cleanly fixed and re-verified on the real binary with Vitest 659/659, `tsc` clean, and Plan 4 regression unchanged. Signed off — Plan 5 QA closed as `PASS`.

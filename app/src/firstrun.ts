@@ -19,10 +19,11 @@ import { mountRadial } from "./views/radial";
 import { mountGalaxy } from "./views/galaxy";
 import { mountBoards } from "./boards/view";
 import { mountScopeStatus } from "./boards/status";
+import { wireSimilar } from "./similar-ui";
+import { CATCH_ALL, FIND_SIMILAR_COPY, fmtBytes } from "./settings/find-similar";
+import { mountSettings } from "./settings/panel";
 
-/** SPEC §5a, verbatim. */
-export const FIND_SIMILAR_COPY =
-  "Turn on Find similar? It downloads a 150–350 MB image model and indexes your library in the background. Recommended for machines with 8 GB of RAM or more.";
+export { FIND_SIMILAR_COPY };
 
 /** `win` is the webview, for drag-and-drop; tests (jsdom has no Tauri window) leave it out. */
 export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
@@ -51,9 +52,15 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   const openCompare = makeOpenCompare(root, api, store);
   // Plan 3: the view shell. Search hits from any view switch to the Reference view first (R5).
   const shell = mountViews(root, { showReference: (id) => view.show(id) });
+  // Plan 5 Task 7 (R14): Find similar hears every shown reference and gives search its option B.
+  // The view shows its first reference before wireSimilar exists: remember the last one shown.
+  let similar: ReturnType<typeof wireSimilar> | null = null;
+  let lastShown: string | null = null;
   const view = mountReference(root, api, store, {
     onNavigate: () => shell.select("reference"),
     openCompare: (a, b) => openCompare(a, b), // no onClose: Esc only closes; filter and pins stay
+    onShow: (id) => ((lastShown = id), similar?.show(id)),
+    similar: () => similar?.search(),
   });
   // The graph views' read-only data seam; Tasks 6-8 pass it to their views.
   const source = storeSource(store);
@@ -106,12 +113,18 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   const menu = mountLibraryMenu(root.querySelector<HTMLElement>("#library-menu")!, api, store, notice, unIntake.idle);
   const unmountSaveDialog = mountSaveDialog(root, api);
   const unwireSaveStatus = wireSaveStatus(root, api);
+  const settingsPanel = mountSettings(root, api); // Plan 5 Task 6: the top bar's gear
+  similar = wireSimilar(root, api, store, win ?? null, {
+    search: view.search,
+    openSettings: () => settingsPanel.open("find-similar"),
+  });
+  if (lastShown) similar.show(lastShown);
   return {
     ...view,
     store,
     source,
     destroy: () =>
-      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
+      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), settingsPanel.close(), similar?.destroy(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
   };
 }
 
@@ -171,7 +184,7 @@ export function firstRun(
   const demo = $<HTMLInputElement>("#fr-demo");
   const go = $<HTMLButtonElement>("#fr-go");
   const status = $("#fr-status");
-  const S = { mode: null as "create" | "open" | null, path: null as string | null, answered: !askFindSimilar, busy: false };
+  const S = { mode: null as "create" | "open" | null, path: null as string | null, answered: !askFindSimilar, findSimilar: null as "on" | "off" | null, busy: false };
   const sync = () => {
     go.disabled = S.busy || !S.path || !S.answered;
     demo.disabled = S.busy || S.mode === "open";
@@ -179,11 +192,18 @@ export function firstRun(
     el.querySelectorAll<HTMLButtonElement>(".fr-btn").forEach((b) => (b.disabled = S.busy));
   };
 
-  if (askFindSimilar)
-    api.systemRamGb().then(
-      (gb) => ($("#fr-ram").textContent = gb ? `This computer: ${gb} GB of RAM` : "This computer: RAM could not be read"),
-      () => ($("#fr-ram").textContent = "This computer: RAM could not be read"),
+  if (askFindSimilar) {
+    // R12: the download size (always the model's total), then the existing RAM line.
+    const ram = api.systemRamGb().then(
+      (gb) => (gb ? `This computer: ${gb} GB of RAM` : "This computer: RAM could not be read"),
+      () => "This computer: RAM could not be read",
     );
+    const size = api.similarStatus().then(
+      (s) => `Download: ${fmtBytes(s.downloadTotal)} · `,
+      () => "",
+    );
+    void Promise.all([size, ram]).then(([d, r]) => ($("#fr-ram").textContent = d + r));
+  }
 
   return new Promise((resolve) => {
     el.addEventListener("click", async (e) => {
@@ -201,8 +221,9 @@ export function firstRun(
       } else if (fs) {
         el.querySelectorAll("[data-fs]").forEach((b) => b.setAttribute("aria-pressed", String(b === t.closest("[data-fs]"))));
         S.answered = true;
-        // Plan 1 only records the answer; the model download comes in Plan 5.
-        api.setSettings({ findSimilar: fs }).catch((err) => (status.textContent = `Could not save that choice: ${String(err)}`));
+        S.findSimilar = fs;
+        // A click only records the choice in memory (it can still change, and quitting before
+        // Begin saves and downloads nothing); Begin saves it (R12).
       } else if (t.closest("#fr-go") && S.path) {
         S.busy = true;
         sync();
@@ -212,6 +233,11 @@ export function firstRun(
           const lib = S.mode === "create" ? await api.createLibrary(S.path, demo.checked) : await api.openLibrary(S.path);
           el.remove();
           shell.forEach((x) => (x.inert = false));
+          // "on": similarEnable saves it before it starts the download.
+          if (S.findSimilar === "on") enableInBackground(root, api);
+          else if (S.findSimilar === "off") {
+            api.setSettings({ findSimilar: "off" }).catch((err) => noticeIn(root)(`<p>Could not save that choice: ${esc(String(err))}</p>`));
+          }
           resolve(lib);
           return;
         } catch (err) {
@@ -222,4 +248,30 @@ export function firstRun(
       sync();
     });
   });
+}
+
+/** After first run's library exists: starts Find similar without waiting on it (the download
+ *  runs in the background), and shows the first failure once as a status notice (R12). */
+function enableInBackground(root: HTMLElement, api: Api) {
+  let told = false;
+  let off: (() => void) | null = null;
+  const done = () => {
+    told = true;
+    off?.();
+  };
+  const tell = (copy: string) => {
+    if (told) return;
+    done();
+    noticeIn(root)(`<p>${esc(copy)}</p><button type="button" class="text-btn" data-open-settings>Open Settings</button>`);
+  };
+  void api
+    .onSimilarStatus((s) => {
+      if (s.phase === "error") tell(s.error ?? CATCH_ALL);
+      else if (s.phase === "ready" || s.phase === "indexing" || s.phase === "paused") done(); // it started
+    })
+    .then((u) => (told ? u() : (off = u)));
+  api.similarEnable().then(
+    (s) => s.phase === "error" && tell(s.error ?? CATCH_ALL),
+    () => tell(CATCH_ALL),
+  );
 }
