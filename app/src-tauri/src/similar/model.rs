@@ -50,9 +50,9 @@ pub const SIGLIP_B16_Q8: ModelSpec = ModelSpec {
     text_len: 64,
     pad_id: 1,
     lowercase: true,
-    // Provisional; Task 8 calibrates both on the demo set.
-    sim_min_image: 0.5,
-    sim_min_text: 0.03,
+    // Calibrated on the 50-reference demo set (Task 8 Step 3b, evidence in app/README.md).
+    sim_min_image: 0.55,
+    sim_min_text: 0.05,
 };
 
 /// Written last, after every file passed its SHA-256 check.
