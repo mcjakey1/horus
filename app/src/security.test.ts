@@ -230,7 +230,7 @@ describe("untrusted text renders as text (Plan 6 Task 3)", () => {
     const ed = mountLinkEditor(root, api, store, { fromRef: "x1", linkId: "l1" });
     await settle(20);
     readsAsText(ed.el, [WHY]);
-    expect(ed.el.querySelector<HTMLTextAreaElement | HTMLInputElement>("textarea, input[name='why'], .le-why")?.value ?? WHY).toBe(WHY);
+    expect(ed.el.querySelector<HTMLTextAreaElement>(".le-why")!.value).toBe(WHY);
     noMarkup();
     expect(unnamed(ed.el)).toEqual([]);
     ed.close();
@@ -269,6 +269,8 @@ describe("untrusted text renders as text (Plan 6 Task 3)", () => {
     expect(unnamed(el)).toEqual([]);
     renderInspector(el, snap, { kind: "ref", id: "ref:halo:x1" }, opts as never);
     readsAsText(el, [TITLE]);
+    noMarkup();
+    expect(unnamed(el)).toEqual([]);
     renderInspector(el, snap, { kind: "op", id: "op:xop" }, opts as never);
     readsAsText(el, [OP]);
     noMarkup();
