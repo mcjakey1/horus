@@ -259,6 +259,29 @@ describe("boot wiring (Task 9)", () => {
     document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
   });
 
+  it("Find similar's tab gets the first shown reference with no manual show (Plan 5 Task 7, review 1)", async () => {
+    const ready = { phase: "ready" as const, downloadDone: 0, downloadTotal: 213373093, indexed: 0, total: 0, diskBytes: 0, error: null };
+    const mk = (id: string): Reference => ({
+      id, title: `Plate ${id}`, file: `images/${id}.jpg`, hash: id, width: 3, height: 4,
+      addedAt: "2026-11-25T00:00:00Z", tags: [], thumb256: id, thumb1024: id,
+    });
+    const library: LibraryView = { root: "C:/lib", references: [mk("p1"), mk("p2")], links: [], boards: [], warning: null, taxonomyReadOnly: false };
+    const api: Api = {
+      ...fakeApi("C:/lib"),
+      openLibrary: vi.fn(async () => library),
+      getTaxonomy: vi.fn(async () => seedJson as unknown as Taxonomy),
+      similarStatus: vi.fn(async () => ready),
+      similarByRef: vi.fn(async () => []),
+    };
+    const view = await boot(document.body, api);
+    await view.ready;
+    await new Promise((r) => setTimeout(r, 260));
+    const first = view.store.refs.keys().next().value;
+    expect(first).toBeDefined();
+    expect(api.similarByRef).toHaveBeenCalledWith(first);
+    view.destroy();
+  });
+
   it("a Tag-like-this drop lands on the new Inbox item with its preset, past a retained tagged item (fix round 1, I1)", async () => {
     const full: Tag = { id: "t1", operationId: "differentiate", techniqueId: "chiaroscuro", branchId: "differentiate.feature", suggested: false };
     const mk = (id: string, tags: Tag[] = []): Reference => ({

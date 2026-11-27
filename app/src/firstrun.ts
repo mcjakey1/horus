@@ -53,11 +53,13 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   // Plan 3: the view shell. Search hits from any view switch to the Reference view first (R5).
   const shell = mountViews(root, { showReference: (id) => view.show(id) });
   // Plan 5 Task 7 (R14): Find similar hears every shown reference and gives search its option B.
+  // The view shows its first reference before wireSimilar exists: remember the last one shown.
   let similar: ReturnType<typeof wireSimilar> | null = null;
+  let lastShown: string | null = null;
   const view = mountReference(root, api, store, {
     onNavigate: () => shell.select("reference"),
     openCompare: (a, b) => openCompare(a, b), // no onClose: Esc only closes; filter and pins stay
-    onShow: (id) => similar?.show(id),
+    onShow: (id) => ((lastShown = id), similar?.show(id)),
     similar: () => similar?.search(),
   });
   // The graph views' read-only data seam; Tasks 6-8 pass it to their views.
@@ -113,9 +115,10 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   const unwireSaveStatus = wireSaveStatus(root, api);
   const settingsPanel = mountSettings(root, api); // Plan 5 Task 6: the top bar's gear
   similar = wireSimilar(root, api, store, win ?? null, {
-    openReference: shell.openReference,
+    search: view.search,
     openSettings: () => settingsPanel.open("find-similar"),
   });
+  if (lastShown) similar.show(lastShown);
   return {
     ...view,
     store,

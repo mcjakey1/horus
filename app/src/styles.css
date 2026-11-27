@@ -617,13 +617,16 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .q-results .sim-head { font-size: 12px; font-weight: 600; color: var(--ink); }
 .q-results .sim-note { font-size: 12px; color: var(--ink-2); }
 .q-results .sw-ref { background: var(--ink-3); }
-/* The drop target sits beside the listbox (C7), left of it, while the dropdown is open or a
-   file is dragged over the window. Square, quiet, in the panel fill. */
-.sim-drop { display: none; position: absolute; top: 38px; right: calc(100% + 8px); width: 180px; min-height: 72px; padding: 12px; place-items: center; text-align: center; background: var(--panel); border: 1px dashed var(--line-2); color: var(--ink-2); font-size: 12px; z-index: 20; }
+/* The drop target sits beside the listbox (C7), to the left of it, while the dropdown is open
+   or a file is dragged over the window. Square, a solid strong hairline (dashed means a partial
+   tag), Menu lift like the dropdown; the border goes to secondary ink while a file is over it. */
+.sim-drop { display: none; position: absolute; top: 38px; right: calc(100% + 8px); width: 180px; min-height: 72px; padding: 12px; place-items: center; text-align: center; background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); color: var(--ink-2); font-size: 12px; z-index: 20; }
 .search:has(#q-results:not([hidden])) .sim-drop, .search.is-drag .sim-drop { display: grid; }
 .search.is-drag .sim-drop { border-color: var(--ink-2); color: var(--ink); }
-/* Narrow windows: the field spans the bar, so the target drops under it instead. */
+/* Narrow windows: the field spans the bar, so the target takes the dropdown's place under it,
+   during a drag only; the listbox steps aside for the drag. */
 @media (max-width: 760px) {
   .sim-drop { right: auto; left: 0; width: 100%; top: 38px; }
-  .search:has(#q-results:not([hidden])) .sim-drop { display: none; }
+  .search:not(.is-drag):has(#q-results:not([hidden])) .sim-drop { display: none; }
+  .search.is-drag .q-results { display: none; }
 }

@@ -47,6 +47,36 @@ describe("search", () => {
     expect(group()!.querySelector('[role="option"][data-r="x"]')).not.toBeNull();
   });
 
+  it("an arrow-key selection survives option B arriving (review 3)", async () => {
+    api = { search: vi.fn(async () => [
+      { kind: "technique", id: "t1", operationId: "op", count: 1 },
+      { kind: "technique", id: "t2", operationId: "op", count: 1 },
+    ]) } as unknown as Api;
+    const chosen = vi.fn();
+    const hooks: SearchHooks = {
+      techniqueName: (id) => id,
+      operationLabel: () => ({ name: "", plain: "", color: "" }),
+      referenceTitle: (id) => `Plate ${id}`,
+      onTechnique: chosen,
+      onReference: () => {},
+      similar: () => new Promise<string[]>((r) => (resolve = r)),
+    };
+    mountSearch(document.body, api, hooks, life.signal);
+    const input = document.querySelector<HTMLInputElement>("#q")!;
+    input.value = "x";
+    input.dispatchEvent(new Event("input"));
+    await settle(0);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    expect(input.getAttribute("aria-activedescendant")).toBe("opt-1");
+    await settle(200);
+    resolve(["r1"]);
+    await settle(0);
+    expect(document.querySelector('[data-r="r1"]')).not.toBeNull();
+    expect(input.getAttribute("aria-activedescendant")).toBe("opt-1");
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(chosen).toHaveBeenCalledWith("t2");
+  });
+
   it("without the similar hook only option A runs", async () => {
     const hooks: SearchHooks = {
       techniqueName: (id) => id,

@@ -6,16 +6,17 @@
 import type { Api, SimilarStatus } from "./api";
 import { esc } from "./esc";
 import type { DropWin } from "./intake";
-import { SIMILAR_REFRESH, SIMILAR_RESULTS, type SimilarResults } from "./search";
+import type { SearchHandle } from "./search";
 import type { Store } from "./store";
 
 const ON = new Set<SimilarStatus["phase"]>(["ready", "indexing", "paused"]);
 
-/** The tab pane's answer for the shown reference. */
-type PaneState = { ids: string[] } | { note: string } | null;
+/** The tab pane: waiting for the shown reference's answer, its ids, or a quiet line. */
+type PaneState = "pending" | { ids: string[] } | { note: string } | null;
 
 const NOTE = "Looks alike — not about technique.";
 const NOT_INDEXED = "This reference isn't indexed yet.";
+const FAILED = "Looks similar couldn't search just now. Try again.";
 const DROP_NOTES: Record<string, string> = {
   TooLarge: "That image is too large to search with.",
   Unreadable: "Horus couldn't read that image.",
@@ -37,13 +38,14 @@ function statusHTML(s: SimilarStatus): string {
   return `Find similar: ${word[s.phase]}`;
 }
 
-/** `hooks.openSettings` opens Settings at its Find similar section (the status bar's click). */
+/** `hooks.search`: the Reference view's search box (drop results, scope refresh).
+ * `hooks.openSettings`: Settings at its Find similar section (the status bar's click). */
 export function wireSimilar(
   root: HTMLElement,
   api: Api,
   store: Store,
   win: DropWin | null,
-  hooks: { openReference(id: string): void; openSettings?(): void },
+  hooks: { search: SearchHandle; openSettings?(): void },
 ): { show(id: string): void; search(): ((q: string) => Promise<string[]>) | undefined; destroy(): void } {
   const life = new AbortController();
   const signal = life.signal;
@@ -58,6 +60,7 @@ export function wireSimilar(
   bar?.addEventListener("click", () => hooks.openSettings?.(), { signal });
 
   function setStatus(s: SimilarStatus) {
+    if (signal.aborted) return;
     if (bar) bar.innerHTML = statusHTML(s);
     const want = ON.has(s.phase);
     if (want && !on) insert();
@@ -66,6 +69,7 @@ export function wireSimilar(
 
   // ---------- inserted while on, removed while off ----------
   function insert() {
+    if (signal.aborted) return; // a status that lands after destroy()
     on = true;
     const tab = document.createElement("button");
     tab.setAttribute("role", "tab");
@@ -84,7 +88,8 @@ export function wireSimilar(
     el.setAttribute("aria-labelledby", "tab-similar");
     el.hidden = true;
     $("#pane-links")?.after(el);
-    // Beside the dropdown's listbox, never inside it (C7).
+    // Beside the dropdown's listbox, never inside it (C7). It has no keyboard path: the tab
+    // above gives the same search from the keyboard.
     const zone = document.createElement("div");
     zone.className = "sim-drop";
     zone.dataset.similarDrop = "";
@@ -92,6 +97,7 @@ export function wireSimilar(
     $("#q-results")?.after(zone);
     tab.addEventListener("click", () => void load(), { signal });
     tab.addEventListener("focus", () => void load(), { signal });
+    if (current) pending();
     void load();
   }
 
@@ -106,10 +112,16 @@ export function wireSimilar(
     $("#pane-similar")?.remove();
     $("[data-similar-drop]")?.remove();
     $(".search")?.classList.remove("is-drag");
-    $("#q")?.dispatchEvent(new CustomEvent(SIMILAR_REFRESH));
+    hooks.search.refresh(); // the search's own group goes with the next keystroke
   }
 
   // ---------- the tab: similarByRef for the shown reference ----------
+  /** A new reference: its old rows never show under it, and the wait reads as a wait. */
+  function pending() {
+    pane = "pending";
+    paintPane();
+  }
+
   async function load() {
     if (!on || !current) return;
     const id = current;
@@ -123,7 +135,7 @@ export function wireSimilar(
         ? { note: NOT_INDEXED }
         : code === "FindSimilarOff" || code.startsWith("UnknownReference:")
           ? { ids: [] } // no results, not an error (api.ts wire codes)
-          : { note: code };
+          : { note: FAILED };
     }
     if (mine !== seq || !on) return;
     pane = next;
@@ -135,7 +147,8 @@ export function wireSimilar(
     const el = $("#pane-similar");
     if (!el || !pane) return;
     let body: string;
-    if ("note" in pane) body = `<p class="none">${esc(pane.note)}</p>`;
+    if (pane === "pending") body = `<p class="none">Searching…</p>`;
+    else if ("note" in pane) body = `<p class="none">${esc(pane.note)}</p>`;
     else {
       const rows = pane.ids
         .filter((id) => store.inScope(id))
@@ -148,7 +161,6 @@ export function wireSimilar(
   }
 
   // ---------- the drop target (Tauri gives paths; HTML5 drops don't) ----------
-  const input = () => $<HTMLInputElement>("#q");
   const unlisten = win?.onDragDropEvent(({ payload: p }) => {
     const search = $(".search");
     if (!on || !search) return;
@@ -158,32 +170,29 @@ export function wireSimilar(
     const dpr = window.devicePixelRatio || 1; // Tauri reports physical pixels
     const hit = document.elementFromPoint?.(p.position.x / dpr, p.position.y / dpr);
     if (!hit?.closest("[data-similar-drop]")) return; // wireIntake imports it
-    const show = (r: SimilarResults) => input()?.dispatchEvent(new CustomEvent(SIMILAR_RESULTS, { detail: r }));
+    // The response slot is taken now: a typed query, Esc or a later drop makes this one stale.
+    const show = hooks.search.beginDrop();
     show({ note: "Searching…" });
     api.similarByFile(p.paths[0]).then(
       (hits) => on && show({ ids: hits.map((h) => h.id) }),
-      (err) => on && show({ note: DROP_NOTES[String(err)] ?? String(err) }),
+      (err) => on && show({ note: DROP_NOTES[String(err)] ?? FAILED }),
     );
   });
 
   // ---------- board scope (R15) and library switches ----------
   const unsub = store.subscribe((e) => {
-    if (e.reset) {
-      current = null;
-      pane = null;
-      const el = $("#pane-similar");
-      if (el) el.innerHTML = "";
-    }
+    // A switch shows the new library's first reference right after (onShow), so `current`
+    // stays as it is; only the old library's rows go.
+    if (e.reset && on && current) pending();
     if (e.scope || e.scopeCleared) {
       paintPane();
-      input()?.dispatchEvent(new CustomEvent(SIMILAR_REFRESH));
+      hooks.search.refresh();
     }
   });
 
   // ---------- status ----------
-  let unlistenStatus: Promise<() => void> | null = null;
   api.similarStatus().then(setStatus, () => {});
-  unlistenStatus = api.onSimilarStatus((s) => {
+  const unlistenStatus = api.onSimilarStatus((s) => {
     const wasOn = on;
     setStatus(s);
     // A finished pass can turn "isn't indexed yet" into results.
@@ -193,6 +202,7 @@ export function wireSimilar(
   return {
     show(id) {
       current = id;
+      if (on) pending();
       void load();
     },
     search: () => (on ? async (q: string) => (await api.similarByText(q)).map((h) => h.id) : undefined),
@@ -200,7 +210,7 @@ export function wireSimilar(
       life.abort();
       unsub();
       void unlisten?.then((f) => f());
-      void unlistenStatus?.then((f) => f());
+      void unlistenStatus.then((f) => f());
       if (on) remove();
     },
   };

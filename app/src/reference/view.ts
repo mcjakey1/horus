@@ -9,7 +9,7 @@ import { openLightboxWithPicker } from "../lightbox/dock";
 import { linkedFirst, linkErrorCopy, mountLinkEditor } from "../links/editor";
 import { mountBoardMenu } from "../boards/menu";
 import { opInk, opLabel } from "../ops";
-import { mountSearch } from "../search";
+import { mountSearch, type SearchHandle } from "../search";
 import type { Store, StoreEvent } from "../store";
 import { mountPicker } from "../tagging/picker";
 import { type Filter, matchesFilter, toggle } from "./filter";
@@ -36,7 +36,13 @@ export function mountReference(
     onShow?(id: string): void;
     similar?(): ((q: string) => Promise<string[]>) | undefined;
   } = {},
-): { show(id: string): void; ready: Promise<void>; destroy(): void } {
+): {
+  show(id: string): void;
+  ready: Promise<void>;
+  destroy(): void;
+  /** Plan 5 (R14): Find similar's drop target and scope refresh reach the search through this. */
+  search: SearchHandle;
+} {
   const life = new AbortController();
   const signal = life.signal;
   const $ = <T extends Element = HTMLElement>(s: string) => root.querySelector<T>(s);
@@ -574,7 +580,7 @@ export function mountReference(
   resize?.observe($(".work")!);
   signal.addEventListener("abort", () => resize?.disconnect());
 
-  mountSearch(root, api, {
+  const search = mountSearch(root, api, {
     techniqueName: techName,
     operationLabel: (id) => ({ ...opLabel(store.tax, id), color: opColor(id) }),
     // Under a board scope, an out-of-board reference hit is dropped (search.ts drops undefined).
@@ -816,6 +822,7 @@ export function mountReference(
   return {
     show: (id: string) => show(id),
     ready,
+    search,
     destroy: () => {
       life.abort();
       unsubscribe();

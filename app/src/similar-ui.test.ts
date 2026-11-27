@@ -54,6 +54,7 @@ const status = (phase: SimilarPhase, extra: Partial<SimilarStatus> = {}): Simila
 const settle = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
 type Rig = {
+  view: ReturnType<typeof mountReference>;
   api: Api;
   store: Store;
   emit(s: SimilarStatus): void;
@@ -90,18 +91,20 @@ async function rig(phase: SimilarPhase): Promise<Rig> {
   };
   const store = createStore(library, taxonomy);
   const openSettings = vi.fn();
+  // As boot() wires it: the view shows its first reference before wireSimilar exists.
   let sim: ReturnType<typeof wireSimilar> | null = null;
-  const view = mountReference(document.body, api, store, { onShow: (id) => sim?.show(id), similar: () => sim?.search() });
+  let last: string | null = null;
+  const view = mountReference(document.body, api, store, { onShow: (id) => ((last = id), sim?.show(id)), similar: () => sim?.search() });
   await view.ready;
   const intake = wireIntake(win, document, { api, store, notice: () => {}, show: () => {}, openPicker: () => {} });
-  sim = wireSimilar(document.body, api, store, win, { openReference: (id) => view.show(id), openSettings });
-  await settle(0);
-  view.show("a");
+  sim = wireSimilar(document.body, api, store, win, { search: view.search, openSettings });
+  if (last) sim.show(last);
   await settle();
   // jsdom has no layout: the drop's hit-test returns whatever element the test aims at.
   let aim: Element | null = null;
   document.elementFromPoint = () => aim;
   return {
+    view,
     api,
     store,
     emit: (s) => emit(s),
@@ -266,6 +269,73 @@ describe("Find similar UI", () => {
       expect(r.api.importPaths).not.toHaveBeenCalled();
       const ids = [...group()!.querySelectorAll<HTMLElement>('[role="option"]')].map((e) => e.dataset.r);
       expect(ids).toEqual(["c"]);
+    });
+
+    it("first_reference_reaches_tab_without_a_manual_show (review 1)", async () => {
+      // The rig never calls show(): the view's own first show() was buffered until wiring.
+      expect(r.api.similarByRef).toHaveBeenCalledWith("a");
+      $('[data-pane="similar"]')!.click();
+      await settle(0);
+      expect([...$("#pane-similar")!.querySelectorAll<HTMLElement>("[data-go]")].length).toBe(2);
+    });
+
+    it("late_drop_result_is_stale_after_typing_esc_or_another_drop (review 2)", async () => {
+      const answers: ((h: { id: string; score: number }[]) => void)[] = [];
+      vi.mocked(r.api.similarByFile).mockImplementation(() => new Promise((res) => answers.push(res)));
+      // Esc after a drop: its late answer never reopens the list.
+      r.drop("drop");
+      const input = $("#q") as HTMLInputElement;
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      answers[0]([{ id: "c", score: 0.8 }]);
+      await settle(0);
+      expect($("#q-results")!.hidden).toBe(true);
+      // A typed query after a drop: the drop's late answer doesn't clear it.
+      r.drop("drop");
+      type("backlit");
+      answers[1]([{ id: "c", score: 0.8 }]);
+      await settle();
+      expect(input.value).toBe("backlit");
+      expect(group()!.textContent).toContain("Works best in English."); // the typed query's group, not the drop's
+      // Two drops: the first one's late answer never replaces the second's.
+      r.drop("drop");
+      r.drop("drop");
+      answers[3]([{ id: "b", score: 0.9 }]);
+      answers[2]([{ id: "c", score: 0.8 }]);
+      await settle(0);
+      const ids = [...group()!.querySelectorAll<HTMLElement>('[role="option"]')].map((e) => e.dataset.r);
+      expect(ids).toEqual(["b"]);
+    });
+
+    it("drop_focuses_and_outside_pointer_closes (review 4)", async () => {
+      r.drop("drop");
+      await settle(0);
+      expect(document.activeElement).toBe($("#q"));
+      expect($("#q-results")!.hidden).toBe(false);
+      $("#specimen")!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      expect($("#q-results")!.hidden).toBe(true);
+    });
+
+    it("dropped_image_group_has_no_english_hint (review 8)", async () => {
+      r.drop("drop");
+      await settle(0);
+      expect(group()!.textContent).not.toContain("Works best in English.");
+      type("backlit");
+      await settle();
+      expect(group()!.textContent).toContain("Works best in English.");
+      expect(group()!.getAttribute("aria-describedby")).toBe("q-sim-hint");
+    });
+
+    it("tab_shows_pending_not_old_rows (review 5)", async () => {
+      $('[data-pane="similar"]')!.click();
+      await settle(0);
+      expect($("#pane-similar")!.querySelectorAll("[data-go]").length).toBe(2);
+      vi.mocked(r.api.similarByRef).mockImplementation(() => new Promise(() => {}));
+      r.view.show("b");
+      await settle(0);
+      const pane = $("#pane-similar")!;
+      expect(pane.querySelectorAll("[data-go]").length).toBe(0);
+      expect(pane.textContent).toContain("Looks alike — not about technique.");
+      expect(pane.textContent).toContain("Searching…");
     });
 
     it("no_tagging_path", () => {
