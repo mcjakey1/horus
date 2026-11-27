@@ -182,6 +182,7 @@ impl Worker {
         let bytes = lock(&self.store).encode();
         if let Err(e) = write_atomic(&embeddings_path(root), &bytes) {
             eprintln!("Find similar: couldn't save embeddings.bin: {e}");
+            *dirty = true; // try again at the next save
         }
         true
     }
