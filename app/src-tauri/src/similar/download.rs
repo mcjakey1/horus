@@ -40,6 +40,8 @@ fn config() -> ureq::config::ConfigBuilder<ureq::typestate::AgentScope> {
         .user_agent(concat!("Horus/", env!("CARGO_PKG_VERSION")))
         .timeout_connect(Some(Duration::from_secs(30)))
         .timeout_per_read(Some(Duration::from_secs(30)))
+        // HTTPS GET only (Global Constraints), also after a redirect.
+        .https_only(true)
 }
 
 /// Downloads every missing file of `spec` into `dir`, file by file: resumes `<path>.part`
@@ -355,8 +357,8 @@ mod tests {
     }
 
     fn test_agent() -> ureq::Agent {
-        // The real agent's settings, minus any proxy from the environment.
-        config().proxy(None).build().into()
+        // The real agent's settings, minus any proxy from the environment; the local server is plain http.
+        config().proxy(None).https_only(false).build().into()
     }
 
     fn run(srv: &Server, dir: &Path) -> (Result<(), DlError>, Vec<DlEvent>) {
