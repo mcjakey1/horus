@@ -170,7 +170,7 @@ describe("Tree view", () => {
     const row = (kind: string) => ns.filter((n) => n.kind === kind).map((n) => (n as { labelRow?: number }).labelRow);
     expect(new Set(row("tech"))).toEqual(new Set([0, 1, 2]));
     expect(new Set(row("branch"))).toEqual(new Set([0, 1, 2]));
-    expect(new Set(row("op"))).toEqual(new Set([0, 1, 2]));
+    expect(new Set(row("op"))).toEqual(new Set([0])); // the seed operations are far apart: all on row 0 (design quick look 3)
   });
 
   it("an expanded technique hangs its references from one joint; only the selected one gets a connector (final review I5)", () => {

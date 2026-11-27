@@ -115,6 +115,19 @@ describe("layoutTree", () => {
     for (let i = 1; i < tx.length; i++) expect(tx[i] - tx[i - 1]).toBeGreaterThanOrEqual(GAP);
   });
 
+  it("seed operations share row 0; side-by-side new ones still stagger (design quick look 3)", () => {
+    const g = buildTaxGraph(snap(seed));
+    const rows = labelRows(g, layoutTree(g));
+    const ops = [...g.nodes.values()].filter((n) => n.kind === "op").map((n) => rows.get(n.id));
+    expect(ops.length).toBeGreaterThan(1);
+    expect(new Set(ops)).toEqual(new Set([0]));
+    const tight = synth(1);
+    for (let k = 0; k < 3; k++) tight.operations.push({ id: `n${k}`, name: `New ${k}`, plainLabel: "", icon: "", description: "" });
+    const gt = buildTaxGraph(snap(tight));
+    const rt = labelRows(gt, layoutTree(gt));
+    expect(new Set(["n0", "n1", "n2"].map((id) => rt.get(`op:${id}`))).size).toBe(3); // one GAP apart: three rows
+  });
+
   it("labels_never_overlap (final review I1)", () => {
     const long = synth(2);
     long.techniques.forEach((t, i) => (t.name = `A very long technique name number ${i}`)); // names the artist types
