@@ -3,6 +3,7 @@
 
 pub mod download;
 pub mod model;
+pub mod store;
 
 /// At most this many "Looks similar" results, highest first.
 pub const SIM_K: usize = 24;
