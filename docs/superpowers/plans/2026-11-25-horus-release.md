@@ -213,7 +213,8 @@
       pub orphans: Vec<PathBuf>,              // images/<hash>.<ext> that no reference points to
       pub taxonomy_backup_invalid: bool,      // taxonomy.bak.json present but Taxonomy::load or validate() fails; reported, never deleted
   }
-  pub fn sweep_tmp(root: &Path) -> Vec<PathBuf>;                 // root, images/, thumbs/256/, thumbs/1024/: names ending ".tmp" or starting ".tmp"
+  pub fn sweep_tmp(root: &Path) -> Vec<PathBuf>;                 // root, images/, thumbs/256/, thumbs/1024/: names ending ".tmp" or starting ".tmp",
+                                                                // except embeddings.bin.tmp (Plan 5's indexer may own it; write_atomic clears its own leftover)
   pub fn check(lib: &Library) -> IntegrityReport;               // existence checks only: no hashing, no decoding;
                                                                 // if taxonomy.bak.json exists, loads it and runs validate() (Plan 2 Task 3 rotation)
   pub fn rebuild_thumbs(root: &Path, refs: &[(String, String, String)]) -> Vec<String>;   // (id, hash, file): decode the original
@@ -250,7 +251,7 @@
   - **One rule for `Ok` and `Err` (Plan 5):** once the switch has returned, the start hook runs for whichever library is open. A refused or failed switch leaves the old library open and indexed.
   - **The asset scope stays per folder (R4):** `install()` allows `images/` and `thumbs/` only, never the root (the window never needs `library.json`, `embeddings.bin` or the backups). Plan 4's lightbox cache directory is allowed once, in `setup`.
 
-  The sweep and the check run before anything can write to the new root, so the sweep can never delete a live `.tmp`. Tests:
+  **The invariant:** the sweep never deletes a `.tmp` that a live writer may own. Library writers (the saver, edits, imports) are excluded by the state lock, and the indexer's file, `embeddings.bin.tmp`, is skipped by name. That covers a reopen of the same library too, whose old indexer is joined only after the sweep. A leftover `embeddings.bin.tmp` is harmless, because `write_atomic` deletes its own `.tmp` before writing. Tests:
   - `open_pipeline_order`: a fake hook records the order of the steps in both commands.
   - A `.tmp` planted by a fake saver or indexer hook after `install()` survives.
   - Plan 5's `failed_open_keeps_old_indexer`, `start_hook_restarts_after_switch` and `switch_library_stops_indexer` stay green.
@@ -258,6 +259,7 @@
 
 - [ ] **Step 1: Write the failing tests**
   - `sweep_removes_only_tmp`: plant `images/.tmpAb12`, `images/x.jpg.tmp`, `thumbs/256/.tmpZ` and `library.json.tmp`. All four are removed. `images/<hash>.jpg`, `library.bak.json` and `taxonomy.bak.json` stay.
+  - `sweep_skips_embeddings_tmp`: a planted `embeddings.bin.tmp` in the root survives `sweep_tmp`, and is not in the returned list.
   - `check_validates_taxonomy_backup`:
     - A valid `taxonomy.bak.json` gives `taxonomy_backup_invalid == false`.
     - Writing `{` into it gives `true`, and the file is still there, byte-identical, after `check` and `sweep_tmp`.
