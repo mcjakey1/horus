@@ -396,6 +396,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   // The pad of the last fitAll while the camera still sits at it; any other move clears it. A resize
   // (a narrower window, a hidden view shown) then fits again (design judgement P1-1: fit at 760).
   let fitPad: number | null = null;
+  let lastPad = 0; // the view's own fit pad, for the 0 key
   function setCamera(c: Camera, animate = false) {
     fitPad = null;
     if (animate && !reducedMotion()) tween = { from: cam, to: c, t0: performance.now() };
@@ -416,7 +417,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     }
     const b: Rect = { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
     setCamera(fit(b, view(), 40 + padPx), animate); // 40: fit's own padding
-    fitPad = padPx;
+    fitPad = lastPad = padPx;
   }
 
   /** Topmost pickable node under a world point, skipping `except` (the node being dragged). */
@@ -514,7 +515,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     const zero = e.key === "0" || (!e.shiftKey && e.code === "Digit0"); // AZERTY's unshifted "à"
     if (e.key === "+" || e.key === "=") setCamera(zoomAt(base, w / 2, h / 2, 1.25), true);
     else if (e.key === "-") setCamera(zoomAt(base, w / 2, h / 2, 0.8), true);
-    else if (zero) fitAll();
+    else if (zero) fitAll(lastPad);
     else if (e.key === "Enter" && selected) emit("activate", selected, { shift: e.shiftKey });
     else if (e.key.startsWith("Arrow") && selected === null) {
       // With a selection, the view moves it (navigate.ts); without one, the arrows pan.

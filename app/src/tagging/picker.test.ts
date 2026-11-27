@@ -354,6 +354,11 @@ describe("technique picker", () => {
     expect(apply.disabled).toBe(true);
     key(row(el), "3");
     expect(apply.disabled).toBe(false);
+    type(el, "zzz brand new");
+    newCard(el)!.click(); // the New technique form has its own Add button
+    expect(apply.disabled).toBe(true);
+    el.querySelector<HTMLButtonElement>(".pk-cancel")!.click();
+    expect(apply.disabled).toBe(false);
   });
 
   const twoDiff = (): NewTag[] =>

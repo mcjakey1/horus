@@ -151,7 +151,7 @@ export function mountPicker(
   }
 
   function renderCards() {
-    applyBtn.disabled = !S.op && !S.ticks.length; // apply() would send nothing (design judgement #11)
+    syncApply();
     keep(grid, () => {
       if (!S.op) {
         listbox(false);
@@ -298,10 +298,16 @@ export function mountPicker(
     renderCards();
   }
 
+  /** Apply is live only when apply() would send something (design judgement #11). */
+  function syncApply() {
+    applyBtn.disabled = S.form || (!S.op && !S.ticks.length);
+  }
+
   function openForm() {
     if (store.taxonomyReadOnly || !S.op) return;
     const domains = [...new Set(tax().branches.filter((b) => b.operationId === S.op).map((b) => b.domainId))];
     S.form = true;
+    syncApply();
     slot.innerHTML = `<form class="pk-form">
       <label>Name <input name="name" type="text" required maxlength="80" autocomplete="off" value="${esc(S.q.trim())}"></label>
       <label>One-line description <input name="description" type="text" maxlength="200" autocomplete="off"></label>
@@ -316,6 +322,7 @@ export function mountPicker(
   function closeForm() {
     S.form = false;
     slot.innerHTML = "";
+    syncApply();
   }
 
   function submitForm(f: HTMLFormElement) {

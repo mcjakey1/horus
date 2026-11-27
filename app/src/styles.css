@@ -125,6 +125,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .work > .lab-actions { grid-column: 1; grid-row: 1; display: flex; flex-wrap: wrap; gap: 6px; margin-left: 20px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .work > .lab { grid-column: 1; grid-row: 2; }
 .work > .margin { grid-column: 2; grid-row: 1 / 3; }
+.work > .lab-actions > button { box-shadow: inset 0 0 0 1px var(--line-2); } /* off the card, the panel chips need an edge on the shell (AGY) */
 .lab-actions > button { padding-top: 4px; padding-bottom: 4px; }
 .leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .leaders path { fill: none; stroke: var(--card-ink); stroke-width: 1; opacity: 0; transition: opacity .2s; } /* at rest: no lines over the art */
@@ -381,9 +382,11 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .lb-side { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
 .lb-bar { position: relative; grid-column: 1; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 20px; border-top: 1px solid var(--line); background: var(--panel); font-size: 13px; }
 /* No dock open: the side column folds away, so the image gets the width (design judgement #6). */
-.lightbox:not(:has(.lb-side > *)) { grid-template-columns: minmax(0, 1fr) 0; }
 .lightbox:not(:has(.lb-side > *)) .lb-side { display: none; }
-@media (min-width: 761px) { .lightbox:not(:has(.lb-side > *)) .lb-stage { margin-right: 20px; } }
+@media (min-width: 761px) {
+  .lightbox:not(:has(.lb-side > *)) { grid-template-columns: minmax(0, 1fr) 0; }
+  .lightbox:not(:has(.lb-side > *)) .lb-stage { margin-right: 20px; }
+}
 .lb-hint { margin: 0; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 760px) {
   .lightbox { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto; }
@@ -579,7 +582,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .bd-main:has(.bd-empty:not([hidden])) .bd-grid { display: none; }
 .bd-empty-line { margin: 0; font: 400 22px/1.3 var(--serif); }
 .bd-empty-row { display: flex; gap: 8px; }
-.bd-new-name { width: 22ch; height: 32px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--shell); color: var(--ink); font: 14px var(--sans); }
+.bd-new-name { width: 22ch; height: 34px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--shell); color: var(--ink); font: 14px var(--sans); }
 .bd-empty-hint { margin: 0; font-size: 13px; color: var(--ink-2); }
 .pane-tip { margin: 2px 0 8px; font-size: 12px; color: var(--ink-2); }
 kbd { font: 500 12px var(--mono); padding: 0 4px; border: 1px solid var(--line-2); border-radius: 2px; }
@@ -605,7 +608,7 @@ kbd { font: 500 12px var(--mono); padding: 0 4px; border: 1px solid var(--line-2
 .bm-actions { display: flex; justify-content: space-between; }
 .boards-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
 .details-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; } /* Task 3c: a chip like its row */
-.off-board { position: absolute; top: 50px; left: 16px; padding: 3px 8px; background: var(--ink); color: var(--panel); font: 500 12px var(--mono); }
+.off-board { position: absolute; top: 14px; left: 16px; padding: 3px 8px; background: var(--ink); color: var(--panel); font: 500 12px var(--mono); }
 .off-board[hidden] { display: none; }
 .off-board-note { color: var(--ink-2); font-style: italic; }
 .board-scope b { font-weight: 600; }

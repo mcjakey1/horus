@@ -189,11 +189,13 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
     msg("");
     api.createBoard(name, []).then(
       (c) => {
+        if (signal.aborted) return;
         $<HTMLInputElement>(".bd-new-name").value = "";
         if (c.created) S.board = c.created;
         store.apply(c);
+        $<HTMLElement>('.bd-pick[aria-current="true"]')?.focus(); // the empty state that held focus is gone
       },
-      (err) => msg(boardErrorCopy(err, store, name)),
+      (err) => signal.aborted || msg(boardErrorCopy(err, store, name)),
     );
   }
 
