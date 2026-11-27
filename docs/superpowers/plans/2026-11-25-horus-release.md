@@ -159,7 +159,7 @@
   - A `dist/` containing `reference/frame-036s.jpg` fails.
   - The source scans ignore `dist/assets/pixi-*.js` (a fixture with a vendor `https://` string passes) and `resources/demo/manifest.json`.
   - A JS file containing the string "A Taxonomy of Visuals" fails.
-  - `fetch("https://x")` fails, but `xmlns="http://www.w3.org/2000/svg"`, a comment naming `http://asset.localhost`, and a `*.test.ts` fixture holding `https://ex.org/a.png` pass (R13).
+  - `fetch("https://x")` fails, but `xmlns="http://www.w3.org/2000/svg"`, comments naming `http://asset.localhost` and `http://ipc.localhost`, and a `*.test.ts` fixture holding `https://ex.org/a.png` pass (R13).
   - `checkGates` with one `- [ ]` passes when not final and fails when final.
   - `checkNotices` fails on notices without the SigLIP Apache-2.0 entry, and passes on a fixture that names `google/siglip-base-patch16-224`, `Apache License, Version 2.0` and a dated `NOTICE: none` line (as Plan 5's `app/notices/manual.md` has), and on one that holds an upstream NOTICE text (gate G8, R5).
   - A JS file containing `` `<span style="left:${x}px">` `` fails `checkNoInlineStyle`, `` `<span data-css="left:${x}px">` `` passes, and a `*.test.ts` file with `style="…"` is skipped (R13).
@@ -193,7 +193,10 @@
 - Modify:
   - `app/src-tauri/src/lib.rs`, to register `tauri_plugin_single_instance::init` as the **first** plugin (before dialog and opener) and focus the main window. Plan 5's `setup` code (its `SimilarEnv` manage and the Find similar background start) stays as it is;
   - `app/src-tauri/src/commands.rs`, so `create_library` and `open_library` run the sweep and the check in Plan 5's order (below);
-  - `app/src-tauri/src/taxonomy.rs`, to put `NAMES_41`, `OBSERVED` and `validate_seed` behind `#[cfg(test)]`.
+  - `app/src-tauri/src/taxonomy.rs`, to put `NAMES_41`, `OBSERVED` and `validate_seed` behind `#[cfg(test)]`;
+  - `app/src-tauri/Cargo.toml`, adding `tauri-plugin-single-instance = "2"`;
+  - `app/src/api.ts`: `LibraryView.integrity?`, the `IntegrityReport` type, and `onThumbsRebuilt(cb)` (it listens to `library://thumbs-rebuilt`), which goes into `NON_IPC_KEYS` in `api.contract.test.ts`;
+  - the integrity notice and the tile re-render: `app/src/firstrun.ts` (`boot()` wiring) and `app/src/reference/view.ts`, with their tests.
 
 **Interfaces:**
 - Consumes:
@@ -235,13 +238,13 @@
     4. Under the state guard: Plan 5's `similar::detach_indexer` (takes the old indexer and bumps the generation), then `install()`: the asset scope, the `LibraryView` (with Plan 4's `boards` and this task's `integrity`), the new `Open` state with a fresh history.
     5. Once the guard drops, join the old indexer (`Indexer::stop`).
     6. `remember()`.
-    7. Plan 5's start hook, then this task's `rebuild_thumbs` in the background.
+    7. Plan 5's start hook (on `Ok` and `Err`, for whichever library is open); then, on `Ok` only and when `missing_thumbs` is non-empty, this task's `rebuild_thumbs` in the background.
   - **`open_library`:**
     1. Under the state guard (held from the flush to the swap, on purpose): flush, then `Library::open`.
     2. Still under it: `sweep_tmp` and `check` on the new root (existence checks only, so the lock is held briefly).
     3. `similar::detach_indexer` (takes the indexer and bumps the generation, Plan 5), then `install()`.
     4. Once the state guard drops, join the old indexer; then `remember()`.
-    5. In the `open_library` wrapper, for `Ok` and `Err` alike: join an indexer a failed install left detached, then Plan 5's start hook, then `rebuild_thumbs` in the background.
+    5. In the `open_library` wrapper: for `Ok` and `Err` alike, join an indexer a failed install left detached, then Plan 5's start hook. Then, on `Ok` only and when `missing_thumbs` is non-empty, `rebuild_thumbs` in the background.
 
     This is the order as Plan 5 Task 5 lands it (`p5-t5`: `create_library`, `open_library` and `open_inner`); if Task 5's review moves a step, Plan 6 follows the merged code.
   - **One rule for `Ok` and `Err` (Plan 5):** once the switch has returned, the start hook runs for whichever library is open. A refused or failed switch leaves the old library open and indexed.
@@ -343,7 +346,8 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
   - `app/src-tauri/capabilities/default.json`: add `opener:allow-open-path` scoped to `$RESOURCE/THIRD_PARTY_NOTICES.md` (R10);
   - `app/src/firstrun.ts`: `boot()` plays the intro (R12). Plan 5 Task 6 already changed this file (`enableInBackground`, `mountSettings`, `FIND_SIMILAR_COPY` re-exported from `settings/find-similar.ts`);
   - `app/src/settings/find-similar.ts`: Plan 5's credit line gains the "About the model" link, which opens the notices (P5-R13);
-  - `app/src/styles.css` and `DESIGN.md` (Step 3, D17).
+  - `app/src/styles.css`, `DESIGN.md` and `app/src/inks.test.ts` (Step 3, D17);
+  - `app/src/settings/find-similar.test.ts`: the "About the model" link opens the notices through `openPath`.
 
 **Interfaces:**
 - Consumes `get_settings` and `set_settings`, which take the partial patch from the Plan 1 Task 8 carry ruling, and `firstrun.ts`.
@@ -375,7 +379,7 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
   - This task builds the mechanics, with a placeholder frame: the "Horus" wordmark centred on the shell.
 - **About** shows:
   - the version;
-  - "Works offline. No account, no telemetry. Find similar downloads an image model only if you turn it on.";
+  - "Works offline. No account, no telemetry. Find similar downloads an image model from huggingface.co only if you turn it on." (G7 names the host);
   - the font licences;
   - a "Third-party notices" link, which opens the bundled `THIRD_PARTY_NOTICES.md` through `opener` (`openPath`), the same target as Plan 5's "About the model" link (P5-R13);
   - the demo set credits, taken from the manifest's `credit` and `rights` fields.
@@ -394,7 +398,7 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
   - `capability_grants_reveal_and_notices_only` (renamed, Rust): the capability grants reveal and exactly one scoped `open-path` (R10).
   - About lists every font family that `checkFonts` finds, and one demo credit per manifest record.
 
-- [ ] **Step 2: Run, then implement, then run again.** Run `npm test -- intro about`. It should FAIL, then PASS.
+- [ ] **Step 2: Run, then implement, then run again.** Run `npm test -- intro about firstrun find-similar` and `cargo test settings:: tests::capability`. They should FAIL, then PASS.
 
 - [ ] **Step 3: The design pass (with the user).** Run the `impeccable` skill on the intro surface in its showcase register. Write the result into `intro.ts` and `styles.css`, keeping the Step 1 tests green. Record the approved concept as a short "Intro card" section in `DESIGN.md`.
   - **D17 in the same pass:** light Group Green's `-on` measures 4.37:1, under AA's 4.5:1. The design reviewer picks the smallest seed-ink change that reaches 4.5:1, `DESIGN.md` records it, and `inks.test.ts` asserts it.
@@ -455,8 +459,8 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
   }
   ```
   - A `..` source mapped to an explicit target keeps the notices at `$RESOURCE/THIRD_PARTY_NOTICES.md`, which Task 4's scoped `open-path` names (R2, R10).
-  - **macOS (`tauri.macos.conf.json`, B2):** the dylib ships as a framework by default: `"frameworks": ["ort/libonnxruntime.dylib"]` (it lands in `Contents/Frameworks`, which Tauri signs), and `"ort/*": null` drops it from the resources. Plan 5's `lib.rs` resolves the dylib from `Contents/Frameworks` on macOS. Resources would be used only if Task 6's spike proves that a dylib there signs and notarises.
-  - **Windows (`tauri.windows.conf.json`, B4):** the four VC++ DLLs map to the resource root, which on Windows is beside `horus.exe` (always searched): `"ort/vc/msvcp140.dll": "msvcp140.dll"`, and the same for `msvcp140_1.dll`, `vcruntime140.dll` and `vcruntime140_1.dll`.
+  - **macOS (`tauri.macos.conf.json`, B2):** the dylib ships as a framework by default: `"frameworks": ["ort/libonnxruntime.dylib"]` (it lands in `Contents/Frameworks`, which Tauri signs), and `"ort/*": null` drops it from the resources. Plan 5's `lib.rs` resolves the dylib from `Contents/Frameworks` on macOS. `Resources` would be used only if a separate Developer ID signing and notarisation spike (Task 7) proves that a dylib there signs and notarises; Task 6's ad-hoc spike checks the framework placement only.
+  - **Windows (`tauri.windows.conf.json`, B4):** the four VC++ DLLs sit in `src-tauri/ort/` beside `onnxruntime.dll` (so dev runs and the pre-load find them), and the bundle maps them to the resource root, which on Windows is beside `horus.exe` (always searched): `"ort/*": null`, then `"ort/onnxruntime.dll": "ort/onnxruntime.dll"`, `"ort/ThirdPartyNotices.txt": "ort/ThirdPartyNotices.txt"`, `"ort/LICENSE": "ort/LICENSE"`, and `"ort/msvcp140.dll": "msvcp140.dll"` and the same for `msvcp140_1.dll`, `vcruntime140.dll` and `vcruntime140_1.dll`, so nothing ships twice.
   - Step 2 checks that Tauri merges these per-platform files as described (a `null` key removes, a new key adds).
   - **Why NSIS with `currentUser`:** artists usually install without admin rights. MSI stays for managed studio machines.
   - **Why `embedBootstrapper`:** it installs WebView2 when it is missing, and costs about 1.8 MB (Review Focus 5).
@@ -469,14 +473,14 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
   - that no resource path matches the third-party exclusions;
   - that the icon files exist;
   - **that ONNX Runtime is really there (R8):** this OS's file (`onnxruntime.dll`, `libonnxruntime.dylib` or `libonnxruntime.so`) is in `src-tauri/ort/` with the size pinned in `fetch-ort.mjs` (the one source of the pins). Plan 5's `.gitkeep` keeps the `ort/*` glob resolving on a fresh clone, so without this check a build that skipped `npm run fetch:ort` would silently ship no ORT;
-  - on Windows, that the four VC++ DLLs are in `src-tauri/ort/vc/` with a PE file version of at least 14.x. They have no SHA-256 pin, because the build machines' copies change (B4);
+  - on Windows, that the four VC++ DLLs are in `src-tauri/ort/` with a PE file version of at least 14.x. They have no SHA-256 pin, because the build machines' copies change (B4);
   - that each artefact is within its measured size budget (Global Constraints, R9), read from `budgetBytes` (per artefact) in `app/release-check.json`, which this task writes from the measurements. The same file holds `textures` (Task 1).
 - **Find similar on each platform (B1, B4).** These change Plan 5's code, so they sit here with the platform config:
   - **The macOS 14 guard (B1).** Beside Plan 5's AVX2 guard, at start-up and before any load: on macOS, read `sysinfo::System::os_version()`, parse the major version as a `u32` (so 26 and later work), and if it is below 14, Find similar is unavailable. If `os_version()` returns `None`, the guard fails open. ORT is never `dlopen`ed when the guard fails.
   - **`SimilarStatus.unsupported: Option<String>`** (Rust; in `api.ts` the optional `unsupported?: string | null`, so the existing test fakes stay valid) is set at start-up when either guard fails (AVX2, or macOS below 14), so Settings and first run can render it before any enable. Its copy is fixed, from `similar/copy.rs`: "Find similar needs macOS 14 or later." (and Plan 5's processor line for AVX2).
   - **Settings:** one muted line in place of the switch, with no "Try again". **First run:** the same line instead of the choice, and `find_similar` is recorded as `"off"`.
-  - **Windows pre-load (B4).** `ort::init_from` calls `LoadLibraryExW(..., 0)`, which doesn't search `ort/` for dependencies. So before `init_from`, Plan 5's loader pre-loads `onnxruntime.dll` with `LoadLibraryExW(path, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)` and keeps the `HMODULE` alive. That way dev runs (DLLs in `ort/`) work too.
-  - **Sourcing the VC++ DLLs (B4):** `fetch-ort.mjs` on Windows copies `msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll` and `vcruntime140_1.dll` from the build machine's Visual Studio `VC\Redist\MSVC\<ver>\x64\Microsoft.VC14*.CRT\` (found through `vswhere`) into `src-tauri/ort/vc/`. Microsoft's Visual C++ redistributable terms allow app-local copies; `notices/manual.md` records the licence line.
+  - **Windows pre-load (B4).** `ort::init_from` calls `LoadLibraryExW(..., 0)`, which doesn't search `ort/` for dependencies. So before `init_from`, Plan 5's loader pre-loads `onnxruntime.dll` with `LoadLibraryExW(path, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)` and keeps the `HMODULE` alive. That way dev runs (all DLLs in `ort/`) work too.
+  - **Sourcing the VC++ DLLs (B4):** `fetch-ort.mjs` on Windows copies `msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll` and `vcruntime140_1.dll` from the build machine's Visual Studio `VC\Redist\MSVC\<ver>\x64\Microsoft.VC14*.CRT\` (found through `vswhere`) into `src-tauri/ort/`. Microsoft's Visual C++ redistributable terms allow app-local copies; `notices/manual.md` records the licence line.
   - **Tests:** `macos_guard_by_version` with an injected version: 13 is unsupported, 14 and 26 are supported, `None` is supported. `unsupported_is_set_before_enable`: the status carries the line, and enabling never loads the encoder. TS: Settings shows the muted line and no switch; first run shows the line instead of the choice and records `"off"`.
 - `app/THIRD_PARTY_NOTICES.md` is generated from three parts, in this order:
   1. `app/notices/manual.md`;
@@ -487,7 +491,7 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
 
 - [ ] **Step 1: Write the failing tests.** `checkBundle` should fail on each of these fixtures: a missing icon, a resource source matching nothing, a `resources` entry under `reference/`, an `ort/` with only `.gitkeep`, an ORT file of the wrong size, and (Windows) a missing or pre-14 VC++ DLL. It should pass the real config. Plus the B1 and B4 tests above.
 
-- [ ] **Step 2: Implement, generate the icons and notices, then run.** Run `npm run fetch:ort && npm test -- release-check && npm run tauri build`. Expected on Windows:
+- [ ] **Step 2: Implement, generate the icons and notices, then run.** Run `npm run fetch:ort && npm test -- release-check find-similar firstrun && cargo test similar:: && npm run tauri build`. Expected on Windows:
   - both `.exe` (NSIS) and `.msi` are produced;
   - each is within the budget measured and recorded here in `app/release-check.json`;
   - the NSIS installer installs without an admin prompt;
