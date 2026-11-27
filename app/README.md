@@ -3,7 +3,7 @@
 Tauri v2 desktop app (Rust core, TypeScript UI).
 
 - `npm install`
-- `npm run fetch:ort` once (fetches and verifies ONNX Runtime for Find similar into `src-tauri/ort/`; re-running does nothing when the files are in place)
+- `npm run fetch:ort` once (fetches and verifies ONNX Runtime for Find similar into `src-tauri/ort/`; re-running does nothing when the files are in place). Run it before any `cargo build` or `cargo test`, in every new clone or worktree: tauri-build checks that the bundle's named resources exist (on Windows, `ort/onnxruntime.dll` and the four VC++ DLLs), and stops with "resource path … doesn't exist" until they do. CI runs it first.
 - `npm run tauri dev`
 - `npm test` (Vitest), `cargo test` in `src-tauri`
 

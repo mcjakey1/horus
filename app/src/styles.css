@@ -188,7 +188,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .status .source { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .toggle input { accent-color: var(--ink); }
-.settings { color: var(--ink); text-underline-offset: 3px; margin-left: 4px; }
+button.settings { color: var(--ink); text-underline-offset: 3px; margin-left: 4px; } /* the filter's Clear; scoped so dialog backdrops (.settings) dim edge to edge */
 
 @media (max-width: 1100px) {
   .work { grid-template-columns: minmax(0, 1fr) 300px; }
@@ -570,6 +570,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .bm-msg { margin: 0; min-height: 1.2em; font-size: 13px; color: var(--ink); }
 .bm-actions { display: flex; justify-content: space-between; }
 .boards-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
+.details-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; } /* Task 3c: a chip like its row */
 .off-board { position: absolute; top: 50px; left: 16px; padding: 3px 8px; background: var(--ink); color: var(--panel); font: 500 12px var(--mono); }
 .off-board[hidden] { display: none; }
 .off-board-note { color: var(--ink-2); font-style: italic; }
@@ -703,3 +704,14 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .ab-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
 .ab-credits { max-height: 40vh; overflow: auto; }
 .ab-rights { color: var(--ink-2); }
+
+/* Plan 6 Task 3c: Details (title, creator, year, credit), on Settings' dialog and sheet. Fields as
+   the link editor's (.le-why): names are serif text, as they read everywhere else. */
+.dt-row { display: grid; gap: 4px; }
+.dt-row label { font-size: 12px; color: var(--ink-2); }
+.dt-row input, .dt-row textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--shell); color: var(--ink); font: 15px/1.45 var(--serif); }
+.dt-row input[name="year"] { max-width: 24ch; }
+.dt-hint { margin: 0; font-size: 12px; color: var(--ink-2); }
+.dt-row textarea { resize: vertical; }
+.dt-err { margin: 0; font-size: 13px; color: var(--ink); }
+.dt-actions { display: flex; align-items: center; gap: 12px; }

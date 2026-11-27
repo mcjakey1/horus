@@ -125,5 +125,5 @@ Evidence files go in `docs/release/evidence/`. Paths are relative to the reposit
 
 These do not block release-check. Each needs the user's answer before 1.0 ships.
 
-- **R27, metadata editing (Plan 4).** v1 has no way to edit a reference's title, creator, year or credit; `credits.txt` in a board export prints what the library holds (the demo metadata, or "—"). Confirm that this stays out of v1, or ask for a "Details" inspector, which would be a new task. Source: `docs/superpowers/ledgers/2026-11-25-horus-boards-lightbox-compare/amendment-report.md` (R27).
+- **R27, metadata editing: RESOLVED (user, 2026-11-28).** The user ruled that metadata editing is implemented in v1: Plan 6 Task 3c edits a reference's title, creator, year and credit. Source: `docs/superpowers/plans/2026-11-25-horus-release.md`, Task 3c.
 - **The Plan 6 Task 4 design pass.** The intro concept and its copy, the D17 ink lever, Library on the right, and the `.insp-plain` swap are implemented and APPROVED by the user on 2026-11-28 ("yes approve all four"). Motion on macOS/Linux is still a Task 8 check. See "Open for the user" in `docs/superpowers/plans/plan6-design-proposal.md`.

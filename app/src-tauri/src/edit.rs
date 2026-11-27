@@ -8,12 +8,32 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// The reference fields Plan 2 edits. No title/creator/year/credit (CROSS-PLAN-AUDIT #23).
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+/// The reference fields the artist edits: Plan 2's note and source URL, and Plan 6 Task 3c's
+/// title, creator, year and credit (R27, user ruling; CROSS-PLAN-AUDIT #23).
+#[derive(Clone, Copy, Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Field {
     Note,
     SourceUrl,
+    Title,
+    Creator,
+    Year,
+    Credit,
+}
+
+impl Field {
+    /// Task 3c: the most characters `set_field` accepts, and the field's name in the copy.
+    /// Checked where the artist types (`set_field`), not here: an imported title (a file name)
+    /// can be longer, and undo must still restore it.
+    pub fn cap(self) -> Option<(&'static str, usize)> {
+        match self {
+            Field::Title => Some(("title", 200)),
+            Field::Creator => Some(("creator", 120)),
+            Field::Year => Some(("year", 40)),
+            Field::Credit => Some(("credit", 400)),
+            Field::Note | Field::SourceUrl => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -264,6 +284,11 @@ pub enum EditError {
     UnknownLink(String),
     #[error("UnknownBoard:{0}")]
     UnknownBoard(String),
+    // Plan 6 Task 3c: artist copy.
+    #[error("A title can't be empty.")]
+    EmptyTitle,
+    #[error("That {0} is too long: {1} characters at most.")]
+    TooLong(&'static str, usize),
 }
 
 /// SPEC §3: a partial tag carries the operation only. A technique tag sets technique and
@@ -438,12 +463,21 @@ fn run(
         } => {
             let i = ref_index(data, &ref_id)?;
             let r = &mut data.references[i];
-            let slot = match field {
-                Field::Note => &mut r.note,
-                Field::SourceUrl => &mut r.source_url,
-            };
             // The inverse restores what was there, whatever `before` claimed.
-            let old = std::mem::replace(slot, after.clone());
+            let old = match field {
+                // An edit never empties a title. Undo and a batch unwind (`check: false`) restore
+                // what was there, even an empty title from a file name such as "   .jpg".
+                Field::Title => match after.as_deref().filter(|t| !check || !t.trim().is_empty()) {
+                    Some(t) => Some(std::mem::replace(&mut r.title, t.to_string())),
+                    None if !check => Some(std::mem::take(&mut r.title)),
+                    None => return Err(EditError::EmptyTitle),
+                },
+                Field::Note => std::mem::replace(&mut r.note, after.clone()),
+                Field::SourceUrl => std::mem::replace(&mut r.source_url, after.clone()),
+                Field::Creator => std::mem::replace(&mut r.creator, after.clone()),
+                Field::Year => std::mem::replace(&mut r.year, after.clone()),
+                Field::Credit => std::mem::replace(&mut r.credit, after.clone()),
+            };
             touched.ref_ids.push(ref_id.clone());
             Edit::SetField {
                 ref_id,
@@ -2110,5 +2144,96 @@ mod tests {
         assert!(t.links && !t.boards);
         merge(&mut t, boards);
         assert!(t.links && t.boards);
+    }
+
+    // ---------- Plan 6 Task 3c: title, creator, year and credit ----------
+
+    fn set(field: Field, after: Option<&str>) -> Edit {
+        Edit::SetField {
+            ref_id: "r1".into(),
+            field,
+            before: None,
+            after: after.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn details_set_and_undo() {
+        let (mut data, mut tax) = fixture();
+        let snapshot = data.clone();
+        let batch = Edit::Batch(vec![
+            set(Field::Title, Some("Harbour at dusk")),
+            set(Field::Creator, Some("A. Painter")),
+            set(Field::Year, Some("c. 1906")),
+            set(Field::Credit, Some("Private collection")),
+        ]);
+        let applied = apply(&mut data, &mut tax, batch).unwrap();
+        let r = &data.references[0];
+        assert_eq!(r.title, "Harbour at dusk");
+        assert_eq!(r.creator.as_deref(), Some("A. Painter"));
+        assert_eq!(r.year.as_deref(), Some("c. 1906"));
+        assert_eq!(r.credit.as_deref(), Some("Private collection"));
+        apply(&mut data, &mut tax, applied.inverse).unwrap();
+        assert_eq!(data, snapshot, "one inverse restores all four");
+    }
+
+    #[test]
+    fn title_is_never_empty() {
+        let (mut data, mut tax) = fixture();
+        let snapshot = data.clone();
+        for e in [set(Field::Title, None), set(Field::Title, Some(""))] {
+            assert_eq!(apply(&mut data, &mut tax, e), Err(EditError::EmptyTitle));
+        }
+        assert_eq!(data, snapshot, "nothing changed");
+        // An empty creator, year or credit clears it.
+        apply(&mut data, &mut tax, set(Field::Creator, Some("x"))).unwrap();
+        apply(&mut data, &mut tax, set(Field::Creator, None)).unwrap();
+        assert_eq!(data.references[0].creator, None);
+    }
+
+    #[test]
+    fn undo_restores_an_empty_title() {
+        // AGY #2: an imported title can be empty (a file named "   .jpg"); renaming it must undo.
+        let (mut data, mut tax) = fixture();
+        data.references[0].title = "   ".into();
+        let applied = apply(&mut data, &mut tax, set(Field::Title, Some("named"))).unwrap();
+        let back = apply_inverse(&mut data, &mut tax, applied.inverse).unwrap();
+        assert_eq!(data.references[0].title, "   ");
+        apply_inverse(&mut data, &mut tax, back.inverse).unwrap(); // and redo
+        assert_eq!(data.references[0].title, "named");
+        // A batch that fails after renaming it unwinds without a panic.
+        data.references[0].title = String::new();
+        let failing = Edit::Batch(vec![
+            set(Field::Title, Some("named")),
+            Edit::SetField {
+                ref_id: "nope".into(),
+                field: Field::Note,
+                before: None,
+                after: None,
+            },
+        ]);
+        assert!(apply(&mut data, &mut tax, failing).is_err());
+        assert_eq!(data.references[0].title, "");
+    }
+
+    #[test]
+    fn undo_restores_an_over_cap_title() {
+        // The caps are set_field's (what the artist types). An imported title can be longer
+        // (it comes from the file name), and undo must still restore it.
+        let (mut data, mut tax) = fixture();
+        let long = "x".repeat(250);
+        data.references[0].title = long.clone();
+        let applied = apply(&mut data, &mut tax, set(Field::Title, Some("short"))).unwrap();
+        apply(&mut data, &mut tax, applied.inverse).unwrap();
+        assert_eq!(data.references[0].title, long);
+    }
+
+    #[test]
+    fn details_copy_reads_as_copy() {
+        assert_eq!(EditError::EmptyTitle.to_string(), "A title can't be empty.");
+        assert_eq!(
+            EditError::TooLong("credit", 400).to_string(),
+            "That credit is too long: 400 characters at most."
+        );
     }
 }

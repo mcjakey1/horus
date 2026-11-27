@@ -368,6 +368,57 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
 
 ---
 
+### Task 3c: Metadata editing (title, creator, year, credit)
+
+**User ruling, 2026-11-28, on R27:** "yes metadata editing should be implemented". This reverses Plan 4's R27 call: CROSS-PLAN-AUDIT #23 now closes with editing in v1. A board export's `credits.txt` then prints what the artist set.
+
+**Files:**
+- Modify:
+  - `app/src-tauri/src/edit.rs`: `Field` gains `Title`, `Creator`, `Year` and `Credit`; `Edit::SetField` applies them; the checks below; two `EditError` copy variants;
+  - `app/src-tauri/src/commands.rs`: `FieldPatch` gains `title`, `creator`, `year` and `credit`, and `set_field` builds them into its one `Edit::Batch`;
+  - `app/src/api.ts`: `FieldPatch` gains the same four optional keys (the IPC contract row is unchanged: `set_field`, `{ refIds, patch }`);
+  - `app/src/reference/view.ts`: a "Details…" text button in the `.lab-actions` row (Task 3b F1) opens the dialog;
+  - `app/src/styles.css`: the dialog, on Settings' sheet;
+  - `app/src/security.test.ts`: a Details case.
+- Create: `app/src/reference/details.ts` and `app/src/reference/details.test.ts`.
+
+**Interfaces:**
+- **One edit variant, reused.** `Edit::SetField { ref_id, field, before, after }` already gives one undo step per `set_field` call (an `Edit::Batch`), an atomic save through the saver, and an inverse that restores what was there. `Field::Title` writes `Reference.title` (a `String`); the other three write their `Option<String>`. A new `Edit::SetDetails` variant would repeat all of that, so none is added.
+- **Checks, in `edit::apply`** (so undo and redo can never get round them), on the trimmed value (`clean()` in `set_field`):
+  - **title:** required, 1 to 200 characters. Empty is `EditError::EmptyTitle`, with the copy "A title can't be empty.";
+  - **creator:** at most 120 characters; empty clears it;
+  - **credit:** at most 400 characters; empty clears it;
+  - **year:** free text, at most 40 characters; empty clears it;
+  - over a cap is `EditError::TooLong(field)`, with the copy "That {field} is too long: {n} characters at most."
+  - The caps leave room over the demo set's longest values (title 152, credit 254, creator 46 characters).
+- **Year stays free text.** The data needs it. The demo set alone holds 38 distinct year forms, such as `1892–95`, `c. 1906`, `1937 Mar`, `between 1936 and 1939` and `1899, printed 1901`. A 4-digit rule would refuse to save an untouched demo record and lose the museums' date ranges. (Controller to confirm: this deviates from the "4-digit or empty" scope note.)
+- **The dialog**, `openDetails(root, ref, api, store): { close(): void }`:
+  - a modal on Task 3b's `holdModal`, with `role="dialog"`, `aria-modal` and `aria-labelledby`;
+  - four `<label for>`-labelled fields: Title, Creator, Year and Credit (Credit is a `<textarea>`), then Save and Cancel;
+  - Enter in a single-line field saves; Esc cancels; focus starts on Title, and returns to "Details…" on close;
+  - it sends only the fields that changed (no change: it just closes), then `store.apply(change)`;
+  - an error is shown inside the dialog (`role="status"`), and the dialog stays open with what the artist typed;
+  - the reference view's keys never fire while it is open (holdModal and stopPropagation, as About).
+- **What re-renders:** every view already subscribes to the store, and a `Change` carries the edited reference. The Reference view's readout and Ranked list, the Inbox, Boards tiles, Compare and the graph labels re-render. Search reads the library on every query (`search.rs`), so a new title is searchable at once.
+- **Plan 5 needs nothing.** Find similar keys on the image hash (`EmbStore`, `similar_by_*`); hits map to the current references, so a renamed reference keeps its embedding.
+- **`prototype/app.js`** reads `taxonomy.json` field names; this task edits `library.json` only and renames nothing.
+
+- [ ] **Step 1: Write the failing tests**
+  - Rust `set_details_is_one_undo_step`: one `set_field` call changes all four fields; one `undo` restores all four, and `redo` sets them again; library.json holds the result after the save.
+  - Rust `details_are_checked`: an empty title, a 201-character title, a 121-character creator, a 401-character credit and a 41-character year are each refused with their copy, and nothing changes; an empty creator, year or credit clears the field; values are trimmed.
+  - Rust `demo_years_save_unchanged`: saving a demo record's own year back (for example `c. 1906`) is accepted.
+  - TS `details.test.ts`: the dialog's four fields have labels; focus starts on Title; Enter saves only the changed fields; Esc cancels and sends nothing; a refused save keeps the dialog open with the error; focus returns to "Details…".
+  - TS `view.test.ts`: after a save, the readout and the Ranked row show the new title.
+  - `security.test.ts`: hostile title, creator, year and credit text in the dialog and in the readout stays text; every control has an accessible name.
+
+- [ ] **Step 2: Run, then implement, then run again.** Run `cargo test edit:: commands::` and `npm test -- details view security`. They should FAIL, then PASS. Then the full `cargo test`, `cargo clippy --all-targets -- -D warnings`, `tsc`, `npm test`, `npm run build` and `npm run release-check`.
+
+- [ ] **Step 3: Design review.** A Claude + `impeccable` reviewer checks the dialog and the "Details…" button against DESIGN.md (the same stand-in as Task 4 Step 3). Apply its P1 fixes; P2s go to the ledger.
+
+- [ ] **Step 4: Commit.** Commit message: `feat: edit a reference's title, creator, year and credit (R27, user ruling)`.
+
+---
+
 ### Task 4: The intro card, the app menu and About
 
 **Files:**

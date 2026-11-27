@@ -213,14 +213,23 @@ pub struct TagFor {
     pub region: Option<Region>,
 }
 
-/// Absent keeps the field, `null` clears it. Values are trimmed, and `""` clears too.
-#[derive(Deserialize, Debug)]
+/// Absent keeps the field, `null` clears it. Values are trimmed, and `""` clears too (the
+/// title can't be cleared: `EmptyTitle`). Plan 6 Task 3c adds title, creator, year and credit.
+#[derive(Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct FieldPatch {
     #[serde(default, deserialize_with = "double_option")]
     pub note: Option<Option<String>>,
     #[serde(default, deserialize_with = "double_option")]
     pub source_url: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub title: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub creator: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub year: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub credit: Option<Option<String>>,
 }
 
 /// A present key, `null` included, is `Some`; `default` makes an absent key `None`.
@@ -1126,13 +1135,24 @@ pub fn set_field<R: Runtime>(
             for (field, value) in [
                 (Field::Note, &patch.note),
                 (Field::SourceUrl, &patch.source_url),
+                (Field::Title, &patch.title),
+                (Field::Creator, &patch.creator),
+                (Field::Year, &patch.year),
+                (Field::Credit, &patch.credit),
             ] {
                 if let Some(v) = value {
+                    let after = clean(v.as_deref());
+                    // Task 3c: the caps, in characters, on what the artist typed.
+                    if let (Some((name, max)), Some(a)) = (field.cap(), &after)
+                        && a.chars().count() > max
+                    {
+                        return Err(EditError::TooLong(name, max).to_string());
+                    }
                     parts.push(Edit::SetField {
                         ref_id: ref_id.clone(),
                         field,
                         before: None, // `apply` reads the real one
-                        after: clean(v.as_deref()),
+                        after,
                     });
                 }
             }
@@ -3607,6 +3627,7 @@ mod tests {
         let patch = FieldPatch {
             note: Some(Some("n".into())),
             source_url: None,
+            ..FieldPatch::default()
         };
         set_field(e.handle(), vec![id], patch).unwrap();
         wait_saved(&e);
@@ -3709,6 +3730,7 @@ mod tests {
         let patch = FieldPatch {
             note: Some(Some("while rebuilding".into())),
             source_url: None,
+            ..FieldPatch::default()
         };
         set_field(e.handle(), vec![id.clone()], patch).unwrap();
         assert!(
@@ -3818,5 +3840,147 @@ mod tests {
             "a new run clears the old Cancel"
         );
         assert!(!st.verify_running.load(Ordering::SeqCst));
+    }
+
+    // ---------- Plan 6 Task 3c: metadata editing ----------
+
+    #[test]
+    fn set_details_is_one_undo_step() {
+        let (e, a) = with_small();
+        let patch: FieldPatch = serde_json::from_value(serde_json::json!({
+            "title": "  Harbour at dusk ", "creator": "A. Painter", "year": "c. 1906", "credit": "Private collection"
+        }))
+        .unwrap();
+        let c = set_field(e.handle(), vec![a.clone()], patch).unwrap();
+        let r = &c.references[0].reference;
+        assert_eq!(r.title, "Harbour at dusk", "trimmed");
+        assert_eq!(
+            (r.creator.as_deref(), r.year.as_deref(), r.credit.as_deref()),
+            (
+                Some("A. Painter"),
+                Some("c. 1906"),
+                Some("Private collection")
+            )
+        );
+        assert!(c.can_undo);
+        let u = undo(e.handle()).unwrap();
+        let r = &u.references[0].reference;
+        assert_eq!(r.title, "small");
+        assert_eq!((&r.creator, &r.year, &r.credit), (&None, &None, &None));
+        assert!(u.can_redo); // one undo restored all four: one step (the import below it stays)
+        let rd = redo(e.handle()).unwrap();
+        assert_eq!(rd.references[0].reference.title, "Harbour at dusk");
+        wait_saved(&e);
+        let saved = open_library(e.handle(), e.lib.clone()).unwrap();
+        let r = &saved
+            .references
+            .iter()
+            .find(|v| v.reference.id == a)
+            .unwrap()
+            .reference;
+        assert_eq!(
+            (r.title.as_str(), r.year.as_deref()),
+            ("Harbour at dusk", Some("c. 1906")),
+            "on disk"
+        );
+        // Searchable at once.
+        assert!(
+            search(e.handle(), "harbour".into())
+                .unwrap()
+                .iter()
+                .any(|h| format!("{h:?}").contains(&a))
+        );
+    }
+
+    #[test]
+    fn refused_details_change_nothing() {
+        let (e, a) = with_small();
+        let patch: FieldPatch =
+            serde_json::from_value(serde_json::json!({"title": "   ", "creator": "kept?"}))
+                .unwrap();
+        assert_eq!(
+            set_field(e.handle(), vec![a.clone()], patch).unwrap_err(),
+            "A title can't be empty."
+        );
+        let st = e.app.state::<AppState>();
+        let open = lock(&st.open);
+        let r = open
+            .as_ref()
+            .unwrap()
+            .lib
+            .data
+            .references
+            .iter()
+            .find(|r| r.id == a)
+            .unwrap();
+        assert_eq!(
+            (r.title.as_str(), &r.creator),
+            ("small", &None),
+            "the batch is all or nothing"
+        );
+    }
+
+    #[test]
+    fn details_have_caps() {
+        let (e, a) = with_small();
+        let long = |n: usize| "x".repeat(n);
+        for (key, n, copy) in [
+            (
+                "title",
+                201,
+                "That title is too long: 200 characters at most.",
+            ),
+            (
+                "creator",
+                121,
+                "That creator is too long: 120 characters at most.",
+            ),
+            ("year", 41, "That year is too long: 40 characters at most."),
+            (
+                "credit",
+                401,
+                "That credit is too long: 400 characters at most.",
+            ),
+        ] {
+            let patch: FieldPatch =
+                serde_json::from_value(serde_json::json!({ key: long(n) })).unwrap();
+            assert_eq!(
+                set_field(e.handle(), vec![a.clone()], patch).unwrap_err(),
+                copy
+            );
+        }
+        // At the caps, in characters (not bytes), and after trimming.
+        let patch: FieldPatch = serde_json::from_value(serde_json::json!({
+            "title": format!(" {} ", "é".repeat(200)), "creator": long(120), "year": long(40), "credit": long(400)
+        }))
+        .unwrap();
+        set_field(e.handle(), vec![a.clone()], patch).unwrap();
+        // Empty clears creator, year and credit.
+        let clear: FieldPatch = serde_json::from_value(
+            serde_json::json!({"creator": "", "year": null, "credit": "  "}),
+        )
+        .unwrap();
+        let c = set_field(e.handle(), vec![a], clear).unwrap();
+        let r = &c.references[0].reference;
+        assert_eq!((&r.creator, &r.year, &r.credit), (&None, &None, &None));
+    }
+
+    #[test]
+    fn demo_years_save_unchanged() {
+        let e = env();
+        let view = create_library(e.handle(), e.lib.clone(), true).unwrap();
+        for v in view
+            .references
+            .iter()
+            .filter(|v| v.reference.year.is_some())
+        {
+            let r = &v.reference;
+            let patch: FieldPatch = serde_json::from_value(serde_json::json!({
+                "title": r.title, "creator": r.creator, "year": r.year, "credit": r.credit
+            }))
+            .unwrap();
+            set_field(e.handle(), vec![r.id.clone()], patch)
+                .unwrap_or_else(|err| panic!("{}: {err}", r.title));
+        }
     }
 }

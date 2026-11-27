@@ -425,6 +425,44 @@ describe("Reference view", () => {
     expect($("#import-notice").hidden).toBe(true);
   });
 
+  // ---------- Plan 6 Task 3c: Details ----------
+  it("details_save_rerenders_the_record_readout_and_ranked", async () => {
+    vi.mocked(api.setField).mockImplementation(async (ids, patch) => ({
+      references: ids.map((id) => ({ ...store.refs.get(id)!, ...(patch as object) })),
+      removed: [], canUndo: true, canRedo: false,
+    }));
+    $<HTMLButtonElement>("#lab .details-open").click();
+    const f = (n: string) => document.querySelector<HTMLInputElement>(`.details [name="${n}"]`)!;
+    f("title").value = "Harbour at dusk";
+    f("creator").value = "A. Painter";
+    document.querySelector<HTMLButtonElement>(".details [data-save]")!.click();
+    await vi.waitFor(() => expect(document.querySelector(".details")).toBeNull());
+    expect(api.setField).toHaveBeenCalledWith(["a"], { title: "Harbour at dusk", creator: "A. Painter" });
+    await settle();
+    expect($('.cell[data-level="ref"] [data-v]').textContent).toBe("Harbour at dusk");
+    expect($("#lab-meta").textContent).toContain("A. Painter");
+    view.show("b"); // A is in B's Ranked list
+    await settle();
+    expect($("#pane-ranked").textContent).toContain("Harbour at dusk");
+  });
+
+  it("renaming_a_linked_reference_updates_links_and_the_plate_alt", async () => {
+    // C is linked to A (the focus) and shares no technique with it (AGY #2).
+    store.apply({ references: [{ ...store.refs.get("c")!, title: "Renamed C" }], removed: [], canUndo: true, canRedo: false });
+    await settle();
+    expect($("#pane-links").textContent).toContain("Renamed C");
+    store.apply({ references: [{ ...store.refs.get("a")!, title: "Renamed A" }], removed: [], canUndo: true, canRedo: false });
+    await settle();
+    expect($("#plate img").getAttribute("alt")).toBe("Renamed A");
+  });
+
+  it("details_closes_when_the_focus_moves", async () => {
+    $<HTMLButtonElement>("#lab .details-open").click();
+    expect(document.querySelector(".details")).not.toBeNull();
+    view.show("b");
+    expect(document.querySelector(".details")).toBeNull();
+  });
+
   const plateSrc = () => $("#plate img")?.getAttribute("src");
   const src = (r: Reference) => api.assetUrl(r.thumb1024);
 
@@ -483,7 +521,7 @@ describe("Reference view", () => {
   // ---------- Plan 6 Task 3b, design review F1 and F2 ----------
   it("lab_actions_one_row (F1): Tag, Link, Boards and the lightbox share one row, apart from the readout", () => {
     const row = $(".lab .lab-actions");
-    expect([...row.querySelectorAll("button")].map((b) => b.className)).toEqual(["tag-open", "link-handle", "boards-open", "lb-open"]);
+    expect([...row.querySelectorAll("button")].map((b) => b.className)).toEqual(["tag-open", "link-handle", "boards-open", "lb-open", "details-open"]); // Task 3c adds Details…
     expect(row.contains($("#lab-meta"))).toBe(false);
   });
 
