@@ -49,7 +49,7 @@
 
 ### F3 (Judgment, D11, -02's Tree row): Tree labels crowd at fit
 
-**Screenshots:** `qa-shots\plan6	ree-light-1280.png` and `tree-dark-1280.png`; the 760 px files show the same problem.
+**Screenshots:** `qa-shots\plan6\tree-light-1280.png` and `tree-dark-1280.png`; the 760 px files show the same problem.
 
 **What crowds:** at the fit zoom with the demo taxonomy, the labels nearly touch, though no two labels fully overlap.
 - Operation labels sit tight on the domain label below them: "Group" on "Grouping", "Sequence" on "Space".
