@@ -18,9 +18,7 @@ describe("assemble", () => {
   });
   it("the checked-in stand-in is the hand-written part, and passes checkNotices", () => {
     // A Windows checkout may turn both into CRLF: compare the text, not the line ends.
-    const lf = (s) => s.replace(/
-/g, "
-");
+    const lf = (s) => s.replace(/\r\n/g, "\n");
     const manual = lf(readFileSync(new URL("../notices/manual.md", import.meta.url), "utf8"));
     const standIn = lf(readFileSync(new URL("../THIRD_PARTY_NOTICES.md", import.meta.url), "utf8"));
     expect(standIn).toBe(assemble({ manual }));
