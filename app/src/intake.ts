@@ -5,7 +5,7 @@
 import type { DragDropEvent } from "@tauri-apps/api/webview";
 import type { Api, FieldPatch, IntakeMeta, ImportReport, ImportResult } from "./api";
 import { esc } from "./esc";
-import { IMPORTED, intakeHTML } from "./importer";
+import { IMPORTED, importProgress, intakeHTML } from "./importer";
 import { isTextEntry } from "./keys";
 import type { Store } from "./store";
 import { presetFrom } from "./tagging/model";
@@ -99,7 +99,7 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
 
   /** Runs one intake's imports in order, applying each Change, then shows one notice for them all. Never rejects. */
   async function runNow(meta: IntakeMeta, steps: (() => Promise<ImportResult>)[]): Promise<string[] | null> {
-    deps.notice(`<p>Importing…</p>`);
+    const progress = importProgress(doc, api); // "Importing N of M" and Cancel (Plan 6 D15)
     const all: ImportReport = { added: [], duplicates: [], skipped: [], warnings: [] };
     try {
       for (const step of steps) {
@@ -109,10 +109,16 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
         all.duplicates.push(...r.report.duplicates);
         all.skipped.push(...r.report.skipped);
         all.warnings!.push(...(r.report.warnings ?? []));
+        if (r.report.cancelled) {
+          all.cancelled = true; // the rest of this intake stays out too
+          break;
+        }
       }
+      progress.done();
       shown(all, meta);
       return all.added;
     } catch (err) {
+      progress.done();
       failed("The import did not finish")(err);
       return null;
     }

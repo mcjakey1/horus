@@ -114,6 +114,7 @@ pub fn run() {
             commands::related,
             commands::graph_edges,
             commands::import_paths,
+            commands::cancel_import,
             commands::import_bytes,
             commands::search,
             commands::get_settings,

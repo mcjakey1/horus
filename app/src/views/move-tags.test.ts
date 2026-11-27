@@ -86,6 +86,31 @@ describe("move-tags dialog", () => {
     dlg().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(await p).toBeNull();
   });
+
+  it("holds focus like Settings: Tab from <body> comes back in, Esc from <body> cancels (D8)", async () => {
+    const p = openMoveTags(host, { s, techId: "rim-light" });
+    (document.activeElement as HTMLElement).blur();
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+    expect(dlg().contains(document.activeElement)).toBe(true);
+    (document.activeElement as HTMLElement).blur();
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(await p).toBeNull();
+    expect(!!host.inert).toBe(false); // released
+  });
+
+  it("Ctrl+Z in the empty search never runs the browser's own undo (D8)", () => {
+    void openMoveTags(host, { s, techId: "rim-light" });
+    const q = dlg().querySelector<HTMLInputElement>(".tx-search")!;
+    const z = (init: KeyboardEventInit) => {
+      const e = new KeyboardEvent("keydown", { key: "z", bubbles: true, cancelable: true, ...init });
+      q.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect(z({ ctrlKey: true })).toBe(true);
+    expect(z({ metaKey: true })).toBe(true);
+    q.value = "rim";
+    expect(z({ ctrlKey: true })).toBe(false); // a typed query keeps the field's own undo
+  });
 });
 
 describe("move-branches dialog", () => {

@@ -50,6 +50,8 @@ pub struct AppState {
     close_owed: AtomicBool,
     /// The UI's intake queue has work Rust has not seen yet: a close waits for it to drain (R2).
     intake_busy: AtomicBool,
+    /// Plan 6 D15: Cancel on the import notice; the running import stops before its next file.
+    import_cancel: AtomicBool,
     /// Imports queue here for their whole run: thumbnail temp names are fixed per hash.
     import_gate: Mutex<()>,
     /// Serialises the settings read-merge-write.
@@ -82,6 +84,7 @@ impl AppState {
             skip_close_flush: AtomicBool::new(false),
             close_owed: AtomicBool::new(false),
             intake_busy: AtomicBool::new(false),
+            import_cancel: AtomicBool::new(false),
             import_gate: Mutex::new(()),
             settings: Mutex::new(()),
             config_dir,
@@ -1393,6 +1396,22 @@ pub fn demo_examples<R: Runtime>(app: AppHandle<R>) -> Result<Vec<DemoExample>, 
     Ok(demo::examples(&o.tax, &st.demo_dir))
 }
 
+/// The import notice's "Importing N of M" (Plan 6 D15), on `import://progress`.
+#[derive(Serialize, Clone, Copy)]
+pub struct ImportProgress {
+    pub done: usize,
+    pub total: usize,
+}
+const IMPORT_PROGRESS: &str = "import://progress";
+
+/// Plan 6 D15: Cancel. The running import stops before its next file and keeps what it added.
+#[tauri::command]
+pub fn cancel_import<R: Runtime>(app: AppHandle<R>) {
+    app.state::<AppState>()
+        .import_cancel
+        .store(true, Ordering::SeqCst);
+}
+
 /// Runs off the main thread. The state lock is held only to read the known hashes and,
 /// afterwards, to append, save and reindex; never while files are copied.
 #[tauri::command]
@@ -1431,7 +1450,20 @@ fn run_import<R: Runtime>(
             .collect();
         (lib.root.clone(), known)
     };
-    let out = import::import_paths(&root, &known, &paths);
+    // A Cancel from before this import (or for an earlier one) never stops it.
+    st.import_cancel.store(false, Ordering::SeqCst);
+    let mut last: Option<Instant> = None;
+    let out = import::import_paths_with(&root, &known, &paths, &mut |done, total| {
+        // At most ten a second, plus the first and the last.
+        if done == 0
+            || done == total
+            || last.is_none_or(|t| t.elapsed() >= Duration::from_millis(100))
+        {
+            last = Some(Instant::now());
+            let _ = app.emit(IMPORT_PROGRESS, ImportProgress { done, total });
+        }
+        !st.import_cancel.load(Ordering::SeqCst)
+    });
     let (note, source_url) = (clean(note.as_deref()), clean(source_url.as_deref()));
     let refs = out.references.into_iter().map(|mut r| {
         r.note = note.clone();

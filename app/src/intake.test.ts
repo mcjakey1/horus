@@ -47,6 +47,8 @@ beforeEach(() => {
     <aside id="import-notice" hidden><div data-body></div><button id="import-dismiss">Dismiss</button></aside>`;
   api = {
     importPaths: vi.fn(async () => result({ added: ["n1", "n2"] }, [ref("n1"), ref("n2")])),
+    onImportProgress: vi.fn(async () => () => {}),
+    cancelImport: vi.fn(async () => {}),
     importBytes: vi.fn(async () => result({ added: ["p1"] }, [ref("p1")])),
     setField: vi.fn(async () => change([])),
     pickImages: vi.fn(async () => ["C:/in/a.jpg", "C:/in/b.jpg"]),

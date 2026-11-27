@@ -105,6 +105,8 @@ function fakeApi(lastLibrary: string | null): Api {
     verifyImageFiles: vi.fn(async () => []),
     cancelVerify: vi.fn(async () => {}),
     onVerifyProgress: vi.fn(async () => () => {}),
+    onImportProgress: vi.fn(async () => () => {}),
+    cancelImport: vi.fn(async () => {}),
   };
 }
 

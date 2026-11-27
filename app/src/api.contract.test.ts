@@ -12,7 +12,7 @@ vi.mock("@tauri-apps/api/core", async (orig) => {
 });
 
 /** Not commands of ours: the asset URL, event listeners, the raw-body paste and the plugin pickers. */
-const NON_IPC_KEYS = ["assetUrl", "onSaveStatus", "onSaveFailed", "onCloseWaiting", "onSimilarStatus", "onThumbsRebuilt", "onMenu", "appVersion", "noticesPath", "openPath", "onVerifyProgress", "importBytes", "pickFolder", "pickImages", "revealFolder"];
+const NON_IPC_KEYS = ["assetUrl", "onSaveStatus", "onSaveFailed", "onCloseWaiting", "onSimilarStatus", "onThumbsRebuilt", "onImportProgress", "onMenu", "appVersion", "noticesPath", "openPath", "onVerifyProgress", "importBytes", "pickFolder", "pickImages", "revealFolder"];
 
 const tag = { operationId: "op" };
 const rows: [keyof Api, string, string[], (a: Api) => Promise<unknown>][] = [
@@ -70,6 +70,7 @@ const rows: [keyof Api, string, string[], (a: Api) => Promise<unknown>][] = [
   ["lightboxSource", "lightbox_source", ["refId"], (a) => a.lightboxSource("r")],
   // Plan 5 Task 5
   ["similarStatus", "similar_status", [], (a) => a.similarStatus()],
+  ["cancelImport", "cancel_import", [], (a) => a.cancelImport()],
   ["similarEnable", "similar_enable", [], (a) => a.similarEnable()],
   ["similarDisable", "similar_disable", [], (a) => a.similarDisable()],
   ["similarRemoveModel", "similar_remove_model", [], (a) => a.similarRemoveModel()],
