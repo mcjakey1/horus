@@ -1,11 +1,11 @@
 {
   "textures": "img-element",
   "budgetBytes": {
-    "nsis": null,
-    "msi": null,
+    "nsis": 30381314,
+    "msi": 34963456,
     "dmg": null,
     "appimage": null,
     "deb": null
   },
-  "budgetNote": "Measured size plus 10% per installer (R9), set from Task 8's release build. Plan 5 Task 8's reference: NSIS 24.39 MiB, MSI 28.09 MiB, before the VC++ DLLs and the WebView2 bootstrapper. null: no ceiling yet."
+  "budgetNote": "Measured size plus 10% per installer (R9). Windows from Plan 6 Task 8's release build (NSIS 27,619,376 B, MSI 31,784,960 B). null: no ceiling yet (DMG, AppImage and deb wait for CI)."
 }

@@ -39,6 +39,17 @@ describe("About (Plan 6 Task 4)", () => {
     expect(credits.every((c) => c.rights.length > 0)).toBe(true);
   });
 
+  it("the scrolling credits take keyboard focus and are named by their heading (QA F2)", () => {
+    const d = document.createElement("div");
+    d.innerHTML = aboutHTML(info());
+    document.body.append(d);
+    const list = d.querySelector<HTMLElement>(".ab-credits")!;
+    expect(list.tabIndex).toBe(0);
+    const by = list.getAttribute("aria-labelledby")!;
+    expect(document.getElementById(by)!.textContent).toBe("Demo set");
+    d.remove();
+  });
+
   it("states the privacy line naming the model host (G7), the version and the notices link", () => {
     const html = aboutHTML(info({ version: "1.2.3" }));
     expect(text(html)).toContain(PRIVACY);

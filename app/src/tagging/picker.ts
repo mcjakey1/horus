@@ -51,7 +51,7 @@ export function mountPicker(
   el.innerHTML = `
     <div class="pk-ops" role="group" aria-label="Operation"></div>
     <input class="pk-search" type="search" autocomplete="off" aria-label="Search techniques" placeholder="Search techniques — “moody”, “spotlight”…">
-    <div class="pk-grid" role="listbox" aria-label="Techniques"></div>
+    <div class="pk-grid"></div>
     <div class="pk-form-slot"></div>
     <div class="pk-foot"><p class="pk-msg" role="status"></p><button type="button" class="text-btn pk-apply">Apply</button></div>
     <div class="pk-chips" role="group" aria-label="Tags on this reference"></div>`;
@@ -139,9 +139,21 @@ export function mountPicker(
       .join("")}</fieldset>`;
   }
 
+  /** QA F1: the grid is a listbox only while it holds options; a note alone is plain text. */
+  function listbox(on: boolean) {
+    if (on) {
+      grid.setAttribute("role", "listbox");
+      grid.setAttribute("aria-label", "Techniques");
+    } else {
+      grid.removeAttribute("role");
+      grid.removeAttribute("aria-label");
+    }
+  }
+
   function renderCards() {
     keep(grid, () => {
       if (!S.op) {
+        listbox(false);
         const n = tax().operations.length;
         grid.innerHTML = `<p class="none">Choose an operation${n ? `, or press ${n > 1 ? `1–${n}` : "1"}` : ""}.</p>`;
         return;
@@ -167,6 +179,7 @@ export function mountPicker(
         );
       }
       grid.innerHTML = cards.join("") || `<p class="none">No technique matches.</p>`;
+      listbox(cards.length > 0);
     });
   }
 
