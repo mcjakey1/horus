@@ -112,7 +112,7 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
     - `init_from` gets an absolute path to the bundled library only, never a bare name. (Windows' `System32` holds its own ORT 1.17.1.)
     - No `ort` API call is made before `init_from` has succeeded. Any earlier call falls back to loading `onnxruntime.dll` by name and panics, or silently loads the wrong one. So `LoadDynamicError` maps to a `String` or our own error, never to `ort::Error`.
     - One environment per process: check `ENV.get()` first, and serialize the lazy init, so `build()` runs at most once. A failed init leaves Find similar in `Error` until the app restarts.
-  - **CPU guard (R1, required):** before load, `if !is_x86_feature_detected!("avx2")`, phase `Error` with "This computer's processor can't run Find similar.", and `find_similar` set to `"off"`.
+  - **CPU guard (R1, required):** on x86_64 only (`#[cfg(target_arch = "x86_64")]`; macOS arm64 has no such check), before load, `if !is_x86_feature_detected!("avx2")`, phase `Error` with "This computer's processor can't run Find similar.", and `find_similar` set to `"off"`.
 - **Error copy (R11):** every error the artist sees comes from one copy table, `similar/copy.rs`. Raw error text (network, I/O, ORT, HTTP codes) goes to stderr only, never into `SimilarStatus`.
 - **Integrity:**
   - Each file downloads to `<name>.part`, resuming with `Range:`.
@@ -147,7 +147,7 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
 
 1. **The download is interrupted** (the network drops, the app quits, the laptop sleeps). The next "Turn on" or app start resumes from the `.part` file. A partly downloaded model is never loaded. Tested in Task 1.
 2. **The server returns the wrong bytes**: an HTML error page, a truncated file, or a file changed upstream. The SHA-256 check rejects it and deletes the `.part`. The status shows "The download didn't finish correctly. Try again." The feature stays off. Tested in Tasks 1 and 5.
-3. **The model can't start on this machine** (too little memory, an unsupported CPU, missing runtime libraries). The status shows "Find similar couldn't start on this computer." `find_similar` returns to `"off"`, and the rest of the app works. With the feature off, ORT is never loaded. Tested in Tasks 0, 2 and 5.
+3. **The model can't start on this machine** (too little memory, an unsupported CPU, missing runtime libraries). The status shows "Find similar couldn't start on this computer.", or for a CPU without AVX2, "This computer's processor can't run Find similar." (R1). `find_similar` returns to `"off"`, and the rest of the app works. With the feature off, ORT is never loaded. Tested in Tasks 0, 2 and 5.
 4. **`embeddings.bin` is stale or damaged** (made by another model, truncated, holding deleted references, or copied from another library). It is pruned or rebuilt, never trusted blindly, and loading it never panics. Tested in Task 3.
 5. **The library changes during indexing** (an import, a reference deleted, the library switched or closed, a pause). Nothing is written to the wrong library's `embeddings.bin`. New references are picked up on the next pass. Pause takes effect within one batch. Tested in Task 4.
 
@@ -444,7 +444,7 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   - **Start:** once the switch has returned, `Ok` or `Err`, the start hook runs with no lock held, for whichever library is open at that point. It starts an indexer only when Find similar is ready and there is no indexer. On success it runs after `remember()`, for the new library. On `Err` it restarts the old library's indexer. There is no separate restart-on-`Err` code.
   - **The start pass:** it indexes every reference whose hash `EmbStore` lacks, so it also covers the demo seed (whose references bypass `hooks::after_change`). It then calls `prune(current hashes)` (R7).
   - **Start-up, in `setup`:** on a background thread, when `find_similar == "on"`: if `!is_installed`, resume the `.part` download; then load the model, then run the start hook.
-  - **CPU guard (R1, required by Task 0):** before any load, `if !is_x86_feature_detected!("avx2")`, phase `Error` with "This computer's processor can't run Find similar.", and `find_similar` set to `"off"`. The detector is injectable for tests.
+  - **CPU guard (R1, required by Task 0):** on x86_64 only (`#[cfg(target_arch = "x86_64")]`), before any load, `if !is_x86_feature_detected!("avx2")`, phase `Error` with "This computer's processor can't run Find similar.", and `find_similar` set to `"off"`. The detector is injectable for tests.
   - **Any load error** (including a missing ORT library or VC++ runtime, Task 0) sets phase `Error`, with the copy "Find similar couldn't start on this computer.", and sets `find_similar` back to `"off"` (Review Focus 3). It drops `similar` before calling `update_settings`.
 - **Indexing trigger (Cross-plan audit row 11):** this triggers on the result, not on the command. The hook is registered with `hooks::register`, and reads `Change.references` through `ReferenceView::hash()` and `thumb1024()` (R9).
   - After any command whose `Change.references` include hashes that `EmbStore` lacks, and while the phase is `Ready`, `Indexing` or `Paused`, an index pass is queued for those hashes.
