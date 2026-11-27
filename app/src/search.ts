@@ -201,5 +201,15 @@ export function mountSearch(root: HTMLElement, api: Api, hooks: SearchHooks, sig
   document.addEventListener("pointerdown", (e) => {
     if (!ul.hidden && !box.contains(e.target as Node)) close();
   }, { signal });
-  return { close, beginDrop, refresh: () => void (!ul.hidden && paint()) };
+  /** Scope changed, or Find similar turned off: an open list drops option B (off means absent). */
+  function refresh() {
+    if (ul.hidden) return;
+    if (!hooks.similar && similar) {
+      similar = null;
+      if (!hits) return close(); // the list held only a dropped image's group
+    }
+    paint();
+  }
+
+  return { close, beginDrop, refresh };
 }

@@ -338,6 +338,25 @@ describe("Find similar UI", () => {
       expect(pane.textContent).toContain("Searching…");
     });
 
+    it("an open group leaves when Find similar turns off (AGY #2)", async () => {
+      type("backlit");
+      await settle();
+      expect(group()).not.toBeNull();
+      r.emit(status("off"));
+      await settle(0);
+      expect(group()).toBeNull();
+      expect($("#q-results")!.hidden).toBe(false); // option A's list stays
+      r.emit(status("ready"));
+      await settle(0);
+      r.drop("drop");
+      await settle(0);
+      expect(group()).not.toBeNull();
+      r.emit(status("off"));
+      await settle(0);
+      expect(group()).toBeNull();
+      expect($("#q-results")!.hidden).toBe(true); // it held only the drop's group
+    });
+
     it("no_tagging_path", () => {
       expect(source).not.toMatch(/\baddTags\b|\bupdateTag\b/);
     });
