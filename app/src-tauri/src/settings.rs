@@ -61,6 +61,24 @@ impl Settings {
     }
 }
 
+/// A missing or unreadable file gives the defaults: settings are never worth failing over.
+pub fn load(dir: &Path) -> Settings {
+    std::fs::read(dir.join(FILE))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
+}
+
+/// Atomic: write a temp file in the same folder, fsync it, then rename it over settings.json.
+pub fn save(dir: &Path, s: &Settings) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
+    tmp.write_all(&serde_json::to_vec_pretty(s).map_err(std::io::Error::other)?)?;
+    tmp.as_file().sync_all()?;
+    tmp.persist(dir.join(FILE)).map_err(|e| e.error)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,22 +103,4 @@ mod tests {
         let old: Settings = serde_json::from_str(r#"{"theme":"light"}"#).unwrap();
         assert!(!old.intro_seen);
     }
-}
-
-/// A missing or unreadable file gives the defaults: settings are never worth failing over.
-pub fn load(dir: &Path) -> Settings {
-    std::fs::read(dir.join(FILE))
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
-}
-
-/// Atomic: write a temp file in the same folder, fsync it, then rename it over settings.json.
-pub fn save(dir: &Path, s: &Settings) -> std::io::Result<()> {
-    std::fs::create_dir_all(dir)?;
-    let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
-    tmp.write_all(&serde_json::to_vec_pretty(s).map_err(std::io::Error::other)?)?;
-    tmp.as_file().sync_all()?;
-    tmp.persist(dir.join(FILE)).map_err(|e| e.error)?;
-    Ok(())
 }
