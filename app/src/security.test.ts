@@ -8,6 +8,7 @@ import seedJson from "../src-tauri/resources/taxonomy.json";
 import type { Api, Board, LibraryView, Link, Reference, SimilarStatus, Taxonomy } from "./api";
 import { mountBoards } from "./boards/view";
 import { mountCompare } from "./compare/view";
+import type { Snapshot } from "./data";
 import { intakeHTML, noticeIn, warningHTML } from "./importer";
 import { mountInbox } from "./inbox/view";
 import type { DropWin } from "./intake";
@@ -261,13 +262,14 @@ describe("untrusted text renders as text (Plan 6 Task 3)", () => {
   it("the Tree inspector, on the technique and on the reference", async () => {
     const el = host();
     const opts = { editable: true, openReference: () => {}, select: () => {}, assetUrl: (p: string) => p };
-    renderInspector(el, store, { kind: "tech", id: "tech:halo" }, opts as never);
+    const snap: Snapshot = { refs: store.refs, links: store.links, tax: store.tax, version: 1, taxonomyReadOnly: false, inScope: () => true };
+    renderInspector(el, snap, { kind: "tech", id: "tech:halo" }, opts as never);
     readsAsText(el, [TECH, `${TECH} described`]);
     noMarkup();
     expect(unnamed(el)).toEqual([]);
-    renderInspector(el, store, { kind: "ref", id: "ref:halo:x1" }, opts as never);
+    renderInspector(el, snap, { kind: "ref", id: "ref:halo:x1" }, opts as never);
     readsAsText(el, [TITLE]);
-    renderInspector(el, store, { kind: "op", id: "op:xop" }, opts as never);
+    renderInspector(el, snap, { kind: "op", id: "op:xop" }, opts as never);
     readsAsText(el, [OP]);
     noMarkup();
     expect(unnamed(el)).toEqual([]);
