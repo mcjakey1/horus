@@ -338,6 +338,9 @@ export function mountPicker(
     const text = isTextEntry(t);
     if (e.key === "Escape") {
       e.preventDefault();
+      // D1: the picker's Esc is its own, so a lightbox it is docked in stays open (and keeps an
+      // unsaved region and its zoom).
+      e.stopPropagation();
       if (S.form) {
         closeForm();
         search.focus();
