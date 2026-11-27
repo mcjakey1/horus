@@ -9,6 +9,7 @@ import {
   clipLabel,
   labelsShown,
   barBoxes,
+  barsOf,
   LABEL_PX,
   mountCanvasOrFallback,
   nodeRect,
@@ -128,13 +129,11 @@ describe("planFrame", () => {
       { from: "j:dn:a", to: "j:up:b", width: 1, color: "#000" }, // a bar
       { from: "j:dn:a", to: "j:up:c", width: 1, color: "#000" }, // a stem: vertical, not an obstacle
     ];
-    const bars = barBoxes(edges, nodes, { x: 0, y: 0, scale: 1 });
+    const bars = barBoxes(barsOf(edges, nodes), { x: 0, y: 0, scale: 1 });
     expect(bars).toEqual([{ id: "bar:j:dn:a>j:up:b", x: 100, y: 99, w: 200, h: 2, rank: 0 }]);
     const name = (id: string, x: number, y: number, rank: number) => ({ id, x, y, w: 60, h: 19, rank });
     const shown = labelsShown([name("br:on", 30, 90, 1), name("br:clear", 30, 120, 1), name("tech:sel", 170, 90, -1)], bars);
-    expect(shown.has("br:on")).toBe(false);
-    expect(shown.has("br:clear")).toBe(true);
-    expect(shown.has("tech:sel")).toBe(true);
+    expect([...shown].sort()).toEqual(["br:clear", "tech:sel"]); // no bar id leaks into the set
   });
 
   it("labels are cut at 24 characters (final review I1)", () => {

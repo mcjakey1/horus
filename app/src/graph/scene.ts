@@ -13,6 +13,8 @@ import {
   EdgeGate,
   labelsShown,
   barBoxes,
+  barsOf,
+  type Bar,
   LABEL_PX,
   type LabelBox,
   sameLook,
@@ -140,6 +142,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   let order = new Map<string, number>();
   let grids: { all: SpatialGrid; pick: SpatialGrid } = buildGrids(nodes);
   let edges: SceneEdge[] = [];
+  let bars: Bar[] = []; // the Tree's connector bars, name obstacles (barsOf), kept with nodes and edges
   const objs = new Map<string, Obj>();
   let shown = new Set<string>();
   let plan: FramePlan = { visible: [], lod: new Map() };
@@ -365,7 +368,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         }
       }
     }
-    const keep = labelsShown(names, barBoxes(edges, nodes, cam));
+    const keep = labelsShown(names, names.length ? barBoxes(bars, cam) : []);
     for (const [id, label] of named) label.visible = keep.has(id);
     // By URL, not by node: one reference can be drawn under several techniques (Tree), and a node
     // can drop from thumb to dot while still on screen. Only loads a thumbnail wants stay in flight.
@@ -582,6 +585,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         else dropObj(id);
       }
       nodes = next;
+      bars = barsOf(edges, nodes);
       order = new Map(list.map((n, i) => [n.id, i]));
       grids = buildGrids(nodes);
       nodesVersion++;
@@ -591,6 +595,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     },
     setEdges(list) {
       edges = list;
+      bars = barsOf(edges, nodes);
       dirty = true;
     },
     camera: () => cam,
