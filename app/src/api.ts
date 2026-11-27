@@ -251,7 +251,8 @@ export interface Api {
   /** The window's close waits for a running import; Rust closes it when that ends. */
   onCloseWaiting(cb: () => void): Promise<() => void>;
   // Plan 5 Find similar. Search errors are wire codes: "FindSimilarOff", "NotIndexedYet",
-  // "TooLarge", "Unreadable"; anything else is artist copy.
+  // "TooLarge", "Unreadable", "UnknownReference:<id>" (treat as no results); anything else is
+  // artist copy.
   similarStatus(): Promise<SimilarStatus>;
   /** Sets findSimilar "on", then downloads if needed, loads and indexes in the background. */
   similarEnable(): Promise<SimilarStatus>;

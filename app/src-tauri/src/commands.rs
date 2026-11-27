@@ -63,6 +63,8 @@ pub struct AppState {
     similar: Mutex<similar::SimilarState>,
     /// Single-flight for the indexer start hook (B4).
     similar_start: Mutex<()>,
+    /// One writer per model folder: a re-enable or a remove waits out a cancelled download.
+    similar_download: Mutex<()>,
 }
 
 impl AppState {
@@ -86,6 +88,7 @@ impl AppState {
             demo_dir,
             similar: Mutex::new(similar::SimilarState::default()),
             similar_start: Mutex::new(()),
+            similar_download: Mutex::new(()),
         }
     }
 }
@@ -557,11 +560,17 @@ fn create_inner<R: Runtime>(
             Err(e) => seed_warnings.push(format!("The demo set was not added: {e}")),
         }
     }
-    // B4: stop the old library's indexer with no lock held, just before the swap.
-    if let Some(old) = similar::detach_indexer(&st) {
-        old.stop();
+    // B4: under the state guard, right before the swap (state then `similar`); the join waits
+    // for the guard to drop.
+    let (installed, old) = {
+        let mut open = lock(&st.open);
+        let old = similar::detach_indexer(&st);
+        (install(&app, &mut open, lib, seed_warnings), old)
+    };
+    if let Some(i) = old {
+        i.stop();
     }
-    let mut view = install(&app, &mut lock(&st.open), lib, seed_warnings)?;
+    let mut view = installed?;
     remember(&st, &mut view);
     Ok(view)
 }
