@@ -489,6 +489,25 @@ describe("Galaxy", () => {
     expect(t.host.textContent).toContain("Tag references to see them cluster.");
   });
 
+  it("idle_inspector_and_faint_untagged (design judgement #3)", async () => {
+    const t = setup();
+    await settle();
+    const snap = snapOf(["a", "b", "c"], 2);
+    snap.refs.set("c", refOf("c", []));
+    t.change(snap);
+    await settle();
+    t.wk.finish();
+    await settle();
+    const nodes = t.sc.calls.nodes[t.sc.calls.nodes.length - 1];
+    const a = nodes.find((n) => n.id === "a")!, c = nodes.find((n) => n.id === "c")!;
+    expect(c.kind === "ref" && c.faint).toBe(true);
+    expect(a.kind === "ref" && !a.faint).toBe(true);
+    expect((c as { size: number }).size).toBeLessThan((a as { size: number }).size);
+    expect(t.host.textContent).toContain("Select a reference to see its strongest neighbours.");
+    expect(t.host.textContent).toContain("2 tagged · 1 untagged");
+    expect(t.host.textContent).toContain("Shift-click a second reference to compare");
+  });
+
   it("destroy_terminates_worker", async () => {
     const t = setup();
     await settle();

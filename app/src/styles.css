@@ -480,6 +480,8 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .gx-shares i { font-family: var(--serif); }
 .gx-neighbours .mono { grid-column: 2; grid-row: 1; color: var(--ink-2); font-size: 12px; }
 .gx-note { margin: 0; color: var(--ink-2); font: 15px/1.5 var(--serif); }
+.gx-counts { margin: 12px 0 0; font-size: 12px; color: var(--ink-2); }
+.gx-keys { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
 
 /* Narrow windows (design judgement P1-1): the wrapped top bar gets its own rows (this selector
    outranks the 760 body rule), and the graph views stack, canvas above the inspector, as the

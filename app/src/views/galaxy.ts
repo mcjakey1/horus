@@ -73,7 +73,9 @@ export function mountGalaxy(
       const p = positions[r.id];
       if (!p) continue;
       nodes.push({
-        id: r.id, kind: "ref", x: p.x, y: p.y, size: NODE, url: r.thumb256,
+        // Untagged references draw smaller and fainter, so the correlated core leads (design judgement #3).
+        id: r.id, kind: "ref", x: p.x, y: p.y, size: r.tags.length ? NODE : NODE * 0.6, url: r.thumb256,
+        ...(r.tags.length ? {} : { faint: true }),
         aspect: r.width > 0 && r.height > 0 ? r.width / r.height : 3 / 4,
         dim: !s.inScope(r.id), // out of board scope: a dot, never picked, no edges
       });
@@ -111,7 +113,16 @@ export function mountGalaxy(
     }
     const sel = selected ? s.refs.get(selected) : undefined;
     if (!sel) {
-      insp.innerHTML = edgesFetched && !byRef.size ? `<div class="insp-body"><p class="gx-note">Tag references to see them cluster.</p></div>` : "";
+      if (edgesFetched && !byRef.size) {
+        insp.innerHTML = `<div class="insp-body"><p class="gx-note">Tag references to see them cluster.</p></div>`;
+        return;
+      }
+      // The idle inspector: what to do next, the counts, and the keys (design judgement #3).
+      const tagged = [...s.refs.values()].filter((r) => r.tags.length && s.inScope(r.id)).length;
+      const untagged = [...s.refs.values()].filter((r) => !r.tags.length && s.inScope(r.id)).length;
+      insp.innerHTML = `<div class="insp-body"><p class="gx-note">Select a reference to see its strongest neighbours.</p>
+        <p class="gx-counts mono">${tagged} tagged · ${untagged} untagged</p>
+        <p class="gx-keys">Enter selects the one nearest the centre, and the arrows move on from it. Shift-click a second reference to compare the two.</p></div>`;
       return;
     }
     const techName = (id: string) => s.tax.techniques.find((t) => t.id === id)?.name ?? id;

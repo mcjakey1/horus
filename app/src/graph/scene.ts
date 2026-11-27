@@ -229,6 +229,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       const body = new PIXI.Container();
       const half = n.size / 2;
       if (n.kind === "ref") {
+        if (n.faint) root.alpha = 0.5;
         body.addChild(new PIXI.Graphics().rect(-half, -half, n.size, n.size).fill(resolveColor("var(--card)")));
         const { plate, outline } = tileBox(n.aspect || 3 / 4, n.size, n.outline?.region);
         const sprite = new PIXI.Sprite(PIXI.Texture.EMPTY);

@@ -10,6 +10,7 @@ export type SceneNode =
   | {
       id: string; kind: "ref"; x: number; y: number; size: number; url: string; aspect: number;
       dim?: boolean; // R9: out of scope (Plan 4 board scope): always "dot", never picked
+      faint?: boolean; // drawn at half alpha (the Galaxy's untagged references)
       outline?: { region: Region; color: string; state: "full" | "partial" | "region" };
     }
   | { id: string; kind: "label"; x: number; y: number; text: string; font: "serif" | "mono"; color: string }
