@@ -99,6 +99,11 @@ impl EmbStore {
     }
 
     pub fn save(&self, root: &Path) -> std::io::Result<()> {
+        write_atomic(&embeddings_path(root), &self.encode())
+    }
+
+    /// The file's bytes. The indexer encodes under the store's lock and writes outside it.
+    pub(crate) fn encode(&self) -> Vec<u8> {
         let mut b = Vec::with_capacity(HEADER + self.by_hash.len() * (32 + 4 * self.dim));
         b.extend_from_slice(MAGIC);
         b.extend_from_slice(&VERSION.to_le_bytes());
@@ -111,7 +116,7 @@ impl EmbStore {
                 b.extend_from_slice(&x.to_le_bytes());
             }
         }
-        write_atomic(&embeddings_path(root), &b)
+        b
     }
 
     pub fn has(&self, hash: &str) -> bool {

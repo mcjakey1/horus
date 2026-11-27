@@ -3,6 +3,7 @@
 
 pub mod download;
 pub mod encoder;
+pub mod indexer;
 pub mod model;
 pub mod store;
 
