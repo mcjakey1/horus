@@ -39,6 +39,12 @@ describe("About (Plan 6 Task 4)", () => {
     expect(credits.every((c) => c.rights.length > 0)).toBe(true);
   });
 
+  it("states the licence and where the source is (AGPL, gate G10)", () => {
+    const t = text(aboutHTML(info()));
+    expect(t).toContain("Horus is free software under the GNU AGPL v3.");
+    expect(t).toContain("Source code: github.com/mcjakey1/horus");
+  });
+
   it("the scrolling credits take keyboard focus and are named by their heading (QA F2)", () => {
     const d = document.createElement("div");
     d.innerHTML = aboutHTML(info());

@@ -119,6 +119,17 @@ Evidence files go in `docs/release/evidence/`. Paths are relative to the reposit
 - **If it fails:** the Windows bundle drops the four DLLs (`tauri.windows.conf.json` and `checkBundle`); `docs/release/INSTALL-UNSIGNED.md` and the release notes say that Find similar needs Microsoft's Visual C++ Redistributable on Windows; and QA row 9a records what a machine without it shows.
 - **Date closed:** —
 
+## G10. The source is offered with every binary (AGPL)
+
+- [ ] **G10. The source is offered with every binary** (AGPL-3.0-only) — owner: **USER**.
+- **The issue:** the user chose the GNU AGPL v3 only (2026-11-28). Everyone who receives a Horus binary must be offered its Corresponding Source. The repository `https://github.com/mcjakey1/horus` is private today, and About names it as the source location.
+- **Pass criteria, one route, recorded with its evidence:**
+  - **(a) Public repository:** the repository is public before the first release, and the release tag's commit is in it.
+  - **(b) Source with the release:** each release carries a source archive of its tag, and About names where it is.
+- **Evidence wanted:** the public repository URL and the date, or the release page with its source archive, in `docs/release/evidence/g10-source/`.
+- **Evidence so far:** `LICENSE` (the verbatim AGPL-3.0 text from gnu.org, SHA-256 `0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0`), `license = "AGPL-3.0-only"` in `app/src-tauri/Cargo.toml` and `app/package.json` (release-check `checkCargoMeta` asserts it), and About's licence line. Every dependency licence is AGPL-compatible: the Rust crates are limited to `about.toml`'s accepted list, and the npm production packages are MIT, ISC, BSD-3-Clause or MIT/Apache-2.0 (checked 2026-11-28).
+- **Date closed:** —
+
 ---
 
 ## Open decisions for the user (not gates)

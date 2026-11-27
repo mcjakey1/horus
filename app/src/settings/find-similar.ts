@@ -6,7 +6,7 @@ import { esc } from "../esc";
 
 /** SPEC §5a, verbatim: the first-run question. */
 export const FIND_SIMILAR_COPY =
-  "Turn on Find similar? It downloads a 150–350 MB image model and indexes your library in the background. Recommended for machines with 8 GB of RAM or more.";
+  "Turn on Find similar? It downloads a 213 MB image model and indexes your library in the background. Recommended for machines with 8 GB of RAM or more.";
 /** The same sentence without the question, under the switch. */
 const DESCRIPTION = FIND_SIMILAR_COPY.replace(/^Turn on Find similar\? /, "");
 /** R11's catch-all, for a call that rejects. Matches Rust's copy table. */
