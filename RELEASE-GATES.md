@@ -44,6 +44,7 @@ Evidence files go in `docs/release/evidence/`. Paths are relative to the reposit
   - `"is_public_domain": true (api.artic.edu/…)` (the Art Institute of Chicago records) is shown as **"Public domain (CC0)"**;
   - any other value (the Library of Congress records: "No known restrictions on publication.") is shown as written.
   - The mapping is `rightsLabel` in `app/src/about.ts`. Confirm this wording honours the AIC CC0 statement quoted in `demo/README.md`, or give the wording to use.
+- **Evidence wanted:** the dated re-check of each record and the four keep-or-remove decisions, in `docs/release/evidence/g3-demo-rights/`; the updated `rightsCheckedAt` values in the manifest; the owner's yes (or wording) for About's rights line.
 - **Evidence so far:** `demo/README.md` (sources, the AIC CC0 statement, the check method). Every record's `rightsCheckedAt` is `2026-11-24`. That is the set-wide date, and it must be within 30 days of the release date.
 - **Date closed:** —
 
@@ -77,6 +78,7 @@ Evidence files go in `docs/release/evidence/`. Paths are relative to the reposit
   - `app/README.md` has the same "Installing the unsigned beta" section (Task 10);
   - `SHA256SUMS` is attached;
   - QA row 1a passes on all three systems (Task 8).
+- **Evidence wanted:** the release page URL (showing "prerelease" and the name), its attached `SHA256SUMS`, the README section, and QA row 1a in `docs/release/qa-matrix.md`.
 - **Evidence so far:**
   - `.github/workflows/release.yml` makes the draft prerelease "Horus <tag> (unsigned beta)" with `--notes-file docs/release/INSTALL-UNSIGNED.md` and one `SHA256SUMS` (written, not run);
   - `docs/release/INSTALL-UNSIGNED.md` exists (Task 10 prep).
@@ -86,6 +88,7 @@ Evidence files go in `docs/release/evidence/`. Paths are relative to the reposit
 
 - [ ] **G7. The privacy statement is accurate** — owner: release engineer.
 - **Pass criteria:** About's text matches behaviour: `checkNoRemoteUrls` passes, QA row 9 (offline) passes, and About names the model host `huggingface.co`.
+- **Evidence wanted:** the tag build's release-check output, and QA row 9 for all three systems in `docs/release/qa-matrix.md`.
 - **Evidence so far:**
   - About says: "Works offline. No account, no telemetry. Find similar downloads an image model from huggingface.co only if you turn it on." (`PRIVACY` in `app/src/about.ts`; `app/src/about.test.ts` checks it);
   - `checkNoRemoteUrls` passes on the sources (2026-11-28);
@@ -100,6 +103,7 @@ Evidence files go in `docs/release/evidence/`. Paths are relative to the reposit
   - **(a) Confirmed:** written confirmation (from the repository owner, or a licence file added at a pinned commit) that the export is redistributable under Apache-2.0. If the commit changes, Plan 5's `SIGLIP_B16_Q8` revision and SHA-256 values are updated and Plan 5's download tests pass.
   - **(b) Self-converted:** the model is converted from `google/siglip-base-patch16-224` with Hugging Face Optimum (int8, the same inputs and outputs) and hosted at a Horus-owned location. Then `SIGLIP_B16_Q8` gets the new files, sizes, SHA-256 values and host; Plan 5's ignored `real_model_semantics` test passes; Plan 5 Task 8 Step 3b re-calibrates the cut-offs; and About's privacy line names the new host (G7).
   - **On either route:** `app/notices/manual.md` keeps SigLIP's Apache-2.0 entry with the upstream NOTICE text or a dated "NOTICE: none" line, and so does the generated `THIRD_PARTY_NOTICES.md` (G5). release-check's `checkNotices` enforces this.
+- **Evidence wanted:** for (a), the written confirmation or the licence file at its pinned commit; for (b), the conversion record (tool versions, command, output hashes) and the new host. Either in `docs/release/evidence/g8-model-licence/`.
 - **Evidence so far:** `app/notices/manual.md` holds the Apache-2.0 entry and "NOTICE: none. Re-checked 2026-11-27" with its evidence. The route, (a) or (b), is not chosen.
 - **Date closed:** —
 
