@@ -247,7 +247,8 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         }
       } else {
         const ink = resolveColor(n.color);
-        const g = new PIXI.Graphics().rect(-half, -half, n.size, n.size);
+        // Taxonomy nodes are markers, so circles; squares stay for data, the references (DESIGN.md Shapes; design judgement #13).
+        const g = new PIXI.Graphics().circle(0, 0, half);
         if (n.kind === "op") g.fill(ink);
         else g.fill(resolveColor("var(--panel)")).stroke({ width: 1, color: ink });
         body.addChild(g);
@@ -288,14 +289,20 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       if (!n || n.kind === "label") return;
       const r = nodeRect(n);
       const pad = 3 / cam.scale;
-      marks.rect(r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad).stroke({ width: w / cam.scale, color: resolveColor(color) });
+      if (n.kind === "ref") marks.rect(r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad);
+      else marks.circle(n.x, n.y, r.w / 2 + pad); // a ring round a marker
+      marks.stroke({ width: w / cam.scale, color: resolveColor(color) });
     };
     if (hovered !== selected) ring(hovered, "var(--line-2)", 1);
     ring(selected, "var(--ink)", 2);
     if (hint && hint !== "blocked") ring(hint.id, hint.color, 2);
     if (ghost) {
       const n = nodes.get(ghost.id);
-      if (n && n.kind !== "label") marks.rect(ghost.x - n.size / 2, ghost.y - n.size / 2, n.size, n.size).fill({ color: resolveColor("var(--ink-2)"), alpha: 0.35 });
+      if (n && n.kind !== "label") {
+        if (n.kind === "ref") marks.rect(ghost.x - n.size / 2, ghost.y - n.size / 2, n.size, n.size);
+        else marks.circle(ghost.x, ghost.y, n.size / 2);
+        marks.fill({ color: resolveColor("var(--ink-2)"), alpha: 0.35 });
+      }
     }
   }
 
