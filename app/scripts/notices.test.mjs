@@ -17,8 +17,12 @@ describe("assemble", () => {
     expect(out).toContain("generated in CI");
   });
   it("the checked-in stand-in is the hand-written part, and passes checkNotices", () => {
-    const manual = readFileSync(new URL("../notices/manual.md", import.meta.url), "utf8");
-    const standIn = readFileSync(new URL("../THIRD_PARTY_NOTICES.md", import.meta.url), "utf8");
+    // A Windows checkout may turn both into CRLF: compare the text, not the line ends.
+    const lf = (s) => s.replace(/
+/g, "
+");
+    const manual = lf(readFileSync(new URL("../notices/manual.md", import.meta.url), "utf8"));
+    const standIn = lf(readFileSync(new URL("../THIRD_PARTY_NOTICES.md", import.meta.url), "utf8"));
     expect(standIn).toBe(assemble({ manual }));
     expect(checkNotices(standIn)).toEqual([]);
   });
