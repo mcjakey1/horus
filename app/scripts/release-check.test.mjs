@@ -153,14 +153,14 @@ describe("checkNoRemoteUrls", () => {
       ]),
     ).toEqual([]);
   });
-});
-
-describe("checkNoInlineStyle", () => {
   it("fails a look-alike of the Tauri local hosts (AGY #2)", () => {
     expect(checkNoRemoteUrls([{ path: "src/a.ts", text: 'fetch("http://asset.localhost.evil.example/x")' }])).not.toEqual([]);
     expect(checkNoRemoteUrls([{ path: "src/a.ts", text: 'fetch("http://ipc.localhostx/")' }])).not.toEqual([]);
     expect(checkNoRemoteUrls([{ path: "src/a.ts", text: "`http://asset.localhost/${p}`" }])).toEqual([]);
   });
+});
+
+describe("checkNoInlineStyle", () => {
   it("fails an upper-case STYLE attribute (AGY #2)", () => {
     expect(checkNoInlineStyle([{ path: "index.html", text: '<div STYLE="color:red"></div>' }])).not.toEqual([]);
   });
@@ -217,6 +217,10 @@ describe("checkNotices", () => {
     const merged = (siglip) => `# Notices\n\n## left-pad\n\nApache License, Version 2.0\n\n### NOTICE\n\nleft-pad notice.\n\n## SigLIP\n\n${siglip}\n## Red Hat Mono\n\nOFL.\n`;
     expect(checkNotices(merged("SigLIP base (google/siglip-base-patch16-224), Copyright Google LLC.\n"))).not.toEqual([]);
     expect(checkNotices(merged(`${entry}- NOTICE: none. Re-checked 2026-11-27.\n`))).toEqual([]);
+    // A Windows checkout has CRLF line ends (AGY #2 round 2).
+    const crlf = (s) => s.replaceAll("\n", "\r\n");
+    expect(checkNotices(crlf(`${entry}\n### NOTICE (upstream)\n\nThis product includes software developed at Google.\n`))).toEqual([]);
+    expect(checkNotices(crlf(`${entry}\n### NOTICE\n\n## Next\n`))).not.toEqual([]);
   });
   it("passes Plan 5's hand-written notices", () => {
     expect(checkNotices(readFileSync(new URL("../notices/manual.md", import.meta.url), "utf8"))).toEqual([]);

@@ -196,7 +196,7 @@ export function checkNotices(noticesMd) {
   const out = [];
   if (!section.includes("Apache License, Version 2.0")) out.push('notices: no "Apache License, Version 2.0" in the SigLIP entry');
   const none = /NOTICE: none\b.*\b\d{4}-\d{2}-\d{2}\b/.test(section);
-  const upstream = /^#+[ \t]*NOTICE\b[^\n]*\n+[ \t]*[^\s#]/m.test(section); // a heading with its text
+  const upstream = /^#+[ \t]*NOTICE\b[^\r\n]*(?:\r?\n)+[ \t]*[^\s#]/m.test(section); // a heading with its text (LF or CRLF)
   if (!none && !upstream) out.push('notices: SigLIP needs its upstream NOTICE text or a dated "NOTICE: none" line');
   return out;
 }
