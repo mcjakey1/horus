@@ -52,11 +52,12 @@ export function mountPicker(
     <div class="pk-ops" role="group" aria-label="Operation"></div>
     <input class="pk-search" type="search" autocomplete="off" aria-label="Search techniques" placeholder="Search techniques — “moody”, “spotlight”…">
     <div class="pk-grid"></div>
+    <div class="pk-domainrow" hidden></div>
     <div class="pk-form-slot"></div>
     <div class="pk-foot"><p class="pk-msg" role="status"></p><button type="button" class="text-btn pk-apply">Apply</button></div>
     <div class="pk-chips" role="group" aria-label="Tags on this reference"></div>`;
   const $ = <T extends HTMLElement = HTMLElement>(s: string) => el.querySelector<T>(s)!;
-  const opsEl = $(".pk-ops"), search = $<HTMLInputElement>(".pk-search"), grid = $(".pk-grid");
+  const opsEl = $(".pk-ops"), search = $<HTMLInputElement>(".pk-search"), grid = $(".pk-grid"), domainRow = $(".pk-domainrow");
   const slot = $(".pk-form-slot"), msg = $(".pk-msg"), chips = $(".pk-chips"), applyBtn = $<HTMLButtonElement>(".pk-apply");
 
   const tax = () => store.tax;
@@ -127,16 +128,32 @@ export function mountPicker(
       .join("");
   }
 
+  /** A technique with one domain names it on its card (plain text). */
   function domainHTML(t: Technique) {
     const d = domainChoice(tax(), S.op!, t.id);
-    if ("branchId" in d) return `<span class="pk-domain">${esc(domainName(d.branchId))}</span>`;
+    return "branchId" in d ? `<span class="pk-domain">${esc(domainName(d.branchId))}</span>` : "";
+  }
+
+  /** QA F4: a technique that asks for a domain gets its radios in a row under the grid, never inside
+   * its option (axe nested-interactive). The legend names the highlighted technique. */
+  function renderDomainRow(t: Technique | undefined) {
+    const d = t && S.op ? domainChoice(tax(), S.op, t.id) : null;
+    if (!t || !d || "branchId" in d) {
+      domainRow.hidden = true;
+      domainRow.innerHTML = "";
+      return;
+    }
     const picked = S.branch.get(t.id);
-    return `<fieldset class="pk-domains"><legend class="sr-only">Domain for ${esc(t.name)}</legend>${d.ask
+    const focused = domainRow.contains(document.activeElement) ? (document.activeElement as HTMLInputElement).value : null;
+    domainRow.hidden = false;
+    domainRow.innerHTML = `<fieldset class="pk-domains" data-tech="${esc(t.id)}"><legend>Domain for ${esc(t.name)}</legend>${d.ask
       .map(
         (b) =>
           `<label><input type="radio" name="${name}-domain" value="${esc(b.id)}"${b.id === picked ? " checked" : ""}> ${esc(domainName(b.id))}</label>`,
       )
       .join("")}</fieldset>`;
+    // A repaint while a radio has focus (a store update) keeps it, as keep() does for the grid.
+    if (focused !== null) [...domainRow.querySelectorAll<HTMLInputElement>("input")].find((r) => r.value === focused)?.focus();
   }
 
   /** QA F1: the grid is a listbox only while it holds options; a note alone is plain text. */
@@ -157,6 +174,7 @@ export function mountPicker(
     keep(grid, () => {
       if (!S.op) {
         listbox(false);
+        renderDomainRow(undefined);
         const n = tax().operations.length;
         grid.innerHTML = `<p class="none">Choose an operation${n ? `, or press ${n > 1 ? `1–${n}` : "1"}` : ""}.</p>`;
         return;
@@ -183,6 +201,7 @@ export function mountPicker(
       }
       grid.innerHTML = cards.join("") || `<p class="none">No technique matches.</p>`;
       listbox(cards.length > 0);
+      renderDomainRow(vis[h]);
     });
   }
 
@@ -435,7 +454,7 @@ export function mountPicker(
   el.addEventListener("change", (e) => {
     const r = e.target as HTMLInputElement;
     if (r.type !== "radio") return;
-    const id = r.closest<HTMLElement>(".pk-card")?.dataset.tech;
+    const id = r.closest<HTMLElement>(".pk-domains")?.dataset.tech;
     if (!id) return;
     S.branch.set(id, r.value);
     const i = tickOf(id);

@@ -4,6 +4,7 @@ import type { Api, Change, DemoExample, NewTag, Reference, Tag, Taxonomy } from 
 import seedJson from "../../src-tauri/resources/taxonomy.json";
 import { createStore } from "../store";
 import { techniquesFor } from "./model";
+import axe from "axe-core";
 import { mountPicker, type PickerOpts } from "./picker";
 
 const seed = seedJson as unknown as Taxonomy;
@@ -94,6 +95,7 @@ const type = (el: HTMLElement, q: string) => {
 };
 const ops = (el: HTMLElement) => [...el.querySelectorAll<HTMLButtonElement>(".pk-op")];
 const row = (el: HTMLElement) => el.querySelector<HTMLElement>(".pk-ops")!;
+const domainRow = (el: HTMLElement) => el.querySelector<HTMLElement>(".pk-domainrow")!;
 const chosen = (el: HTMLElement) => el.querySelector<HTMLElement>('.pk-op[aria-pressed="true"]')?.dataset.op;
 const cards = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>(".pk-card[data-tech]")].map((c) => c.dataset.tech);
 const hi = (el: HTMLElement) => el.querySelector<HTMLElement>(".pk-card.is-hi");
@@ -245,7 +247,7 @@ describe("technique picker", () => {
     const { el, api } = mount({}, { tax: withTexture() });
     key(row(el), "1");
     type(el, "chiaroscuro");
-    const radios = [...hi(el)!.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
+    const radios = [...domainRow(el).querySelectorAll<HTMLInputElement>('input[type="radio"]')];
     expect(radios.map((r) => r.value)).toEqual(["differentiate.feature", "differentiate.texture"]);
     key(search(el), "Enter");
     expect(api.addTags).not.toHaveBeenCalled();
@@ -320,7 +322,7 @@ describe("technique picker", () => {
     const { el, api } = mount({}, { tax: withTexture() });
     key(row(el), "1");
     type(el, "chiaroscuro");
-    const radio = hi(el)!.querySelector<HTMLInputElement>('input[type="radio"]')!;
+    const radio = domainRow(el).querySelector<HTMLInputElement>('input[type="radio"]')!;
     radio.focus();
     expect(key(radio, " ").defaultPrevented).toBe(false); // the browser checks it
     expect(el.querySelector(".pk-msg")!.textContent).toBe("");
@@ -421,6 +423,30 @@ describe("technique picker", () => {
     expect([...ticked].map((c) => c.dataset.tech)).toEqual([cards(el)[1]]);
   });
 
+  it("a domain choice is a row under the grid, named for the highlighted technique (QA F4)", async () => {
+    const { el } = mount({}, { tax: withTexture() });
+    key(row(el), "1");
+    expect(domainRow(el).hidden).toBe(true); // nothing asks yet
+    type(el, "chiaroscuro");
+    const rowEl = domainRow(el);
+    expect(rowEl.hidden).toBe(false);
+    expect(hi(el)!.querySelector("input, fieldset")).toBeNull();
+    expect(rowEl.querySelector("legend")!.textContent).toBe("Domain for Chiaroscuro");
+    // Tab order: the grid's roving stop, then the domain row, then Apply.
+    const grid = el.querySelector(".pk-grid")!, apply = el.querySelector(".pk-apply")!;
+    expect(grid.compareDocumentPosition(rowEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(rowEl.compareDocumentPosition(apply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const r = await axe.run(el, { runOnly: ["nested-interactive", "aria-required-children", "aria-required-parent"] });
+    expect(r.violations.map((v) => `${v.id} x${v.nodes.length}`)).toEqual([]);
+    const second = rowEl.querySelectorAll<HTMLInputElement>('input[type="radio"]')[1];
+    second.focus();
+    search(el).value = "chiaroscuro "; // a repaint with the same highlight (focus stays put)
+    search(el).dispatchEvent(new Event("input", { bubbles: true }));
+    expect((document.activeElement as HTMLInputElement).value).toBe(second.value);
+    type(el, "");
+    expect(domainRow(el).hidden).toBe(true); // a highlight that does not ask clears it
+  });
+
   it("tick_box_on_an_ask_card_shows_its_radios_and_stays_unticked", () => {
     const { el } = mount({}, { tax: withTexture() });
     key(row(el), "1");
@@ -428,7 +454,7 @@ describe("technique picker", () => {
     box.click();
     const card = el.querySelector<HTMLElement>('.pk-card[data-tech="chiaroscuro"]')!;
     expect(card.classList.contains("is-hi")).toBe(true);
-    expect(card.querySelectorAll('input[type="radio"]')).toHaveLength(2);
+    expect(domainRow(el).querySelectorAll('input[type="radio"]')).toHaveLength(2);
     expect(card.getAttribute("aria-selected")).toBe("false");
     expect(card.classList.contains("is-ticked")).toBe(false);
     expect(el.querySelector(".pk-msg")!.textContent).toBe("Choose a domain first.");

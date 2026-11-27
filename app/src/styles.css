@@ -294,7 +294,10 @@ button.settings { color: var(--ink); text-underline-offset: 3px; margin-left: 4p
 .pk-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; }
 .pk-name { font: 500 17px/1.25 var(--serif); }
 .pk-domain { font-size: 12px; color: var(--ink-2); padding: 0 6px; border: 1px solid var(--line); }
-.pk-domains { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; border: 0; font-size: 12px; color: var(--ink-2); }
+.pk-domains { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; padding: 0; border: 0; font-size: 12px; color: var(--ink-2); }
+/* QA F4: the highlighted technique's domain choice, under the grid (a hairline above it). */
+.pk-domainrow { padding: 8px 0 0; border-top: 1px solid var(--line); }
+.pk-domainrow legend { float: left; padding: 0; margin-right: 4px; color: var(--ink); }
 /* Plan 6: the technique's glyph, 24 px line art in currentColor (both themes). */
 .pk-icon { display: block; width: 24px; height: 24px; color: var(--ink-2); }
 .pk-icon svg { display: block; width: 24px; height: 24px; }
