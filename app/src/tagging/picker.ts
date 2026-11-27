@@ -4,10 +4,18 @@
 // Change, which goes through the store. Sections re-render on their own, so the search keeps focus.
 import type { Api, Change, DemoExample, NewTag, Region, Tag, TagFor, Technique } from "../api";
 import { esc } from "../esc";
+import { glyphFor } from "../glyphs/glyphs";
 import { digitOf, isTextEntry } from "../keys";
 import { opInk, opLabel } from "../ops";
 import type { Store } from "../store";
 import { domainChoice, examplesFor, rankByQuery, techniquesFor } from "./model";
+
+/** The technique's glyph (Plan 6 art), named by its icon description; a custom technique (no
+ * icon) draws the plain square, as decoration only. The SVGs are static repo data. */
+const glyphSpan = (icon: string) =>
+  icon
+    ? `<span class="pk-icon" role="img" aria-label="${esc(icon)}">${glyphFor(icon)}</span>`
+    : `<span class="pk-icon" aria-hidden="true">${glyphFor(icon)}</span>`;
 
 export type PickerOpts = {
   refId: string;
@@ -148,7 +156,7 @@ export function mountPicker(
         return `<div class="pk-card${on ? " is-hi" : ""}${ticked ? " is-ticked" : ""}" role="option" aria-selected="${on}" data-tech="${esc(t.id)}" tabindex="${i === stop ? 0 : -1}">
           <input type="checkbox" class="pk-tick" tabindex="-1" aria-label="Tick ${esc(t.name)}"${ticked ? " checked" : ""}>
           <span class="pk-body"><span class="pk-head"><b class="pk-name">${esc(t.name)}</b>${on ? domainHTML(t) : ""}</span>
-          <span class="pk-icon">${esc(t.icon)}</span>
+          ${glyphSpan(t.icon)}
           <span class="pk-desc">${esc(t.description)}</span>
           ${ex ? `<span class="pk-exs">${ex}</span>` : ""}</span></div>`;
       });

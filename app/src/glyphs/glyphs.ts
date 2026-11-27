@@ -10,5 +10,6 @@ const set: Record<string, string> = GLYPHS;
 
 /** The SVG for an icon description; an unknown or empty one (a custom technique) draws the plain square. */
 export function glyphFor(icon: string): string {
-  return set[icon] ?? set[FALLBACK];
+  // Own keys only: a hand-edited icon such as "toString" never reaches Object.prototype (AGY).
+  return Object.prototype.hasOwnProperty.call(set, icon) ? set[icon] : set[FALLBACK];
 }
