@@ -20,6 +20,8 @@ const FIXED: Record<string, string> = {
   TooManyOperations: "Up to 9 operations.",
   UnknownInk: "That ink isn't available.",
   UnknownIcon: "That icon isn't available.",
+  // Plan 6 D6: Rust's own copy for a tag that is already gone; shown as it is.
+  "That tag is no longer on this reference. Nothing changed.": "That tag is no longer on this reference. Nothing changed.",
 };
 
 /** A refusal already put into words (a caller without the taxonomy shows its message as is). */
@@ -39,9 +41,15 @@ export function sayError(err: unknown, tax?: Taxonomy): string {
   }
   m = /^unknown (operation|domain|branch|technique|reference|tag):/.exec(raw);
   if (m) return `That ${m[1]} no longer exists.`;
-  m = /^still in use: (.+)$/.exec(raw); // O3: a move that a tag pointing at a missing place blocked
-  if (m)
-    return `Horus couldn't move every tag off ${named(m[1]) ?? "it"}: some point at a technique or domain that no longer exists. Retag those references, or delete them with their tags.`;
+  m = /^still in use: (.+)$/.exec(raw);
+  if (m) {
+    // O3 is about an operation or domain move that a tag pointing at a missing place blocked;
+    // anything else still in use is said plainly (D12 M2).
+    const place = tax?.operations.some((x) => x.id === m![1]) || tax?.domains.some((x) => x.id === m![1]);
+    if (place)
+      return `Horus couldn't move every tag off ${named(m[1]) ?? "it"}: some point at a technique or domain that no longer exists. Retag those references, or delete them with their tags.`;
+    return `${named(m[1]) ?? "It"} is still in use. Move or remove its tags first.`;
+  }
   return "That change didn't save. Try again.";
 }
 
