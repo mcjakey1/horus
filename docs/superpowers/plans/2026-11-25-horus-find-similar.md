@@ -557,6 +557,8 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
 
 ### Task 7: "Looks similar" in the Reference view, the search box and the drop target
 
+**Status-bar state (design review of Task 6, 2026-11-27):** `#find-similar` in the status bar (index.html) becomes a live `text-btn`: "Find similar: off", "downloading", "indexing N of M", "paused", "ready" or "needs attention", with numbers in mono, driven from `onSimilarStatus` in `wireSimilar`. A click calls the Settings panel's `open("find-similar")`. Test: `status_bar_reflects_phase_and_opens_settings`.
+
 **Files:**
 - Create:
   - `app/src/similar-ui.ts`;
