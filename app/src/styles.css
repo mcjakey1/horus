@@ -111,10 +111,17 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .num { position: absolute; top: -13px; left: -13px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 500 13px var(--mono); color: var(--on, #fff); background: var(--c); box-shadow: 0 0 0 2px var(--card); }
 .box.is-whole .num { top: 2px; left: auto; right: -40px; }
 .lab-meta { position: absolute; left: 16px; bottom: 14px; margin: 0; padding: 5px 10px; font-size: 12px; background: var(--panel); color: var(--ink-2); letter-spacing: .02em; }
-.lab-meta span { white-space: nowrap; }
-/* one line, inside the 48px below the specimen: never over the plate */
-.lab-meta { max-width: calc(100% - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lab-meta span:not(:last-child)::after { content: " · "; white-space: pre; }
+.lab-meta span { white-space: nowrap; flex: none; }
+/* one line, inside the 48px below the specimen: never over the plate. Only the credit shrinks
+   (design review F2); the separator leads each later item, so the credit's ellipsis never eats it. */
+.lab-meta { max-width: calc(100% - 32px); display: flex; white-space: nowrap; overflow: hidden; }
+.lab-meta .lab-credit { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lab-meta span + span::before { content: " · "; white-space: pre; }
+/* Design review F1: the plate's actions in one row at the top left, clear of the readout. */
+/* The plate sits 48 px down and a number badge reaches 13 px above it, so the row ends by 31 px
+   (6 + 25): it never covers a badge. Buttons stay at least 24 px tall (F12). */
+.lab-actions { position: absolute; top: 6px; left: 16px; display: flex; gap: 6px; }
+.lab-actions > button { padding-top: 4px; padding-bottom: 4px; }
 .leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .leaders path { fill: none; stroke: var(--card-ink); stroke-width: 1; opacity: 0; transition: opacity .2s; } /* at rest: no lines over the art */
 .leaders path.is-hot { stroke: var(--hot); stroke-width: 1.75; opacity: 1; stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: draw .55s var(--ease) forwards; }
@@ -123,7 +130,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 /* margin */
 .margin { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); margin-left: 20px; }
 .m-tabs { display: flex; border-bottom: 1px solid var(--line); padding: 0 12px; }
-.m-tab { padding: 12px 10px 10px; color: var(--ink-2); font-weight: 500; box-shadow: inset 0 -2px 0 transparent; }
+.m-tab { white-space: nowrap; padding: 12px 10px 10px; color: var(--ink-2); font-weight: 500; box-shadow: inset 0 -2px 0 transparent; }
 .m-tab.is-on { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
 .pane { overflow: auto; padding: 14px 16px 24px; display: flex; flex-direction: column; gap: 12px; }
 .pane[hidden] { display: none; }
@@ -169,7 +176,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 2px 2px 8px; border: 1px solid var(--line-2); background: var(--shell); font: 500 15px/1.25 var(--serif); }
 .chip::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--ink-3)); }
-.chip-x { width: 22px; height: 22px; color: var(--ink-2); font: 400 15px var(--sans); }
+.chip-x { width: 24px; height: 24px; color: var(--ink-2); font: 400 15px var(--sans); }
 .chip-x:hover { color: var(--ink); }
 .filter-by { font-size: 12px; margin-top: 6px; }
 
@@ -198,9 +205,14 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
   .cell:nth-child(3) { border-left: 0; }
   .cell:nth-child(n+3) { border-top: 1px solid var(--line); }
   .work { grid-template-columns: 1fr; }
-  .lab { margin: 16px; height: auto; display: flex; flex-direction: column; align-items: center; padding: 28px 16px 16px; gap: 16px; }
+  .lab { margin: 16px; height: auto; display: flex; flex-direction: column; align-items: center; padding: 16px; gap: 16px; }
   .specimen { width: min(100%, calc(58vh * var(--ar, .75))); max-width: calc(100% - 40px); height: auto; max-height: none; }
   .lab-meta { position: static; align-self: stretch; display: flex; flex-wrap: wrap; max-width: none; }
+  .lab-actions { position: static; order: -1; align-self: stretch; flex-wrap: wrap; }
+  .lab-actions > button { padding-top: 5px; padding-bottom: 5px; }
+  .off-board { position: static; order: -1; align-self: flex-start; }
+  .lab-meta span + span::before { content: none; }
+  .lab-meta span:not(:last-child)::after { content: " · "; white-space: pre; }
   .box.is-whole .num { right: -31px; }
   .margin { margin: 0; border-left: 0; border-top: 1px solid var(--line); }
   .leaders { display: none; }
@@ -217,7 +229,8 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .text-btn { color: var(--ink); font-weight: 500; padding: 4px 2px; white-space: nowrap; text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
 .text-btn:hover:not(:disabled) { text-decoration-color: currentColor; }
 .text-btn:disabled { color: var(--ink-3); }
-.notice { position: fixed; right: 20px; bottom: 48px; z-index: 45; /* over the lightbox (40); dialogs raised over it use 45 too */ width: min(380px, calc(100vw - 40px)); max-height: 50vh; overflow: auto; display: grid; gap: 8px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); font-size: 13px; }
+/* D9: bottom left, over the plate or canvas, never over the inspector's controls on the right. */
+.notice { position: fixed; left: 20px; bottom: 48px; z-index: 45; /* over the lightbox (40); dialogs raised over it use 45 too */ width: min(380px, calc(100vw - 40px)); max-height: 50vh; overflow: auto; display: grid; gap: 8px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); font-size: 13px; }
 .notice[hidden] { display: none; }
 .notice p { margin: 0; }
 .notice ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; color: var(--ink-2); }
@@ -254,7 +267,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 /* technique picker (Plan 2 Task 8): docked in the margin, replacing the tabs while open */
 .margin:has(> .picker) > :not(.picker) { display: none; }
 .work:has(.picker) .leaders { display: none; }
-.tag-open { position: absolute; top: 14px; right: 16px; padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
+.tag-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
 .picker { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 24px; display: flex; flex-direction: column; gap: 12px; }
 .pk-ops { display: flex; flex-wrap: wrap; gap: 6px; }
 .pk-op { display: grid; grid-template-columns: 10px auto; column-gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); background: var(--panel); text-align: left; transition: border-color .2s var(--ease), background .2s var(--ease); }
@@ -290,7 +303,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .pk-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
 .pk-chips:empty { display: none; }
 .pk-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 8px; border: 1px solid var(--line-2); font: 500 14px/1.25 var(--serif); }
-.pk-chip button { width: 22px; height: 22px; color: var(--ink-2); }
+.pk-chip button { width: 24px; height: 24px; color: var(--ink-2); }
 
 /* The view shell (body[data-view]): only the Reference view has the record row; every other view
    uses the Inbox row template, and graph views dock the breadcrumb in their inspector (SPEC §5).
@@ -347,7 +360,7 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 }
 
 /* minimal lightbox (Plan 2 Task 10; Plan 4 replaces the chrome). Positions come from the CSSOM. */
-.lb-open { position: absolute; top: 14px; left: 16px; padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
+.lb-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
 .lightbox { position: fixed; inset: 0; z-index: 40; display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: minmax(0, 1fr) 36px; background: var(--shell); }
 .lb-stage { position: relative; margin: 20px 0 20px 20px; background: var(--card); overflow: hidden; cursor: crosshair; touch-action: none; user-select: none; }
 .lb-plate { position: absolute; box-shadow: 0 1px 2px rgb(0 0 0 / .25), 0 14px 34px rgb(0 0 0 / .22); }
@@ -359,7 +372,7 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .lb-pending { border: 2px dotted var(--card-ink); box-shadow: 0 0 0 1px rgb(0 0 0 / .45); } /* the region being tagged */
 .lb-draft[hidden], .lb-pending[hidden] { display: none; }
 .lb-side { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
-.lb-bar { grid-column: 1; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 20px; border-top: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+.lb-bar { position: relative; grid-column: 1; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 20px; border-top: 1px solid var(--line); background: var(--panel); font-size: 13px; }
 .lb-hint { margin: 0; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 760px) {
   .lightbox { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto; }
@@ -415,7 +428,7 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .insp-err:empty, .insp-msg:empty { display: none; }
 .insp-syns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .insp-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 8px; border: 1px solid var(--line); background: var(--shell); font-size: 13px; }
-.insp-x { padding: 2px 6px; border: 0; background: none; color: var(--ink-2); font-size: 15px; line-height: 1; }
+.insp-x { min-width: 24px; min-height: 24px; padding: 2px 6px; border: 0; background: none; color: var(--ink-2); font-size: 15px; line-height: 1; }
 .insp-x:disabled, .insp-act:disabled { color: var(--ink-3); cursor: not-allowed; }
 .insp-pair { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; align-items: center; }
 .insp-inks { display: flex; gap: 10px; }
@@ -450,7 +463,7 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 /* Plan 3 Task 7: the Galaxy, a canvas with the inspector docked on the right (DESIGN margin width) */
 .gx { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 0; }
 .gx-canvas { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
-.gx-insp { border-left: 1px solid var(--line); background: var(--panel); padding: 20px 22px; overflow: auto; min-height: 0; }
+.gx-insp { border-left: 1px solid var(--line); background: var(--panel); padding: 0; overflow: auto; min-height: 0; }
 .gx-title { margin: 0 0 12px; font: 500 22px/1.2 var(--serif); }
 .gx-open { padding: 6px 10px; border: 1px solid var(--line-2); border-radius: 2px; color: var(--ink); font-weight: 500; }
 .gx-open:hover { background: var(--shell); }
@@ -482,9 +495,13 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .lb-note[hidden] { display: none; }
 .lb-zoom, .lb-size { color: var(--ink-2); font: 500 12px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .lb-bar .lb-hint { flex: 1 1 auto; min-width: 0; } /* the zoom and size readouts keep their room */
+/* Design review F10: the rest of the keys, opened above the bar. */
+.lb-keys { flex: none; color: var(--ink-2); }
+.lb-keys summary { cursor: pointer; }
+.lb-keys p { position: absolute; right: 20px; bottom: calc(100% + 8px); width: max-content; max-width: min(360px, calc(100vw - 40px)); margin: 0; padding: 10px 12px; background: var(--panel); color: var(--ink); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); white-space: normal; z-index: 1; }
 
 /* ---------- Plan 4 Task 4: links you draw yourself ---------- */
-.link-handle { position: absolute; bottom: 14px; right: 16px; padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; cursor: grab; touch-action: none; }
+.link-handle { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; cursor: grab; touch-action: none; }
 .link-handle:active { cursor: grabbing; }
 /* The leader from the handle to the pointer while dragging: positioned through the CSSOM vars. */
 .link-leader { position: fixed; left: var(--x); top: var(--y); width: var(--len, 0); height: 0; border-top: 2px dashed var(--ink); transform-origin: 0 50%; transform: rotate(var(--angle, 0)); pointer-events: none; z-index: 50; }
@@ -525,13 +542,21 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .bd-rename { font: 400 22px/1.2 var(--serif); padding: 2px 6px; border: 1px solid var(--line-2); background: var(--shell); color: var(--ink); }
 .bd-actions { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .bd-actions [aria-pressed="true"] { text-decoration-color: currentColor; }
+/* Compare's Value view: pressed like .tree-all (design review). */
+.cmp-top [aria-pressed="true"] { text-decoration-color: currentColor; }
+.cmp-top [aria-pressed="true"]::after { content: " · on"; font: 500 11px var(--mono); color: var(--ink-2); }
+/* Design review F11: a fixed label, with the state as a suffix like .tree-all; Delete sits apart. */
+.bd-scope[aria-pressed="true"]::after { content: " · on"; font: 500 11px var(--mono); color: var(--ink-2); }
+.bd-actions .sep { align-self: center; width: 1px; height: 16px; background: var(--line-2); }
 .bd-msg { margin: 8px 0; min-height: 1.2em; font-size: 13px; color: var(--ink); }
 .bd-grid { flex: 1; min-height: 0; overflow: auto; padding-bottom: 24px; }
 .bd-tile { position: relative; width: 160px; height: 160px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2); touch-action: none; cursor: grab; }
 .bd-plate, .bd-plate img { display: block; width: 100%; height: 100%; }
 .bd-plate img { object-fit: contain; } /* the true aspect ratio, letterboxed on the N5 card */
 .bd-title { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 6px; background: var(--panel); font: 500 15px/1.25 var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bd-tools { position: absolute; top: 4px; right: 4px; display: none; gap: 6px; padding: 0 4px; background: var(--panel); }
+/* D2: wider than the tile, the tools ran out of its left edge and the grid clipped them on the
+   first column; they now wrap inside the tile. */
+.bd-tools { position: absolute; top: 4px; right: 4px; max-width: calc(100% - 8px); display: none; flex-wrap: wrap; justify-content: flex-end; gap: 2px 6px; padding: 0 4px; background: var(--panel); }
 .bd-tile:hover .bd-tools, .bd-tile:focus-within .bd-tools { display: flex; }
 .bd-ghost { position: fixed; left: var(--x); top: var(--y); width: 96px; height: 96px; transform: translate(-50%, -50%); opacity: .8; pointer-events: none; z-index: 50; background: var(--card); box-shadow: 0 0 0 1px var(--line-2); }
 .board-menu { padding: 14px 16px 16px; border-bottom: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; gap: 8px; }
@@ -544,7 +569,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .bm-create { padding: 5px 12px; border: 1px solid var(--line-2); color: var(--ink); font-weight: 500; }
 .bm-msg { margin: 0; min-height: 1.2em; font-size: 13px; color: var(--ink); }
 .bm-actions { display: flex; justify-content: space-between; }
-.boards-open { position: absolute; bottom: 14px; left: 16px; padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
+.boards-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
 .off-board { position: absolute; top: 50px; left: 16px; padding: 3px 8px; background: var(--ink); color: var(--panel); font: 500 12px var(--mono); }
 .off-board[hidden] { display: none; }
 .off-board-note { color: var(--ink-2); font-style: italic; }
@@ -564,7 +589,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .cmp-link[hidden] { display: none; }
 .cmp-score { margin: 0 auto 0 0; color: var(--ink-2); font: 500 12px var(--mono); font-variant-numeric: tabular-nums; }
 .cmp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 260px) minmax(0, 1fr); gap: 24px; padding-top: 16px; }
-.cmp-title { margin: 0 0 10px; font: 500 18px/1.3 var(--serif); }
+.cmp-title { margin: 0 0 10px; font: 500 18px/1.3 var(--serif); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } /* F7: two lines at most */
 .cmp-tile { position: relative; width: min(420px, 100%); height: auto; aspect-ratio: 1; background: var(--card); } /* the plate is placed in % of it (final review I5) */
 .cmp-plate { position: absolute; box-shadow: 0 1px 2px rgb(0 0 0 / .25), 0 14px 34px rgb(0 0 0 / .22); }
 .cmp-plate img { display: block; width: 100%; height: 100%; }

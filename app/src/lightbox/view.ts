@@ -51,7 +51,7 @@ export function openLightbox(
       <p class="lb-note" hidden>${PREVIEW_NOTE}</p>
     </div>
     <aside class="lb-side" aria-label="Tag the region"></aside>
-    <div class="lb-bar"><p class="lb-hint" id="lb-hint">Drag a box to tag a region · Enter, arrows (Shift resizes), Enter · wheel or + − 0 1 zooms · Space+drag pans · o regions · v value view · Esc closes</p><span class="lb-zoom"></span><span class="lb-size">${ref.width} × ${ref.height}</span><button type="button" class="text-btn lb-close">Close</button></div>`;
+    <div class="lb-bar"><p class="lb-hint" id="lb-hint">Drag to tag a region · v value · Esc closes</p><details class="lb-keys"><summary>Keys</summary><p>Enter, then the arrows (Shift resizes), then Enter tags a region · wheel or + − 0 1 zooms · Space+drag pans · o shows or hides the regions · v value view · Esc closes</p></details><span class="lb-zoom"></span><span class="lb-size">${ref.width} × ${ref.height}</span><button type="button" class="text-btn lb-close">Close</button></div>`;
   const q = <T extends HTMLElement = HTMLElement>(s: string) => el.querySelector<T>(s)!;
   const stage = q(".lb-stage"), plateEl = q(".lb-plate"), img = q<HTMLImageElement>("img");
   const boxes = q(".lb-boxes"), draftEl = q(".lb-draft"), pendingEl = q(".lb-pending");

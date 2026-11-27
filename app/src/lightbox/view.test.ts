@@ -77,6 +77,14 @@ describe("openLightbox", () => {
     expect($<HTMLImageElement>(".lb-plate img").draggable).toBe(false); // no native image drag
   });
 
+  it("a short hint, with the other keys behind a Keys disclosure (design review F10)", () => {
+    expect($(".lb-hint").textContent).toBe("Drag to tag a region · v value · Esc closes");
+    const keys = $(".lb-keys");
+    expect(keys.tagName).toBe("DETAILS");
+    expect(keys.querySelector("summary")!.textContent).toBe("Keys");
+    expect(keys.textContent).toContain("Space+drag pans");
+  });
+
   it("drag_opens_picker_with_region", () => {
     pointer("pointerdown", at(0.1, 0.1));
     pointer("pointermove", at(0.4, 0.5));

@@ -28,6 +28,8 @@ export type InspectorOpts = {
   notice?(html: string): void;
   /** Task 10, additive: after Enter saves a field, focus goes back to the canvas (C19). */
   focusCanvas?(): void;
+  /** The Radial's centred operation: the crumb's operation while nothing is selected (design review F6). */
+  centreOp?: string;
 };
 
 /** Mirrors commands.rs DOMAIN_ICONS (C8); shown as their descriptions until Plan 6 draws them. */
@@ -61,7 +63,8 @@ const TILE = 64;
 const place = (el: HTMLElement, b: Box) =>
   Object.assign(el.style, { left: `${b.left}px`, top: `${b.top}px`, width: `${b.width}px`, height: `${b.height}px` });
 
-function crumbHTML(cells: (string | undefined)[]): string {
+/** The four-cell path (Principle 4); the Galaxy shows it too (design review F4). */
+export function crumbHTML(cells: (string | undefined)[]): string {
   const keys = [["op", "01 Operation"], ["domain", "02 Domain"], ["tech", "03 Technique"], ["ref", "04 Reference"]];
   return `<div class="record insp-crumb">${keys
     .map(([level, k], i) => `<div class="cell" data-level="${level}"><span class="k">${k}</span><span class="v${i === 1 ? "" : " serif"}">${esc(cells[i] ?? "")}</span></div>`)
@@ -119,7 +122,7 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
   // The path, to the depth of the selection.
   const branchId = node?.kind === "branch" ? node.branchId : node?.kind === "tech" ? node.parents[0] : node?.kind === "ref" ? node.via.branchId : undefined;
   const br = branchId ? N.branch(branchId) : undefined;
-  const opId = node?.kind === "op" ? node.opId : br?.operationId;
+  const opId = node?.kind === "op" ? node.opId : (br?.operationId ?? (sel ? undefined : opts.centreOp));
   const refNode = node?.kind === "ref" ? node : undefined;
   const crumb = crumbHTML([
     opId ? opLabel(tax, opId).name : undefined,

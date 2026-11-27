@@ -2,7 +2,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import html from "../index.html?raw";
 import type { Api, Change, ImportResult } from "./api";
-import { integrityHTML, mountImport, summaryHTML } from "./importer";
+import { clearOnUndo, integrityHTML, markImport, mountImport, noticeIn, summaryHTML } from "./importer";
+import { createStore } from "./store";
 
 const text = (h: string) => {
   const d = document.createElement("div");
@@ -41,6 +42,8 @@ describe("importer", () => {
     } as unknown as Api;
     const onChange = vi.fn();
     mountImport(document.body, api, { libraryRoot: () => "C:\\lib", onChange });
+    // Design review F9: "Add", as in the Inbox.
+    expect([...document.querySelectorAll("[data-import]")].map((b) => b.textContent)).toEqual(["Add images…", "Add folder…"]);
     document.querySelector<HTMLButtonElement>('[data-import="files"]')!.click();
     await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith(change));
     expect(api.importPaths).toHaveBeenCalledWith(["C:/in/x.jpg"]);
@@ -77,6 +80,32 @@ describe("importer", () => {
   });
 });
 
+describe("an import notice after an undo (D9)", () => {
+  beforeEach(() => {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+  });
+  const tax = { operations: [], domains: [], branches: [], techniques: [], branchTechniques: [] };
+  const lib = { root: "C:\lib", references: [], links: [], boards: [], warning: null, taxonomyReadOnly: false };
+  const undo = (removed: string[]) => ({ references: [], removed, canUndo: false, canRedo: true });
+
+  it("goes when an undo removes what it reported, and stays for anything else", () => {
+    const store = createStore(lib, tax);
+    const off = clearOnUndo(document, store);
+    const notice = document.querySelector<HTMLElement>("#import-notice")!;
+    noticeIn(document)("<p>Added 2 to the Inbox</p>");
+    markImport(document, ["a", "b"]);
+    store.apply(undo(["z"])); // something else
+    expect(notice.hidden).toBe(false);
+    store.apply(undo(["b"]));
+    expect(notice.hidden).toBe(true);
+    // A Find similar failure is not an import's: an undo never clears it.
+    noticeIn(document)("<p>Find similar couldn't start.</p><button data-open-settings>Open Settings</button>");
+    store.apply(undo(["a"]));
+    expect(notice.hidden).toBe(false);
+    off();
+  });
+});
+
 describe("integrityHTML (Plan 6 Task 2)", () => {
   const base = { sweptTmp: [], missingOriginals: [], missingThumbs: [], orphans: [], taxonomyBackupInvalid: false };
   it("says nothing for housekeeping only", () => {
@@ -85,12 +114,14 @@ describe("integrityHTML (Plan 6 Task 2)", () => {
   });
   it("counts in singular and plural, with one action each", () => {
     const one = integrityHTML({ ...base, orphans: ["o"], missingOriginals: ["m"] });
-    expect(one).toContain("Recovered 1 image to the Inbox.");
+    expect(one).toContain("1 image file isn't in the library. ");
+    expect(one).toContain(">Add it to the Inbox<");
     expect(one).toContain("1 reference is missing its image file.");
     expect(one).toContain("data-recover");
     expect(one).toContain("data-show-missing");
     const many = integrityHTML({ ...base, orphans: ["o", "p"], missingOriginals: ["m", "n"], taxonomyBackupInvalid: true });
-    expect(many).toContain("Recovered 2 images to the Inbox.");
+    expect(many).toContain("2 image files aren't in the library. ");
+    expect(many).toContain(">Add them to the Inbox<");
     expect(many).toContain("2 references are missing their image files.");
     expect(many).toContain("taxonomy.bak.json");
   });

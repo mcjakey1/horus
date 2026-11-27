@@ -38,6 +38,8 @@ pub enum IdxEvent {
     Progress {
         done: usize,
         total: usize,
+        /// Of `done`, the ones put in the store: a failed image is done but not indexed (3b (b)).
+        embedded: usize,
     },
     Paused,
     /// (hash, reason) for every thumbnail that failed to load or encode. A worker panic
@@ -56,7 +58,7 @@ pub struct Indexer {
 impl Indexer {
     pub fn start(
         job: IndexJob,
-        embedder: Arc<Mutex<Box<dyn Embedder>>>,
+        embedder: Arc<dyn Embedder>,
         store: Arc<Mutex<EmbStore>>,
         still_current: Box<dyn Fn() -> bool + Send>,
         on: Box<dyn Fn(IdxEvent) + Send>,
@@ -105,7 +107,7 @@ impl Indexer {
 }
 
 struct Worker {
-    embedder: Arc<Mutex<Box<dyn Embedder>>>,
+    embedder: Arc<dyn Embedder>,
     store: Arc<Mutex<EmbStore>>,
     still_current: Box<dyn Fn() -> bool + Send>,
     on: Box<dyn Fn(IdxEvent) + Send>,
@@ -149,7 +151,11 @@ impl Worker {
                 }
                 Err(e) => failed.push((hash.clone(), e)),
             }
-            (self.on)(IdxEvent::Progress { done: n + 1, total });
+            (self.on)(IdxEvent::Progress {
+                done: n + 1,
+                total,
+                embedded: n + 1 - failed.len(),
+            });
         }
         if self.save(&job.root, &mut dirty) {
             (self.on)(IdxEvent::Finished { failed });
@@ -175,12 +181,12 @@ impl Worker {
         }
     }
 
-    /// One thumbnail, holding the encoder's lock for this image only.
+    /// One thumbnail, holding the vision session's lock for this image only.
     fn embed(&self, thumb: &Path) -> Result<Vec<f32>, String> {
         let rgb = image::open(thumb)
             .map_err(|e| format!("Couldn't read the thumbnail: {e}"))?
             .to_rgb8();
-        lock(&self.embedder).image(&rgb)
+        self.embedder.image(&rgb)
     }
 
     /// Encodes under the store's lock and writes outside it, only when something was put.
@@ -236,7 +242,7 @@ mod tests {
     }
 
     impl Embedder for Fake {
-        fn image(&mut self, rgb: &image::RgbImage) -> Result<Vec<f32>, String> {
+        fn image(&self, rgb: &image::RgbImage) -> Result<Vec<f32>, String> {
             let i = self.calls.fetch_add(1, Ordering::SeqCst);
             if Some(i) == self.panic_at {
                 panic!("fake encoder bug");
@@ -253,7 +259,7 @@ mod tests {
             }
             Ok(vec_for(red as usize))
         }
-        fn text(&mut self, _q: &str) -> Result<Vec<f32>, String> {
+        fn text(&self, _q: &str) -> Result<Vec<f32>, String> {
             Ok(vec_for(0))
         }
         fn dim(&self) -> usize {
@@ -266,7 +272,7 @@ mod tests {
         items: Vec<(String, PathBuf)>,
         calls: Arc<AtomicUsize>,
         release: Arc<AtomicBool>,
-        embedder: Arc<Mutex<Box<dyn Embedder>>>,
+        embedder: Arc<dyn Embedder>,
         store: Arc<Mutex<EmbStore>>,
         generation: Arc<AtomicU64>,
     }
@@ -307,7 +313,7 @@ mod tests {
             items,
             calls,
             release,
-            embedder: Arc::new(Mutex::new(Box::new(fake))),
+            embedder: Arc::new(fake),
             store: Arc::new(Mutex::new(store)),
             generation: Arc::new(AtomicU64::new(0)),
             dir,
@@ -470,7 +476,7 @@ mod tests {
         r.wait_calls(1);
         let t = Instant::now();
         let e = r.embedder.clone();
-        let v = std::thread::spawn(move || e.lock().unwrap().text("x").unwrap())
+        let v = std::thread::spawn(move || e.text("x").unwrap())
             .join()
             .unwrap();
         assert_eq!(v.len(), DIM);
@@ -537,6 +543,28 @@ mod tests {
     }
 
     #[test]
+    fn progress_counts_only_what_was_embedded() {
+        // Plan 6 3b (b): a failed image is done but not indexed, so `indexed` never overstates.
+        let r = rig(5, 0, Some(1));
+        let (ix, rx) = r.start();
+        let (seen, _) = until_finished(&rx);
+        ix.stop();
+        let last = seen
+            .iter()
+            .filter_map(|e| match e {
+                IdxEvent::Progress {
+                    done,
+                    total,
+                    embedded,
+                } => Some((*done, *total, *embedded)),
+                _ => None,
+            })
+            .next_back()
+            .unwrap();
+        assert_eq!(last, (5, 5, 4));
+    }
+
+    #[test]
     fn progress_monotonic() {
         let r = rig(2 * BATCH + 3, 0, None);
         let (ix, rx) = r.start();
@@ -545,7 +573,7 @@ mod tests {
         let progress: Vec<(usize, usize)> = seen
             .iter()
             .filter_map(|e| match e {
-                IdxEvent::Progress { done, total } => Some((*done, *total)),
+                IdxEvent::Progress { done, total, .. } => Some((*done, *total)),
                 _ => None,
             })
             .collect();

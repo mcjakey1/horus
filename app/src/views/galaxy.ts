@@ -8,7 +8,9 @@ import type { FromWorker, ToWorker, XY } from "../graph/force";
 import { mountCanvasOrFallback, type Scene, type SceneEdge, type SceneNode } from "../graph/frame";
 import { createScene } from "../graph/scene";
 import { isTextEntry } from "../keys";
+import { opLabel } from "../ops";
 import type { ViewHandle } from "../views";
+import { crumbHTML } from "./inspector";
 
 const SEED = 7;
 const ARROWS: Record<string, XY> = { ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 } };
@@ -33,10 +35,13 @@ export function mountGalaxy(
 ): ViewHandle {
   host.innerHTML = `<div class="gx">
     <div class="gx-canvas" data-label="Galaxy of references"></div>
-    <aside class="gx-insp" aria-live="polite"></aside>
+    <aside class="gx-insp"></aside>
+    <p class="sr-only" aria-live="polite" data-gx-live></p>
   </div>`;
   const canvasEl = host.querySelector<HTMLElement>(".gx-canvas")!;
   const insp = host.querySelector<HTMLElement>(".gx-insp")!;
+  /** Says the selected reference: the inspector re-renders, so its own nodes can't be the live region. */
+  const live = host.querySelector<HTMLElement>("[data-gx-live]")!;
 
   let scene: Scene | null = null;
   let destroyed = false;
@@ -101,29 +106,39 @@ export function mountGalaxy(
   function renderInsp() {
     const s = data.get();
     if (!s.refs.size) {
-      insp.innerHTML = `<p class="gx-note">No references yet.</p>`;
+      insp.innerHTML = `<div class="insp-body"><p class="gx-note">No references yet.</p></div>`;
       return;
     }
     const sel = selected ? s.refs.get(selected) : undefined;
     if (!sel) {
-      insp.innerHTML = edgesFetched && !byRef.size ? `<p class="gx-note">Tag references to see them cluster.</p>` : "";
+      insp.innerHTML = edgesFetched && !byRef.size ? `<div class="insp-body"><p class="gx-note">Tag references to see them cluster.</p></div>` : "";
       return;
     }
     const techName = (id: string) => s.tax.techniques.find((t) => t.id === id)?.name ?? id;
     // Only neighbours inside the board scope are listed (Plan 4 T7 M10).
     const rows = (related?.id === sel.id ? related.rows : []).filter((r) => s.inScope(r.id));
-    insp.innerHTML = `<h2 class="gx-title">${esc(sel.title)}</h2>
+    // Design review F4: the path of the selection's first tag, as in the Tree and the Radial.
+    const t = sel.tags.find((x) => x.techniqueId) ?? sel.tags[0];
+    const br = t?.branchId ? s.tax.branches.find((b) => b.id === t.branchId) : undefined;
+    const crumb = crumbHTML([
+      t ? opLabel(s.tax, t.operationId).name : undefined,
+      br ? s.tax.domains.find((d) => d.id === br.domainId)?.name : undefined,
+      t?.techniqueId ? techName(t.techniqueId) : undefined,
+      sel.title,
+    ]);
+    insp.innerHTML = `${crumb}<div class="insp-body"><h2 class="gx-title">${esc(sel.title)}</h2>
       <button class="gx-open" data-open-ref>Open in Reference view</button>
       ${rows.length ? `<ol class="gx-neighbours">${rows.map((r) => `<li><button data-ref="${esc(r.id)}">
         <span class="gx-name">${esc(s.refs.get(r.id)?.title ?? r.id)}</span>
         ${r.sharedTechniques.length ? `<span class="gx-shares">shares ${r.sharedTechniques.map((t) => `<i>${esc(techName(t))}</i>`).join(", ")}</span>` : ""}
         <span class="mono">${r.score.toFixed(2)}</span>
-      </button></li>`).join("")}</ol>` : ""}`;
+      </button></li>`).join("")}</ol>` : ""}</div>`;
   }
 
   async function select(id: string | null) {
     if (id && !data.get().inScope(id)) return void scene?.select(selected); // out of the board scope: keep what was selected
     selected = id;
+    live.textContent = id ? (data.get().refs.get(id)?.title ?? "") : "";
     related = null;
     scene?.select(id);
     renderInsp();

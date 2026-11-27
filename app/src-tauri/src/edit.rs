@@ -238,7 +238,8 @@ pub struct Applied {
 pub enum EditError {
     #[error("unknown reference: {0}")]
     UnknownReference(String),
-    #[error("unknown tag: {0}")]
+    // Plan 6 D6: the artist reads this; the id stays in the value for logs.
+    #[error("That tag is no longer on this reference. Nothing changed.")]
     UnknownTag(String),
     #[error("invalid tag: {0}")]
     InvalidTag(String),
@@ -1031,6 +1032,16 @@ mod tests {
     use crate::model::{Board, LibraryData, Link, Reference, Region, Tag};
     use crate::taxonomy::{BranchTechnique, Taxonomy, Technique};
     use std::path::PathBuf;
+
+    #[test]
+    fn unknown_tag_reads_as_artist_copy() {
+        // Plan 6 D6: the artist sees this; no internal word or tag id.
+        let s = EditError::UnknownTag("t-123".into()).to_string();
+        assert_eq!(
+            s,
+            "That tag is no longer on this reference. Nothing changed."
+        );
+    }
 
     fn seed() -> Taxonomy {
         Taxonomy::load(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/taxonomy.json"))

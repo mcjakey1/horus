@@ -68,14 +68,19 @@ pub struct Technique {
     pub extra: Map<String, Value>,
 }
 
+fn null_is_empty<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    Option::<String>::deserialize(d).map(Option::unwrap_or_default)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BranchTechnique {
     pub branch_id: String,
     pub technique_id: String,
-    #[serde(default)]
+    /// Missing and `null` both read as "" (a hand-edited file; Plan 6 C8).
+    #[serde(default, deserialize_with = "null_is_empty")]
     pub source: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_is_empty")]
     pub rationale: String,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
@@ -698,6 +703,69 @@ mod tests {
         t.branch_techniques.push(link);
         let errs = t.validate().unwrap_err();
         assert!(errs.iter().any(|e| e.contains("nope.missing")), "{errs:?}");
+    }
+
+    #[test]
+    fn validate_rejects_each_broken_rule() {
+        // Plan 6 C8: one mutation per rule, each named in the errors (table-driven).
+        type Mutation = fn(&mut Taxonomy);
+        let cases: [(&str, Mutation); 10] = [
+            ("duplicate operation", |t| {
+                t.operations.push(t.operations[0].clone())
+            }),
+            ("duplicate domain", |t| t.domains.push(t.domains[0].clone())),
+            ("duplicate branch", |t| {
+                let mut b = t.branches[0].clone();
+                b.domain_id = t.domains[1].id.clone(); // a new pair, so only the id repeats
+                t.branches.push(b);
+            }),
+            ("duplicate technique", |t| {
+                t.techniques.push(t.techniques[0].clone())
+            }),
+            ("duplicate branch pair", |t| {
+                let mut b = t.branches[0].clone();
+                b.id = "pair.copy".into();
+                t.branches.push(b);
+            }),
+            ("duplicate link", |t| {
+                t.branch_techniques.push(t.branch_techniques[0].clone())
+            }),
+            ("unknown operationId", |t| {
+                t.branches[0].operation_id = "gone".into()
+            }),
+            ("unknown domainId", |t| {
+                t.branches[0].domain_id = "gone".into()
+            }),
+            ("unknown techniqueId", |t| {
+                t.branch_techniques[0].technique_id = "gone".into()
+            }),
+            ("technique without a branch", |t| {
+                let id = t.techniques[0].id.clone();
+                t.branch_techniques.retain(|l| l.technique_id != id);
+            }),
+        ];
+        for (want, mutate) in cases {
+            let mut t = seed();
+            mutate(&mut t);
+            let errs = t.validate().expect_err(want);
+            assert!(errs.iter().any(|e| e.contains(want)), "{want}: {errs:?}");
+        }
+    }
+
+    #[test]
+    fn a_link_missing_source_or_rationale_loads_as_empty() {
+        // Plan 6 C8: a missing optional key and an empty one read the same.
+        for json in [
+            r#"{"branchId": "b", "techniqueId": "t"}"#,
+            r#"{"branchId": "b", "techniqueId": "t", "source": null, "rationale": null}"#,
+        ] {
+            let l: BranchTechnique = serde_json::from_str(json).unwrap();
+            assert_eq!(
+                (l.source.as_str(), l.rationale.as_str()),
+                ("", ""),
+                "{json}"
+            );
+        }
     }
 
     #[test]

@@ -339,7 +339,7 @@ export const tauriApi: Api = {
     return typeof p === "string" ? p : null;
   },
   pickImages: async () =>
-    (await open({ multiple: true, title: "Import images", filters: [{ name: "Images", extensions: IMAGE_EXTS }] })) ?? [],
+    (await open({ multiple: true, title: "Add images", filters: [{ name: "Images", extensions: IMAGE_EXTS }] })) ?? [],
   revealFolder: (path) => revealItemInDir(path),
   assetUrl: (path) => convertFileSrc(path),
   undo: () => invoke("undo"),

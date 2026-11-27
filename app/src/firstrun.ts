@@ -30,6 +30,8 @@ const reducedMotion = () =>
   typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export { FIND_SIMILAR_COPY };
+/** N1: first run's "Not now" could not be saved; Settings can set it again. */
+const SAVE_CHOICE_FAILED = "Horus couldn't save that choice. You can set Find similar in Settings.";
 
 /** `win` is the webview, for drag-and-drop; tests (jsdom has no Tauri window) leave it out. */
 export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
@@ -322,7 +324,11 @@ export function firstRun(
           // "on": similarEnable saves it before it starts the download.
           if (S.findSimilar === "on") enableInBackground(root, api);
           else if (S.findSimilar === "off") {
-            api.setSettings({ findSimilar: "off" }).catch((err) => noticeIn(root)(`<p>Could not save that choice: ${esc(String(err))}</p>`));
+            // N1: artist copy on screen; the raw error text goes to the console only.
+            api.setSettings({ findSimilar: "off" }).catch((err) => {
+              console.error("Could not save the Find similar choice:", err);
+              noticeIn(root)(`<p>${SAVE_CHOICE_FAILED}</p>`);
+            });
           }
           resolve(lib);
           return;

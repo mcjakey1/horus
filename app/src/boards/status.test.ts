@@ -41,6 +41,16 @@ describe("mountScopeStatus", () => {
     expect(el.textContent).toBe("Board removed — showing all references");
   });
 
+  it("an undo that brings the board back clears the note (D3)", () => {
+    const store = storeWith(ten, [harbour]);
+    mountScopeStatus(el, store);
+    store.setScope("h");
+    store.apply(change({ boards: [] }));
+    expect(el.textContent).toBe("Board removed — showing all references");
+    store.apply(change({ boards: [harbour] })); // the undo of the delete
+    expect(el.hidden).toBe(true);
+  });
+
   it("counts only members still in the library, and follows a rename", () => {
     const store = storeWith(ten, [{ ...harbour, referenceIds: [...harbour.referenceIds, "gone"] }]);
     mountScopeStatus(el, store);

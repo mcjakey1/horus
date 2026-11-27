@@ -57,7 +57,7 @@ describe("Compare", () => {
     expect(li.style.getPropertyValue("--t")).toBe("var(--x-rose-text)");
     expect(li.textContent).toBe("Beat › Tech t2");
     expect([...document.querySelectorAll('.cmp-side[data-side="a"] .cmp-only li')].map((l) => l.textContent)).toEqual(["Beat › Tech t1"]);
-    expect($(".cmp-branches").textContent).toBe(""); // its branch has a shared technique
+    expect(document.querySelector(".cmp-branches")).toBeNull(); // its branch has a shared technique: no empty list (F7)
     expect($(".cmp-score").textContent).toBe("0.42 · related by technique");
     // hovering a technique outlines its region on the image that carries it, in its ink
     li.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
@@ -65,6 +65,42 @@ describe("Compare", () => {
     expect(out.hidden).toBe(false);
     expect(out.style.getPropertyValue("--c")).toBe("var(--x-rose)");
     expect($('.cmp-side[data-side="b"] .cmp-out').hidden).toBe(true); // b's tag is whole-image
+  });
+
+  it("value view, swap and lightbox are buttons too (design review F3)", async () => {
+    open("a", "b");
+    await tick();
+    const btn = (s: string) => $<HTMLButtonElement>(`.cmp-top ${s}`);
+    expect(btn(".cmp-value").getAttribute("aria-pressed")).toBe("false");
+    btn(".cmp-value").click();
+    expect(btn(".cmp-value").getAttribute("aria-pressed")).toBe("true");
+    expect([...document.querySelectorAll(".cmp-tile")].every((t) => t.classList.contains("is-value"))).toBe(true);
+    btn(".cmp-swap").click();
+    expect($('.cmp-side[data-side="a"] .cmp-title').textContent).toBe("Plate b");
+    expect(btn(".cmp-value").getAttribute("aria-pressed")).toBe("true"); // a swap keeps the value view
+    // One Lightbox button under each title, for that side (design review ruling).
+    expect(document.querySelector(".cmp-top .cmp-lb")).toBeNull();
+    const lb = [...document.querySelectorAll<HTMLButtonElement>(".cmp-side .cmp-lb")];
+    expect(lb.map((b) => [b.dataset.lb, b.getAttribute("aria-label")])).toEqual([["a", "Lightbox: Plate b"], ["b", "Lightbox: Plate a"]]);
+  });
+
+  it("Swap keeps keyboard focus on Swap after the re-render (design review)", async () => {
+    open("a", "b");
+    await tick();
+    $<HTMLButtonElement>(".cmp-swap").focus();
+    $<HTMLButtonElement>(".cmp-swap").click();
+    expect(document.activeElement).toBe($(".cmp-swap"));
+  });
+
+  it("headings over empty lists stay out (design review F7)", async () => {
+    vi.mocked(api.scorePair).mockResolvedValue(scored(0));
+    store.apply({ references: [ref("b", [tag("b1", "t1")])], removed: [], canUndo: true, canRedo: false });
+    open("a", "b");
+    await tick();
+    const heads = (side: string) => [...document.querySelectorAll(`.cmp-side[data-side="${side}"] .cmp-h`)].map((h) => h.textContent);
+    expect(heads("a")).toEqual(["Only here"]); // a has t2 on its own
+    expect(heads("b")).toEqual([]); // b's only technique is shared
+    expect([...document.querySelectorAll(".cmp-mid .cmp-h")].map((h) => h.textContent)).toEqual(["Shared"]);
   });
 
   it("x swaps the sides and v toggles the value view on both plates", async () => {
@@ -106,7 +142,7 @@ describe("Compare", () => {
     const A2 = { ...A, tags: [...A.tags, tag("a3", "t3")] };
     store.apply({ references: [A2], removed: [], canUndo: true, canRedo: false });
     expect(shared()).toEqual(["t2", "t3"]); // the local intersection while the reply is out: nothing vanishes
-    expect($('.cmp-side[data-side="b"] .cmp-only').textContent).toBe("");
+    expect(document.querySelector('.cmp-side[data-side="b"] .cmp-only')).toBeNull(); // nothing only on b now (F7)
     store.apply({ references: [A2], removed: [], canUndo: true, canRedo: false }); // a second change
     await tick();
     expect(api.scorePair).toHaveBeenCalledTimes(3);
@@ -122,16 +158,16 @@ describe("Compare", () => {
     await tick();
     const dlg = $(".compare");
     expect([dlg.getAttribute("role"), dlg.getAttribute("aria-modal")]).toEqual(["dialog", "true"]);
-    const close = $<HTMLButtonElement>(".cmp-close");
-    const first = dlg.querySelector<HTMLElement>("button")!;
-    expect(first).not.toBe(close);
+    const buttons = [...dlg.querySelectorAll<HTMLElement>("button")];
+    const [first, last] = [buttons[0], buttons[buttons.length - 1]]; // the last: side b's Lightbox
+    expect(first).not.toBe(last);
     first.focus();
     const back = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true });
     first.dispatchEvent(back);
     expect(back.defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(close); // wrapped to the last control
+    expect(document.activeElement).toBe(last); // wrapped to the last control
     const on = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
-    close.dispatchEvent(on);
+    last.dispatchEvent(on);
     expect(on.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(first); // and round to the first
   });

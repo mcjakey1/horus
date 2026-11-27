@@ -81,9 +81,10 @@ export function mountCompare(
     const score = scored === null ? "" : scored.score > 0 ? `${scored.score.toFixed(2)} · related by technique` : "not related by technique";
     const side = (key: "a" | "b", r: Reference, only: string[], partial: string[]) => `
       <section class="cmp-side" data-side="${key}">
-        <h2 class="cmp-title">${esc(r.title)}</h2>
+        <h2 class="cmp-title" title="${esc(r.title)}">${esc(r.title)}</h2>
+        <button type="button" class="text-btn cmp-lb" data-lb="${key}" aria-label="Lightbox: ${esc(r.title)}">Lightbox</button>
         <div class="cmp-tile${value ? " is-value" : ""}"><span class="cmp-plate"><img alt="${esc(r.title)}" src="${esc(api.assetUrl(r.thumb1024))}" draggable="false"></span><span class="cmp-out" hidden></span></div>
-        <h3 class="cmp-h">Only here</h3><ul class="cmp-only">${only.map(techItem).join("")}</ul>
+        ${only.length ? `<h3 class="cmp-h">Only here</h3><ul class="cmp-only">${only.map(techItem).join("")}</ul>` : ""}
         ${partial.length ? `<h3 class="cmp-h">Operation only</h3><ul class="cmp-partial">${partial.map(opItem).join("")}</ul>` : ""}
       </section>`;
     // Only the rewritten part counts: focus in the docked link editor stays where it is (I3).
@@ -93,6 +94,8 @@ export function mountCompare(
       <header class="cmp-top">
         <p class="cmp-link"${link ? "" : " hidden"}>${link ? `Linked by you: “${esc(link.why)}”` : ""}</p>
         <p class="cmp-score">${score}</p>
+        <button type="button" class="text-btn cmp-value" aria-pressed="${value}" aria-keyshortcuts="v">Value view</button>
+        <button type="button" class="text-btn cmp-swap" aria-keyshortcuts="x">Swap</button>
         <button type="button" class="text-btn cmp-link-btn">${link ? "Edit link" : "Link these two"}</button>
         <button type="button" class="text-btn cmp-close">Close</button>
       </header>
@@ -100,7 +103,7 @@ export function mountCompare(
         ${side("a", ra, s.onlyA, s.partialA)}
         <section class="cmp-mid">
           <h3 class="cmp-h">Shared</h3><ul class="cmp-shared">${s.shared.map(techItem).join("")}</ul>
-          <h3 class="cmp-h">Same operation × domain</h3><ul class="cmp-branches">${branches.map(branchItem).join("")}</ul>
+          ${branches.length ? `<h3 class="cmp-h">Same operation × domain</h3><ul class="cmp-branches">${branches.map(branchItem).join("")}</ul>` : ""}
         </section>
         ${side("b", rb, s.onlyB, s.partialB)}
       </div>`;
@@ -147,12 +150,15 @@ export function mountCompare(
   /** The score is symmetric, so a swap asks nothing. The Reference view's focus does not follow a
    * swap: Compare is a modal over it, and closing leaves the view as it was (review I2). */
   function swap() {
+    const had = !!document.activeElement?.closest(".cmp-swap");
     [A, B] = [B, A];
     render();
+    if (had) body.querySelector<HTMLElement>(".cmp-swap")?.focus(); // the re-render dropped it (design review)
   }
-  function openLb() {
+  /** `side`: a side's own Lightbox button; the L key uses the side under the pointer. */
+  function openLb(side: "a" | "b" = pointerSide) {
     if (lightbox || document.querySelector(".lightbox")) return;
-    lightbox = openLightboxWithPicker(api, store, pointerSide === "a" ? A : B, {
+    lightbox = openLightboxWithPicker(api, store, side === "a" ? A : B, {
       onClose: () => {
         lightbox = null;
         if (!closed) el.focus();
@@ -187,6 +193,11 @@ export function mountCompare(
       (e.shiftKey ? last : first).focus();
     }
   }
+  function toggleValue() {
+    value = !value;
+    body.querySelectorAll(".cmp-tile").forEach((t) => t.classList.toggle("is-value", value));
+    body.querySelector(".cmp-value")?.setAttribute("aria-pressed", String(value));
+  }
   el.addEventListener("keydown", (e) => {
     if (e.isComposing || lightbox) return; // the lightbox over it owns the keys
     if (e.key === "Tab") return trap(e);
@@ -199,16 +210,18 @@ export function mountCompare(
       e.stopPropagation();
       return exit();
     }
-    if (e.key === "v") {
-      value = !value;
-      body.querySelectorAll(".cmp-tile").forEach((t) => t.classList.toggle("is-value", value));
-    } else if (e.key === "x") swap();
+    if (e.key === "v") toggleValue();
+    else if (e.key === "x") swap();
     else if (e.key === "l" || e.key === "L") openLb();
   }, { signal });
   el.addEventListener("click", (e) => {
     const t = e.target as Element;
     if (t.closest(".cmp-close")) exit();
     else if (t.closest(".cmp-link-btn")) openLinkEditor();
+    // Design review F3: the v, x and L keys as buttons too.
+    else if (t.closest(".cmp-value")) toggleValue();
+    else if (t.closest(".cmp-swap")) swap();
+    else if (t.closest(".cmp-lb")) openLb(t.closest<HTMLElement>(".cmp-lb")!.dataset.lb === "b" ? "b" : "a");
   }, { signal });
   el.addEventListener("mouseover", (e) => {
     const side = (e.target as Element).closest<HTMLElement>(".cmp-side")?.dataset.side;

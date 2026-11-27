@@ -413,6 +413,17 @@ describe("technique picker", () => {
     expect(hi(el)).toBeNull();
   });
 
+  it("its Esc stays in the picker, so a lightbox around it stays open (D1)", () => {
+    const { el } = mount();
+    const host = el.parentElement!;
+    const outside = vi.fn();
+    host.addEventListener("keydown", outside);
+    key(search(el), "Escape"); // empty search: the picker closes itself
+    expect(el.isConnected).toBe(false);
+    expect(outside).not.toHaveBeenCalled();
+    host.removeEventListener("keydown", outside);
+  });
+
   it("esc_clears_the_search_then_closes", () => {
     const { el } = mount();
     key(row(el), "1");

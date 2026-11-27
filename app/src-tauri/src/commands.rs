@@ -382,7 +382,11 @@ pub(crate) fn library_error(e: LibraryError) -> String {
         LibraryError::Corrupt { .. } => {
             "The library file is damaged and its backup could not be read either.".into()
         }
-        LibraryError::Io(e) => format!("Could not read or write the library: {e}"),
+        // Plan 6 D13: a plain hint for the artist; the OS text goes to stderr only.
+        LibraryError::Io(e) => {
+            eprintln!("Library I/O error: {e}");
+            "Could not read or write the library. Check that the library folder isn't read-only and that the disk has space.".into()
+        }
         LibraryError::InvalidFile(_) => "That image file name is not valid.".into(),
     }
 }
@@ -422,7 +426,8 @@ fn flush_open(o: &mut Open) -> Result<(), String> {
 /// Before another library replaces the open one. On `Err` the open one stays.
 fn flush_for_switch(open: &mut Option<Open>) -> Result<(), String> {
     match open.as_mut() {
-        Some(o) => flush_open(o).map_err(|e| format!("Couldn't save the current library: {e}")),
+        // The flush's own copy already says what failed and what to check (3b review).
+        Some(o) => flush_open(o),
         None => Ok(()),
     }
 }
@@ -1288,6 +1293,19 @@ pub fn set_board_members<R: Runtime>(
 ) -> Result<Change, String> {
     commit(&app, |o| {
         let (_, before) = find_board(o, &board_id)?;
+        // D19: a hand-edited board can name a reference that is gone; the UI sends its list back
+        // whole, so drop those ids rather than refuse the reorder or remove.
+        let known: HashSet<&str> = o
+            .lib
+            .data
+            .references
+            .iter()
+            .map(|r| r.id.as_str())
+            .collect();
+        let reference_ids = reference_ids
+            .into_iter()
+            .filter(|id| known.contains(id.as_str()))
+            .collect();
         let after = Board {
             reference_ids,
             ..before.clone()
@@ -1807,6 +1825,15 @@ mod tests {
     use std::time::Duration;
     use tauri::Listener;
     use tauri::test::{MockRuntime, mock_builder, mock_context, noop_assets};
+
+    #[test]
+    fn a_library_write_failure_gives_a_hint_not_the_os_text() {
+        // Plan 6 D13: "Access is denied. (os error 5)" goes to stderr only.
+        let s = library_error(LibraryError::Io(std::io::Error::from_raw_os_error(5)));
+        assert!(s.starts_with("Could not read or write the library"), "{s}");
+        assert!(s.contains("read-only"), "{s}");
+        assert!(!s.contains("os error"), "{s}");
+    }
 
     pub(super) struct Env {
         _dir: tempfile::TempDir,
@@ -2807,6 +2834,29 @@ mod tests {
     }
 
     #[test]
+    fn a_hand_edited_board_with_a_missing_reference_still_reorders_and_removes() {
+        // D19: library.json names a reference id that is gone; the UI sends it back with the rest.
+        let (e, a, b) = two_refs();
+        let c = create_board(e.handle(), "Harbour".into(), vec![a.clone(), b.clone()]).unwrap();
+        let id = c.created.unwrap();
+        {
+            let st = e.app.state::<AppState>();
+            let mut open = lock(&st.open);
+            let board = &mut open.as_mut().unwrap().lib.data.boards[0];
+            board.reference_ids.push("gone".into());
+        }
+        set_board_members(
+            e.handle(),
+            id.clone(),
+            vec![b.clone(), "gone".into(), a.clone()],
+        )
+        .unwrap();
+        assert_eq!(boards_now(&e)[0].reference_ids, [b.clone(), a.clone()]);
+        set_board_members(e.handle(), id, vec!["gone".into(), a.clone()]).unwrap();
+        assert_eq!(boards_now(&e)[0].reference_ids, [a]);
+    }
+
+    #[test]
     fn board_crud_and_undo() {
         let (e, a, b) = two_refs();
         let mut states = vec![boards_now(&e)];
@@ -3424,7 +3474,7 @@ mod tests {
         let err = open_library(e.handle(), b).unwrap_err();
         eprintln!("switch refusal: {err}");
         assert!(
-            err.starts_with("Couldn't save the current library: "),
+            err.starts_with("Could not read or write the library. Check"),
             "{err}"
         );
         let state = st(&e);

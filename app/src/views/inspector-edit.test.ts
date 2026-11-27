@@ -601,6 +601,18 @@ describe("sayError: readable copy, never the raw text", () => {
     expect(t).not.toContain("still in use");
   });
 
+  it("only an operation or domain move gets the O3 sentence; anything else in use says so plainly (D12 M2)", () => {
+    expect(sayError("still in use: social", mine)).toContain("couldn't move every tag off");
+    const t = sayError("still in use: chiaroscuro", mine);
+    expect(t).not.toContain("couldn't move every tag");
+    expect(t).toBe("Chiaroscuro is still in use. Move or remove its tags first.");
+  });
+
+  it("Rust's own artist copy passes through (D6)", () => {
+    const copy = "That tag is no longer on this reference. Nothing changed.";
+    expect(sayError(copy, mine)).toBe(copy);
+  });
+
   it("anything else gets a generic line", () => {
     for (const raw of ["invalid tag: t1: unknown branch", "duplicate id: x", "boom", new Error("kaput")]) {
       const t = sayError(raw, mine);

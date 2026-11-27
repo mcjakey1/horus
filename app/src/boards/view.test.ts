@@ -67,6 +67,17 @@ describe("mountBoards", () => {
     expect((document.activeElement as HTMLElement).dataset.id).toBe("r1");
   });
 
+  it("the refocus after a move never scrolls the grid (D19)", async () => {
+    mount();
+    vi.mocked(api.setBoardMembers).mockResolvedValueOnce(change({ boards: [{ id: "h", name: "Harbour", referenceIds: ["r2", "r1", "r3"] }] }));
+    const spy = vi.spyOn(HTMLElement.prototype, "focus");
+    $('.bd-tile[data-id="r1"]').dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true }));
+    await flush();
+    const last = spy.mock.calls[spy.mock.calls.length - 1];
+    spy.mockRestore();
+    expect(last?.[0]).toEqual({ preventScroll: true });
+  });
+
   it("reorder and Remove keep a hidden member in its slot (final review M0a)", async () => {
     mount([{ id: "h", name: "Harbour", referenceIds: ["r1", "ghost", "r2", "r3"] }]);
     $('.bd-tile[data-id="r1"]').dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", altKey: true, bubbles: true }));
@@ -136,6 +147,14 @@ describe("mountBoards", () => {
     expect($('[data-act="scope"]').getAttribute("aria-pressed")).toBe("true");
     $<HTMLButtonElement>('[data-act="scope"]').click();
     expect(store.scope).toBeNull();
+  });
+
+  it("the scope button keeps its label; Delete sits apart, after a separator (design review F11)", () => {
+    mount();
+    $<HTMLButtonElement>('[data-act="scope"]').click();
+    expect($('[data-act="scope"]').textContent).toBe("Show only this board"); // CSS adds " · on" while pressed
+    const acts = [...document.querySelectorAll(".bd-actions > *")].map((e) => (e as HTMLElement).dataset.act ?? e.className);
+    expect(acts).toEqual(["scope", "rename", "export", "sep", "delete"]);
   });
 
   it("Open goes to the Reference view; Remove from board drops the member", async () => {

@@ -88,14 +88,16 @@ describe("move-tags dialog", () => {
   });
 
   it("holds focus like Settings: Tab from <body> comes back in, Esc from <body> cancels (D8)", async () => {
+    const aside = document.body.appendChild(document.createElement("aside")); // a sibling of the host
     const p = openMoveTags(host, { s, techId: "rim-light" });
+    expect(aside.inert).toBe(true); // the rest of the window is inert while it is open
     (document.activeElement as HTMLElement).blur();
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
     expect(dlg().contains(document.activeElement)).toBe(true);
     (document.activeElement as HTMLElement).blur();
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     expect(await p).toBeNull();
-    expect(!!host.inert).toBe(false); // released
+    expect(!!aside.inert).toBe(false); // released
   });
 
   it("Ctrl+Z in the empty search never runs the browser's own undo (D8)", () => {

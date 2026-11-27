@@ -4,7 +4,7 @@
 import type { Api, Change, Region } from "../api";
 import type { DataSource } from "../data";
 import { esc } from "../esc";
-import { BAND_GAP, LABEL_ROW, NODE } from "../graph/constants";
+import { BAND_GAP, NODE } from "../graph/constants";
 import { clipLabel, mountCanvasOrFallback, type Scene, type SceneEdge, type SceneNode } from "../graph/frame";
 import { blockTech, labelRows, layoutTree } from "../graph/layout-tree";
 import { canvasKeys, move } from "../graph/navigate";
@@ -13,6 +13,9 @@ import { buildTaxGraph, type TaxGraph } from "../graph/taxgraph";
 import { opInk, opLabel } from "../ops";
 import type { ViewHandle } from "../views";
 import { renderInspector, sayError, selectionOf } from "./inspector";
+
+/** The Tree fits its names too, not only its nodes: half a 12 px name, in screen px (design review F8). */
+const LABEL_FIT = 80;
 
 /** Decision 3: "Show all references" is off by default and remembered for the session. */
 let showAllSession = false;
@@ -131,7 +134,7 @@ export function mountTree(
           : (s.tax.techniques.find((t) => t.id === n.techId)?.name ?? n.techId);
         nodes.push({
           id: n.id, kind: n.kind, x, y, size: SIZE[n.kind], color: n.kind === "op" ? opInk(s.tax, n.opId).base : colorOf(n.id), label: clipLabel(label),
-          labelDy: rows.get(n.id)! * LABEL_ROW,
+          labelRow: rows.get(n.id)!,
         });
       }
     }
@@ -236,7 +239,7 @@ export function mountTree(
     }
     if (!shown) return void (stale = true);
     render();
-    if (fitOnShow) scene?.fitAll();
+    if (fitOnShow) scene?.fitAll(LABEL_FIT);
     fitOnShow = false;
   });
 
@@ -264,7 +267,7 @@ export function mountTree(
       if (n?.kind === "ref") deps.openReference(n.refId);
     });
     render();
-    sc.fitAll();
+    sc.fitAll(LABEL_FIT);
   });
   render();
 
@@ -274,7 +277,7 @@ export function mountTree(
       if (!stale) return;
       stale = false;
       render();
-      if (fitOnShow) scene?.fitAll();
+      if (fitOnShow) scene?.fitAll(LABEL_FIT);
       fitOnShow = false;
     },
     hide() {

@@ -1,10 +1,11 @@
-// "Import images…" / "Import folder…" in the status bar: pick, import, apply the returned Change
+// "Add images…" / "Add folder…" in the status bar: pick, import, apply the returned Change
 // to the store (B4: no reopen, so the import stays undoable), then show what happened. The other
 // intake routes (drop, paste, the Inbox's buttons) live in intake.ts; every route ends in the same
 // notice, with the note field and the duplicate rows (Task 9).
 import type { Api, Change, ImportReport, ImportResult, IntegrityReport, Skip } from "./api";
 import { esc } from "./esc";
 import type { DupRow } from "./intake";
+import type { Store } from "./store";
 
 export type ImportHooks = {
   libraryRoot(): string | null;
@@ -83,7 +84,7 @@ export function integrityHTML(r?: IntegrityReport | null): string {
   if (!r) return "";
   let html = "";
   if (r.orphans.length)
-    html += `<p>Recovered ${n(r.orphans.length, "image", "images")} to the Inbox. <button type="button" class="text-btn" data-recover>Add them</button></p>`;
+    html += `<p>${n(r.orphans.length, "image file isn't", "image files aren't")} in the library. <button type="button" class="text-btn" data-recover>${r.orphans.length === 1 ? "Add it to the Inbox" : "Add them to the Inbox"}</button></p>`;
   if (r.missingOriginals.length)
     html += `<p>${n(r.missingOriginals.length, "reference is", "references are")} missing ${r.missingOriginals.length === 1 ? "its image file" : "their image files"}. <button type="button" class="text-btn" data-show-missing>Show them</button></p>`;
   if (r.taxonomyBackupInvalid) html += `<p>The taxonomy backup (taxonomy.bak.json) is damaged. Horus left it as it is.</p>`;
@@ -97,7 +98,32 @@ export function noticeIn(root: ParentNode): (html: string) => void {
   return (html) => {
     body.innerHTML = html;
     notice.hidden = false;
+    delete notice.dataset.kind; // a newer notice is no import summary until markImport says so (D9)
+    delete notice.dataset.added;
   };
+}
+
+/** D9: the notice now shows an import's summary of `added`, so an undo that takes those back
+ * can clear it. Call right after writing the summary. */
+export function markImport(root: ParentNode, added: string[]): void {
+  const notice = root.querySelector<HTMLElement>("#import-notice");
+  if (!notice) return;
+  notice.dataset.kind = "import";
+  notice.dataset.added = added.join(" ");
+}
+
+/** D9: an undo (any change) that removes a reference the shown import summary reported hides
+ * that summary. Never any other notice: a Find similar failure stays. Returns the unsubscribe. */
+export function clearOnUndo(root: ParentNode, store: Store): () => void {
+  return store.subscribe((c) => {
+    const notice = root.querySelector<HTMLElement>("#import-notice");
+    if (!notice || notice.hidden || notice.dataset.kind !== "import" || !c.removed?.length) return;
+    const added = new Set((notice.dataset.added ?? "").split(" ").filter(Boolean));
+    if (!c.removed.some((id) => added.has(id))) return;
+    notice.hidden = true;
+    delete notice.dataset.kind;
+    delete notice.dataset.added;
+  });
 }
 
 /** Plan 6 D15: "<verb> N of M" with a Cancel text button in `#import-notice`, until `stop()`.
@@ -122,11 +148,20 @@ export function showProgress(root: ParentNode, verb: string, onCancel: () => voi
   };
 }
 
-/** `showProgress` for one import: listens to `import://progress` until `done()`. */
-export function importProgress(root: ParentNode, api: Api): { done(): void } {
-  const prog = showProgress(root, "Importing", () => void api.cancelImport().catch(() => {}));
+/** `showProgress` for one intake: listens to `import://progress` until `done()`. `cancelled`:
+ * Cancel was clicked, so an intake of several steps stops before its next one (a one-file step can
+ * finish before Rust sees the flag). */
+export function importProgress(root: ParentNode, api: Api): { readonly cancelled: boolean; done(): void } {
+  let cancelled = false;
+  const prog = showProgress(root, "Importing", () => {
+    cancelled = true;
+    void api.cancelImport().catch(() => {});
+  });
   const unlisten = api.onImportProgress((p) => prog.update(p.done, p.total));
   return {
+    get cancelled() {
+      return cancelled;
+    },
     done() {
       prog.stop();
       void unlisten.then((f) => f()).catch(() => {});
@@ -150,6 +185,7 @@ export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, sig
       const result: ImportResult = await api.importPaths(paths);
       hooks.onChange(result.change);
       say(summaryHTML(result.report));
+      markImport(root, result.report.added);
       root.ownerDocument.dispatchEvent(new CustomEvent<ImportResult>(IMPORTED, { detail: result }));
     } catch (err) {
       say(`<p>The import did not finish: ${esc(String(err))}</p>`);
@@ -164,7 +200,7 @@ export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, sig
     if (b?.dataset.import === "files") void run(() => api.pickImages());
     else if (b?.dataset.import === "folder")
       void run(async () => {
-        const p = await api.pickFolder("Import a folder of images");
+        const p = await api.pickFolder("Add a folder of images");
         return p ? [p] : [];
       });
     else if ((e.target as Element).closest("#import-dismiss")) notice.hidden = true;

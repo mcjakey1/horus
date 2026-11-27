@@ -242,11 +242,17 @@ export function mountReference(
     const ref = focusRef();
     if (!ref) return;
     const value = $<HTMLInputElement>("#value")!.checked ? "on" : "off";
-    // Items wrap as whole units; the separator trails each item so no line starts with "·".
-    $("#lab-meta")!.innerHTML = [ref.creator, ref.year, ref.credit, "Grey card N5", `Value view ${value}`]
-      .filter(Boolean)
-      .map((x) => `<span>${esc(x)}</span>`)
-      .join("");
+    // Design review F2: drop the creator and year when the credit already names them; only the
+    // credit shrinks (ellipsis, full text as its tooltip), so "Grey card N5 · Value view" stays whole.
+    const credit = ref.credit ?? "";
+    const named = (x?: string) => !!x && !credit.includes(x);
+    $("#lab-meta")!.innerHTML = [
+      named(ref.creator) ? `<span>${esc(ref.creator)}</span>` : "",
+      named(ref.year) ? `<span>${esc(ref.year)}</span>` : "",
+      credit ? `<span class="lab-credit" title="${esc(credit)}">${esc(credit)}</span>` : "",
+      `<span>Grey card N5</span>`,
+      `<span>Value view ${value}</span>`,
+    ].join("");
   }
 
   function renderCallouts(ref: Reference) {
@@ -660,7 +666,11 @@ export function mountReference(
     });
     picker = mine;
   }
-  $("#lab")!.insertAdjacentHTML("beforeend", `<button type="button" class="tag-open" aria-keyshortcuts="t">Tag…</button>`);
+  // Design review F1: Tag…, Link…, Boards… and Open lightbox share one row, clear of the readout.
+  $("#lab")!.insertAdjacentHTML("beforeend", `<div class="lab-actions"></div>`);
+  const actions = $<HTMLElement>("#lab .lab-actions")!;
+  signal.addEventListener("abort", () => actions.remove());
+  actions.insertAdjacentHTML("beforeend", `<button type="button" class="tag-open" aria-keyshortcuts="t">Tag…</button>`);
   const tagOpen = $<HTMLButtonElement>("#lab .tag-open")!;
   tagOpen.addEventListener("click", openPicker, { signal });
   signal.addEventListener("abort", () => {
@@ -680,7 +690,7 @@ export function mountReference(
     linkEditor = mine;
   }
   // On #lab, like .tag-open: #plate re-renders. Never `draggable` (audit #2: native drops are intake's).
-  $("#lab")!.insertAdjacentHTML(
+  actions.insertAdjacentHTML(
     "beforeend",
     `<button type="button" class="link-handle" aria-keyshortcuts="k" title="Drag onto a reference to link it, or click to choose one">Link…</button>`,
   );
@@ -750,10 +760,8 @@ export function mountReference(
     closePicker(); // one docked panel in the margin at a time
     boardMenu = mountBoardMenu($(".margin")!, api, store, ref.id);
   }
-  $("#lab")!.insertAdjacentHTML(
-    "beforeend",
-    `<button type="button" class="boards-open" aria-keyshortcuts="b">Boards…</button><span class="off-board" hidden>Not on this board</span>`,
-  );
+  actions.insertAdjacentHTML("beforeend", `<button type="button" class="boards-open" aria-keyshortcuts="b">Boards…</button>`);
+  $("#lab")!.insertAdjacentHTML("beforeend", `<span class="off-board" hidden>Not on this board</span>`);
   // The boards the focus is on, at the top of the margin; "Boards…" (or b) edits them (S1).
   $(".margin")!.insertAdjacentHTML("afterbegin", `<p class="ref-boards" hidden><span class="k">Boards:</span> <span data-v></span></p>`);
   const boardsLine = $<HTMLElement>(".margin .ref-boards")!;
@@ -784,7 +792,7 @@ export function mountReference(
       onClose: () => void (lightbox = null),
     });
   }
-  $("#lab")!.insertAdjacentHTML("beforeend", `<button type="button" class="lb-open" aria-keyshortcuts="l">Open lightbox</button>`);
+  actions.insertAdjacentHTML("beforeend", `<button type="button" class="lb-open" aria-keyshortcuts="l">Open lightbox</button>`);
   const lbOpen = $<HTMLButtonElement>("#lab .lb-open")!;
   lbOpen.addEventListener("click", openLb, { signal });
   signal.addEventListener("abort", () => {

@@ -231,6 +231,11 @@ describe("Radial view", () => {
     expect(fake.lastSel()).toBeNull();
   });
 
+  it("with nothing selected, the crumb names the centred operation (design review F6)", () => {
+    expect(fake.lastSel()).toBeNull();
+    expect(host.querySelector('.insp-crumb .cell[data-level="op"] .v')!.textContent).toBe("Infer");
+  });
+
   it("Enter with nothing selected selects the centre (final review I3)", () => {
     expect(fake.lastSel()).toBeNull();
     key("Enter");

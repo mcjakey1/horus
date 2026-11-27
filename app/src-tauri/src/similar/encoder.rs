@@ -14,9 +14,11 @@ use tokenizers::Tokenizer;
 
 use super::model::ModelSpec;
 
-pub trait Embedder: Send {
-    fn image(&mut self, rgb: &image::RgbImage) -> Result<Vec<f32>, String>;
-    fn text(&mut self, q: &str) -> Result<Vec<f32>, String>;
+/// Shared as `Arc<dyn Embedder>` with no outer lock (Plan 6 3b): an implementation keeps its
+/// own leaf locks, so a text query never waits on an image encode.
+pub trait Embedder: Send + Sync {
+    fn image(&self, rgb: &image::RgbImage) -> Result<Vec<f32>, String>;
+    fn text(&self, q: &str) -> Result<Vec<f32>, String>;
     fn dim(&self) -> usize;
 }
 
@@ -28,12 +30,14 @@ pub enum LoadError {
     Model(String),
 }
 
+/// The vision and text sessions sit behind separate mutexes, both leaves: never held with an app
+/// lock or with each other, so typing searches while the indexer encodes (Plan 6 3b).
 pub struct SiglipEncoder {
-    vision: Session,
+    vision: Mutex<Session>,
     vision_in: String,
     vision_out: String,
     /// Loaded on the first `text()` call: only typed queries need it (R18).
-    text: Option<(Session, String, String)>,
+    text: Mutex<Option<(Session, String, String)>>,
     text_path: PathBuf,
     intra_threads: usize,
     tokenizer: Tokenizer,
@@ -166,10 +170,10 @@ impl SiglipEncoder {
         let tokenizer =
             Tokenizer::from_file(model_file(dir, spec, "tokenizer.json")?).map_err(model_err)?;
         Ok(Self {
-            vision,
+            vision: Mutex::new(vision),
             vision_in,
             vision_out,
-            text: None,
+            text: Mutex::new(None),
             text_path: model_file(dir, spec, "text_model")?,
             intra_threads,
             tokenizer,
@@ -201,12 +205,12 @@ fn embed(
 }
 
 impl Embedder for SiglipEncoder {
-    fn image(&mut self, rgb: &image::RgbImage) -> Result<Vec<f32>, String> {
+    fn image(&self, rgb: &image::RgbImage) -> Result<Vec<f32>, String> {
         let side = SIDE as usize;
         let x = ort::value::Tensor::from_array(([1usize, 3, side, side], preprocess(rgb)))
             .map_err(|e| e.to_string())?;
         embed(
-            &mut self.vision,
+            &mut self.vision.lock().unwrap_or_else(|p| p.into_inner()),
             &self.vision_in,
             &self.vision_out,
             x.into_dyn(),
@@ -214,8 +218,10 @@ impl Embedder for SiglipEncoder {
         )
     }
 
-    fn text(&mut self, q: &str) -> Result<Vec<f32>, String> {
-        if self.text.is_none() {
+    fn text(&self, q: &str) -> Result<Vec<f32>, String> {
+        // The lazy load runs under the text lock: one load, and no image waits on it.
+        let mut text = self.text.lock().unwrap_or_else(|p| p.into_inner());
+        if text.is_none() {
             // ENV is set: `load` succeeded before this could be called.
             let env = ENV.get().ok_or("ONNX Runtime is not initialised")?;
             let s = open_session(env, &self.text_path, self.intra_threads)
@@ -224,13 +230,13 @@ impl Embedder for SiglipEncoder {
                 input_name(&s, &[self.spec.text_len as i64]).map_err(|e| format!("{e:?}"))?;
             let output =
                 output_name(&s, "text_embeds", self.spec.dim).map_err(|e| format!("{e:?}"))?;
-            self.text = Some((s, input, output));
+            *text = Some((s, input, output));
         }
         let ids = tokenize(&self.tokenizer, self.spec, q);
         let x = ort::value::Tensor::from_array(([1usize, ids.len()], ids))
             .map_err(|e| e.to_string())?;
         let dim = self.spec.dim;
-        let (s, input, output) = self.text.as_mut().expect("loaded above");
+        let (s, input, output) = text.as_mut().expect("loaded above");
         embed(s, input, output, x.into_dyn(), dim)
     }
 
@@ -430,7 +436,7 @@ mod tests {
             eprintln!("[{:.1}] {what}", t.as_secs_f64());
         };
         mark("start");
-        let mut enc = SiglipEncoder::load(&lib, &dir, &SIGLIP_B16_Q8, 2).unwrap();
+        let enc = SiglipEncoder::load(&lib, &dir, &SIGLIP_B16_Q8, 2).unwrap();
         mark("vision session loaded");
         let cat_img = image::open(format!("{FIX}/cat.jpg")).unwrap().to_rgb8();
         let cat = enc.image(&cat_img).unwrap();
