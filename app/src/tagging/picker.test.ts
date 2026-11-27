@@ -467,6 +467,22 @@ describe("technique picker", () => {
     expect(chips).toMatch(/padding-top: 12px; border-top: 1px solid var\(--line\)/);
   });
 
+  it("offers no New technique when the query is an existing technique's name (judge quick look 2)", () => {
+    const { el } = mount();
+    key(row(el), "1");
+    const name = el.querySelector(".pk-card[data-tech] .pk-name")!.textContent!;
+    type(el, `  ${name.toUpperCase().split(" ").join("   ")} `); // the backend's key: case and spacing only
+    expect(newCard(el)).toBeNull();
+    type(el, name.slice(0, -1)); // a part of a name is still new
+    expect(newCard(el)).not.toBeNull();
+  });
+
+  it("styles both picker-side search boxes' cancel buttons, not the native blue one (judge quick look 2)", () => {
+    const css = readFileSync("src/styles.css", "utf8");
+    const line = css.split("\n").find((l: string) => l.includes("::-webkit-search-cancel-button") && l.includes("appearance: none")) ?? "";
+    for (const sel of [".search input", ".pk-search", ".tx-search"]) expect(line).toContain(`${sel}::-webkit-search-cancel-button`);
+  });
+
   it("tick_box_on_an_ask_card_shows_its_radios_and_stays_unticked", () => {
     const { el } = mount({}, { tax: withTexture() });
     key(row(el), "1");
@@ -567,18 +583,17 @@ describe("technique picker", () => {
 
     it("NameTaken shows the exact copy, and use it tags the existing one", async () => {
       const api = fakeApi();
-      vi.mocked(api.addTechnique).mockRejectedValueOnce("NameTaken:chiaroscuro");
+      // A name under another operation (Infer): New stays (an exact name in this operation is its card).
+      vi.mocked(api.addTechnique).mockRejectedValueOnce("NameTaken:scale-disparity");
       const { el } = mount({}, { api });
       key(row(el), "1");
-      type(el, "chiaroscuro ");
+      type(el, "scale disparity ");
       newCard(el)!.click();
       el.querySelector<HTMLFormElement>(".pk-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
       await flush();
-      expect(el.querySelector(".pk-msg")!.textContent).toBe("Already exists: Chiaroscuro — use it");
+      expect(el.querySelector(".pk-msg")!.textContent).toBe("Already exists: Scale disparity — use it");
       el.querySelector<HTMLButtonElement>(".pk-msg button")!.click();
-      expect(sent(api)).toEqual([
-        ["r", [{ operationId: "differentiate", techniqueId: "chiaroscuro", branchId: "differentiate.feature" }]],
-      ]);
+      expect(sent(api)).toEqual([["r", [{ operationId: "infer", techniqueId: "scale-disparity", branchId: "infer.semantic" }]]]);
     });
 
     it("TaxonomyReadOnly shows the copy", async () => {
