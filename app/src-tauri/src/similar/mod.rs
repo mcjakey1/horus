@@ -2,6 +2,7 @@
 //! Off by default; nothing else in the app depends on it.
 
 pub mod download;
+pub mod encoder;
 pub mod model;
 pub mod store;
 

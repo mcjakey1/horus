@@ -3,8 +3,35 @@
 Tauri v2 desktop app (Rust core, TypeScript UI).
 
 - `npm install`
+- `npm run fetch:ort` once (fetches and verifies ONNX Runtime for Find similar into `src-tauri/ort/`; re-running does nothing when the files are in place)
 - `npm run tauri dev`
 - `npm test` (Vitest), `cargo test` in `src-tauri`
+
+## Find similar: ONNX Runtime (Plan 5)
+
+The optional Find similar feature runs Google SigLIP on Microsoft ONNX Runtime 1.31.1. ORT is loaded at run time with `ort::init_from(<absolute path>)` only when the feature is on (`ort` features `load-dynamic` + `api-31`), so the app has no load-time ORT import.
+
+**Getting it.** `npm run fetch:ort` (`scripts/fetch-ort.mjs`) downloads the NuGet package `Microsoft.ML.OnnxRuntime` 1.31.1, checks its SHA-256, extracts this OS's library plus `ThirdPartyNotices.txt` and `LICENSE`, checks each one and writes them to `src-tauri/ort/` (gitignored). `bundle.resources` ships that folder as `ort/`. The binaries are never committed. The pins live in the script only; the test `ort_pins_match_plan` ties them to the plan.
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `microsoft.ml.onnxruntime.1.31.1.nupkg` | 159,626,394 | `6871ccbc97f3d5bdb4095a1dcec33aa78d56f6ed8de5980ef5fa1d9f2e7c679a` |
+| `onnxruntime.dll` (Windows x64) | 17,253,728 | `cb2fa518b18356617f6f9f460c012501da2819ec7e5c1d80bd8f5de20492db0c` |
+| `libonnxruntime.dylib` (macOS arm64) | 44,830,288 | `2685dc296147c47b0dbd8e0615547b12fc0c445d158d1f374cbd0705d9626fdc` |
+| `libonnxruntime.so` (Linux x64) | 29,345,384 | `a96f132e5eb5ca04e23a7d2fc1078fb95aa591e8d71d0f237702ece3a1e0f4ea` |
+
+**Installer growth:** about 16.5 MiB on Windows x64, 42.8 MiB on macOS arm64 and 28 MiB on Linux x64 (the library), plus about 337 KiB of notices. The model itself (213 MB) is never in the installer; it is downloaded on "Turn on".
+
+**Checks (Task 2 Step 3, 2026-11-27, Windows 11, debug build):**
+- `dumpbin /dependents horus.exe` lists only Windows system DLLs and the CRT. There is no `onnxruntime`, `DirectML`, `D3D12` or `DXCORE` import and no delay-load section.
+- `horus.exe` starts and closes normally with ORT never called. The running process has no `onnxruntime`, `DirectML`, `D3D12` or `DXCORE` module loaded.
+- **Real model (`real_model_semantics`, pinned files hand-downloaded and SHA-256-checked, debug test build, ORT 1.31.1 CPU):** passes. "a photo of a cat" scores 0.0956 against `cat.jpg` and 0.0327 against `dog.jpg` (cosine).
+  - Working set with the vision session loaded: about **184 MB**. With both sessions loaded: about **304 MB**, peak seen **317 MB** (sampled every 200 ms with `Get-Process`, so the true peak can be slightly higher).
+  - Seconds per image at `intra_threads = 2`: **0.22–0.24 s** (mean of 10 encodes of a 330×220 JPEG, preprocessing included; two runs).
+
+**Ignored tests** (CI never runs them; run them on their own, never with `--include-ignored`):
+- `HORUS_ORT_LIB=<abs path to src-tauri/ort/onnxruntime.dll> cargo test similar::encoder -- --ignored`
+- `real_model_semantics` also needs `HORUS_SIGLIP_DIR`, a folder holding the three model files (see `src/similar/model.rs`).
 
 ## Release build (Windows)
 

@@ -34,6 +34,9 @@ unicode-normalization = "0.1"
 # Find similar download (Plan 5 T1): rustls on ring, no gzip, no tokio; no aws-lc-sys or cmake (R3).
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 sha2 = "0.11"
+# Find similar encoder (Plan 5 T2): ORT loaded at run time only (B1, Task 0); pure-Rust tokenizer.
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["load-dynamic", "api-31"] }
+tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }
 
 [features]
 # Task 11's speed check only: HORUS_DEMO_DIR overrides the bundled demo folder (lib.rs).
