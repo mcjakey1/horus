@@ -395,6 +395,27 @@ describe("Reference view", () => {
     expect(api.getTaxonomy).not.toHaveBeenCalled();
   });
 
+  // ---------- Plan 6 Task 3b, design review F1 and F2 ----------
+  it("lab_actions_one_row (F1): Tag, Link, Boards and the lightbox share one row, apart from the readout", () => {
+    const row = $(".lab .lab-actions");
+    expect([...row.querySelectorAll("button")].map((b) => b.className)).toEqual(["tag-open", "link-handle", "boards-open", "lb-open"]);
+    expect(row.contains($("#lab-meta"))).toBe(false);
+  });
+
+  it("readout_drops_what_the_credit_repeats (F2): only the credit shrinks, with its full text as a tooltip", async () => {
+    const credit = "Henri de Toulouse-Lautrec. Divan Japonais, 1893. The Art Institute of Chicago";
+    store.apply({ ...none, references: [{ ...A, creator: "Toulouse-Lautrec", year: "1893", credit }] });
+    await settle();
+    const spans = [...document.querySelectorAll<HTMLElement>("#lab-meta span")];
+    expect(spans.map((s) => s.textContent)).toEqual([credit, "Grey card N5", "Value view off"]);
+    expect(spans[0].classList.contains("lab-credit")).toBe(true);
+    expect(spans[0].title).toBe(credit);
+    // A credit that doesn't name them keeps the creator and year.
+    store.apply({ ...none, references: [{ ...A, creator: "Hokusai", year: "1831", credit: "The Art Institute of Chicago" }] });
+    await settle();
+    expect([...document.querySelectorAll("#lab-meta span")].map((s) => s.textContent)).toEqual(["Hokusai", "1831", "The Art Institute of Chicago", "Grey card N5", "Value view off"]);
+  });
+
   it("unknown_op_is_neutral", async () => {
     store.apply({ ...none, references: [ref("q", "Plate Q", [tag("q1", "provoke")])] });
     view.show("q");

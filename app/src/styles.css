@@ -111,10 +111,14 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .num { position: absolute; top: -13px; left: -13px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 500 13px var(--mono); color: var(--on, #fff); background: var(--c); box-shadow: 0 0 0 2px var(--card); }
 .box.is-whole .num { top: 2px; left: auto; right: -40px; }
 .lab-meta { position: absolute; left: 16px; bottom: 14px; margin: 0; padding: 5px 10px; font-size: 12px; background: var(--panel); color: var(--ink-2); letter-spacing: .02em; }
-.lab-meta span { white-space: nowrap; }
-/* one line, inside the 48px below the specimen: never over the plate */
-.lab-meta { max-width: calc(100% - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lab-meta span:not(:last-child)::after { content: " · "; white-space: pre; }
+.lab-meta span { white-space: nowrap; flex: none; }
+/* one line, inside the 48px below the specimen: never over the plate. Only the credit shrinks
+   (design review F2); the separator leads each later item, so the credit's ellipsis never eats it. */
+.lab-meta { max-width: calc(100% - 32px); display: flex; white-space: nowrap; }
+.lab-meta .lab-credit { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lab-meta span + span::before { content: " · "; white-space: pre; }
+/* Design review F1: the plate's actions in one row at the top left, clear of the readout. */
+.lab-actions { position: absolute; top: 14px; left: 16px; display: flex; gap: 6px; }
 .leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .leaders path { fill: none; stroke: var(--card-ink); stroke-width: 1; opacity: 0; transition: opacity .2s; } /* at rest: no lines over the art */
 .leaders path.is-hot { stroke: var(--hot); stroke-width: 1.75; opacity: 1; stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: draw .55s var(--ease) forwards; }
@@ -201,6 +205,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
   .lab { margin: 16px; height: auto; display: flex; flex-direction: column; align-items: center; padding: 28px 16px 16px; gap: 16px; }
   .specimen { width: min(100%, calc(58vh * var(--ar, .75))); max-width: calc(100% - 40px); height: auto; max-height: none; }
   .lab-meta { position: static; align-self: stretch; display: flex; flex-wrap: wrap; max-width: none; }
+  .lab-actions { position: static; order: -1; align-self: stretch; flex-wrap: wrap; }
   .box.is-whole .num { right: -31px; }
   .margin { margin: 0; border-left: 0; border-top: 1px solid var(--line); }
   .leaders { display: none; }
@@ -254,7 +259,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 /* technique picker (Plan 2 Task 8): docked in the margin, replacing the tabs while open */
 .margin:has(> .picker) > :not(.picker) { display: none; }
 .work:has(.picker) .leaders { display: none; }
-.tag-open { position: absolute; top: 14px; right: 16px; padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
+.tag-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
 .picker { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 24px; display: flex; flex-direction: column; gap: 12px; }
 .pk-ops { display: flex; flex-wrap: wrap; gap: 6px; }
 .pk-op { display: grid; grid-template-columns: 10px auto; column-gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); background: var(--panel); text-align: left; transition: border-color .2s var(--ease), background .2s var(--ease); }
@@ -346,7 +351,7 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 }
 
 /* minimal lightbox (Plan 2 Task 10; Plan 4 replaces the chrome). Positions come from the CSSOM. */
-.lb-open { position: absolute; top: 14px; left: 16px; padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
+.lb-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
 .lightbox { position: fixed; inset: 0; z-index: 40; display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: minmax(0, 1fr) 36px; background: var(--shell); }
 .lb-stage { position: relative; margin: 20px 0 20px 20px; background: var(--card); overflow: hidden; cursor: crosshair; touch-action: none; user-select: none; }
 .lb-plate { position: absolute; box-shadow: 0 1px 2px rgb(0 0 0 / .25), 0 14px 34px rgb(0 0 0 / .22); }
@@ -483,7 +488,7 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .lb-bar .lb-hint { flex: 1 1 auto; min-width: 0; } /* the zoom and size readouts keep their room */
 
 /* ---------- Plan 4 Task 4: links you draw yourself ---------- */
-.link-handle { position: absolute; bottom: 14px; right: 16px; padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; cursor: grab; touch-action: none; }
+.link-handle { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; cursor: grab; touch-action: none; }
 .link-handle:active { cursor: grabbing; }
 /* The leader from the handle to the pointer while dragging: positioned through the CSSOM vars. */
 .link-leader { position: fixed; left: var(--x); top: var(--y); width: var(--len, 0); height: 0; border-top: 2px dashed var(--ink); transform-origin: 0 50%; transform: rotate(var(--angle, 0)); pointer-events: none; z-index: 50; }
@@ -543,7 +548,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .bm-create { padding: 5px 12px; border: 1px solid var(--line-2); color: var(--ink); font-weight: 500; }
 .bm-msg { margin: 0; min-height: 1.2em; font-size: 13px; color: var(--ink); }
 .bm-actions { display: flex; justify-content: space-between; }
-.boards-open { position: absolute; bottom: 14px; left: 16px; padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
+.boards-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
 .off-board { position: absolute; top: 50px; left: 16px; padding: 3px 8px; background: var(--ink); color: var(--panel); font: 500 12px var(--mono); }
 .off-board[hidden] { display: none; }
 .off-board-note { color: var(--ink-2); font-style: italic; }
