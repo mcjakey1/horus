@@ -232,16 +232,18 @@
     1. Flush the previous library (Plan 2 Task 5). On failure, refuse the switch, before anything is created on disk.
     2. `Library::create`, then the demo seed (no lock held).
     3. Run `sweep_tmp` and `check` on the new root (no lock held).
-    4. Stop the previous library's indexer: take it under `similar`, bump the generation, join it with no lock held (Plan 5).
-    5. `install()` under the state lock: the asset scope, the `LibraryView` (with Plan 4's `boards` and this task's `integrity`), the new `Open` state with a fresh history.
+    4. Under the state guard: Plan 5's `similar::detach_indexer` (takes the old indexer and bumps the generation), then `install()`: the asset scope, the `LibraryView` (with Plan 4's `boards` and this task's `integrity`), the new `Open` state with a fresh history.
+    5. Once the guard drops, join the old indexer (`Indexer::stop`).
     6. `remember()`.
     7. Plan 5's start hook, then this task's `rebuild_thumbs` in the background.
   - **`open_library`:**
     1. Under the state guard (held from the flush to the swap, on purpose): flush, then `Library::open`.
     2. Still under it: `sweep_tmp` and `check` on the new root (existence checks only, so the lock is held briefly).
-    3. Take the indexer under `similar` and bump the generation (Plan 5), then `install()`.
+    3. `similar::detach_indexer` (takes the indexer and bumps the generation, Plan 5), then `install()`.
     4. Once the state guard drops, join the old indexer; then `remember()`.
-    5. Plan 5's start hook, then `rebuild_thumbs` in the background.
+    5. In the `open_library` wrapper, for `Ok` and `Err` alike: join an indexer a failed install left detached, then Plan 5's start hook, then `rebuild_thumbs` in the background.
+
+    This is the order as Plan 5 Task 5 lands it (`p5-t5`: `create_library`, `open_library` and `open_inner`); if Task 5's review moves a step, Plan 6 follows the merged code.
   - **One rule for `Ok` and `Err` (Plan 5):** once the switch has returned, the start hook runs for whichever library is open. A refused or failed switch leaves the old library open and indexed.
   - **The asset scope stays per folder (R4):** `install()` allows `images/` and `thumbs/` only, never the root (the window never needs `library.json`, `embeddings.bin` or the backups). Plan 4's lightbox cache directory is allowed once, in `setup`.
 
@@ -414,7 +416,7 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
   - `app/src-tauri/tauri.conf.json`, the `bundle` section;
   - `app/scripts/release-check.mjs`, adding `checkBundle(conf)`;
   - `app/scripts/fetch-ort.mjs` (Plan 5): on Windows it also copies the four VC++ DLLs (B4);
-  - Find similar's platform guards and loading (B1, B4), in Plan 5's code: `app/src-tauri/src/commands/similar.rs`, `app/src-tauri/src/similar/encoder.rs`, `app/src-tauri/src/similar/copy.rs`, `app/src/api.ts`, `app/src/settings/find-similar.ts` and `app/src/firstrun.ts`.
+  - Find similar's platform guards and loading (B1, B2, B4), in Plan 5's code: `app/src-tauri/src/commands/similar.rs` (beside the AVX2 guard), `app/src-tauri/src/similar/encoder.rs` (before `ort::init_from`), `app/src-tauri/src/similar/copy.rs`, `app/src-tauri/src/lib.rs` (`ort_library`: resolve the dylib from `Contents/Frameworks` on macOS), `app/src/api.ts`, `app/src/settings/find-similar.ts` and `app/src/firstrun.ts`.
 
 **Interfaces:**
 - **The in-app glyph set (Plan 3 cross-plan impact item 6).** Plans 2 and 3 show each technique, domain and operation `icon` as its description text "until Plan 6 draws the glyphs". This task draws them.
@@ -471,7 +473,7 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
   - that each artefact is within its measured size budget (Global Constraints, R9), read from `budgetBytes` (per artefact) in `app/release-check.json`, which this task writes from the measurements. The same file holds `textures` (Task 1).
 - **Find similar on each platform (B1, B4).** These change Plan 5's code, so they sit here with the platform config:
   - **The macOS 14 guard (B1).** Beside Plan 5's AVX2 guard, at start-up and before any load: on macOS, read `sysinfo::System::os_version()`, parse the major version as a `u32` (so 26 and later work), and if it is below 14, Find similar is unavailable. If `os_version()` returns `None`, the guard fails open. ORT is never `dlopen`ed when the guard fails.
-  - **`SimilarStatus.unsupported: Option<String>`** (Rust and `api.ts`) is set at start-up when either guard fails (AVX2, or macOS below 14), so Settings and first run can render it before any enable. Its copy is fixed, from `similar/copy.rs`: "Find similar needs macOS 14 or later." (and Plan 5's processor line for AVX2).
+  - **`SimilarStatus.unsupported: Option<String>`** (Rust; in `api.ts` the optional `unsupported?: string | null`, so the existing test fakes stay valid) is set at start-up when either guard fails (AVX2, or macOS below 14), so Settings and first run can render it before any enable. Its copy is fixed, from `similar/copy.rs`: "Find similar needs macOS 14 or later." (and Plan 5's processor line for AVX2).
   - **Settings:** one muted line in place of the switch, with no "Try again". **First run:** the same line instead of the choice, and `find_similar` is recorded as `"off"`.
   - **Windows pre-load (B4).** `ort::init_from` calls `LoadLibraryExW(..., 0)`, which doesn't search `ort/` for dependencies. So before `init_from`, Plan 5's loader pre-loads `onnxruntime.dll` with `LoadLibraryExW(path, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)` and keeps the `HMODULE` alive. That way dev runs (DLLs in `ort/`) work too.
   - **Sourcing the VC++ DLLs (B4):** `fetch-ort.mjs` on Windows copies `msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll` and `vcruntime140_1.dll` from the build machine's Visual Studio `VC\Redist\MSVC\<ver>\x64\Microsoft.VC14*.CRT\` (found through `vswhere`) into `src-tauri/ort/vc/`. Microsoft's Visual C++ redistributable terms allow app-local copies; `notices/manual.md` records the licence line.
