@@ -259,6 +259,13 @@ describe("Settings panel", () => {
     expect(document.activeElement).toBe(first);
     expect(key(first, "Tab", true).defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(last);
+    // Focus on the dialog itself (a click on its text): Shift+Tab wraps to the last, Tab goes first.
+    dlg.focus();
+    expect(key(dlg, "Tab", true).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(last);
+    dlg.focus();
+    expect(key(dlg, "Tab").defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(first);
     // Focus fell to <body> (a control went away under it): Backspace never reaches the view.
     const behind = vi.fn();
     document.addEventListener("keydown", behind);

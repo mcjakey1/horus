@@ -56,7 +56,8 @@ export function mountSettings(root: HTMLElement, api: Api): { open(section?: "fi
       const f = [...sheet.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((x) => x.tabIndex >= 0 && !x.closest("[hidden]"));
       if (!f.length) return;
       const a = document.activeElement, first = f[0], last = f[f.length - 1];
-      if (sheet.contains(a) && a !== (e.shiftKey ? first : last)) return;
+      // Not `sheet.contains`: focus can sit on the dialog itself (tabIndex -1), and wraps from there too.
+      if (f.includes(a as HTMLElement) && a !== (e.shiftKey ? first : last)) return;
       e.preventDefault();
       (e.shiftKey ? last : first).focus();
     };
