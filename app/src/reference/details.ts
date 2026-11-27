@@ -78,6 +78,7 @@ export function openDetails(root: HTMLElement, ref: Reference, api: Api, store: 
 
   el.addEventListener("keydown", (e) => {
     e.stopPropagation(); // the Reference view's keys never fire while it is open
+    if (e.isComposing) return; // an IME's Enter and Esc are its own
     if (e.key === "Escape") return (e.preventDefault(), close());
     if (e.key === "Enter" && (e.target as Element).tagName === "INPUT") return (e.preventDefault(), void save());
   });

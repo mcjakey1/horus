@@ -186,7 +186,7 @@ export function wireSimilar(
     if (e.scope || e.scopeCleared) {
       paintPane();
       hooks.search.refresh();
-    }
+    } else if (e.references.length) paintPane(); // a renamed title (Task 3c)
   });
 
   // ---------- status ----------

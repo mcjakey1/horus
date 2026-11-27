@@ -465,9 +465,11 @@ fn run(
             let r = &mut data.references[i];
             // The inverse restores what was there, whatever `before` claimed.
             let old = match field {
-                // A reference always has a title.
-                Field::Title => match after.as_deref().filter(|t| !t.trim().is_empty()) {
+                // An edit never empties a title. Undo and a batch unwind (`check: false`) restore
+                // what was there, even an empty title from a file name such as "   .jpg".
+                Field::Title => match after.as_deref().filter(|t| !check || !t.trim().is_empty()) {
                     Some(t) => Some(std::mem::replace(&mut r.title, t.to_string())),
+                    None if !check => Some(std::mem::take(&mut r.title)),
                     None => return Err(EditError::EmptyTitle),
                 },
                 Field::Note => std::mem::replace(&mut r.note, after.clone()),
@@ -2187,6 +2189,31 @@ mod tests {
         apply(&mut data, &mut tax, set(Field::Creator, Some("x"))).unwrap();
         apply(&mut data, &mut tax, set(Field::Creator, None)).unwrap();
         assert_eq!(data.references[0].creator, None);
+    }
+
+    #[test]
+    fn undo_restores_an_empty_title() {
+        // AGY #2: an imported title can be empty (a file named "   .jpg"); renaming it must undo.
+        let (mut data, mut tax) = fixture();
+        data.references[0].title = "   ".into();
+        let applied = apply(&mut data, &mut tax, set(Field::Title, Some("named"))).unwrap();
+        let back = apply_inverse(&mut data, &mut tax, applied.inverse).unwrap();
+        assert_eq!(data.references[0].title, "   ");
+        apply_inverse(&mut data, &mut tax, back.inverse).unwrap(); // and redo
+        assert_eq!(data.references[0].title, "named");
+        // A batch that fails after renaming it unwinds without a panic.
+        data.references[0].title = String::new();
+        let failing = Edit::Batch(vec![
+            set(Field::Title, Some("named")),
+            Edit::SetField {
+                ref_id: "nope".into(),
+                field: Field::Note,
+                before: None,
+                after: None,
+            },
+        ]);
+        assert!(apply(&mut data, &mut tax, failing).is_err());
+        assert_eq!(data.references[0].title, "");
     }
 
     #[test]

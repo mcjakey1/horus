@@ -446,6 +446,23 @@ describe("Reference view", () => {
     expect($("#pane-ranked").textContent).toContain("Harbour at dusk");
   });
 
+  it("renaming_a_linked_reference_updates_links_and_the_plate_alt", async () => {
+    // C is linked to A (the focus) and shares no technique with it (AGY #2).
+    store.apply({ references: [{ ...store.refs.get("c")!, title: "Renamed C" }], removed: [], canUndo: true, canRedo: false });
+    await settle();
+    expect($("#pane-links").textContent).toContain("Renamed C");
+    store.apply({ references: [{ ...store.refs.get("a")!, title: "Renamed A" }], removed: [], canUndo: true, canRedo: false });
+    await settle();
+    expect($("#plate img").getAttribute("alt")).toBe("Renamed A");
+  });
+
+  it("details_closes_when_the_focus_moves", async () => {
+    $<HTMLButtonElement>("#lab .details-open").click();
+    expect(document.querySelector(".details")).not.toBeNull();
+    view.show("b");
+    expect(document.querySelector(".details")).toBeNull();
+  });
+
   const plateSrc = () => $("#plate img")?.getAttribute("src");
   const src = (r: Reference) => api.assetUrl(r.thumb1024);
 

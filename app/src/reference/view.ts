@@ -105,6 +105,7 @@ export function mountReference(
     if (id !== S.focus) lightbox?.close(); // it shows the focus; never another reference behind it
     if (id !== S.focus) linkEditor?.close(); // it links from the focus
     if (id !== S.focus) boardMenu?.close(); // it is for the focus
+    if (id !== S.focus) details?.close(); // it edits the focus (Task 3c)
     if (push && S.focus && S.focus !== id) S.trail.push(S.focus);
     const spec = $("#specimen")!;
     const first = !S.focus;
@@ -144,7 +145,7 @@ export function mountReference(
     if (S.plateSrc !== src) {
       $("#plate")!.innerHTML = img(ref, true);
       S.plateSrc = src;
-    }
+    } else $("#plate img")?.setAttribute("alt", ref.title); // a renamed title (Task 3c)
     renderBoxes(ref);
     renderCallouts(ref);
     renderRanked(ref);
@@ -183,6 +184,7 @@ export function mountReference(
   function renderEmpty() {
     linkEditor?.close(); // nothing left to link from
     boardMenu?.close();
+    details?.close();
     boardsLine.hidden = true;
     S.focus = S.pinned = S.hot = S.arrival = null;
     S.filter = noFilter();
@@ -828,13 +830,12 @@ export function mountReference(
     if (c.reset || c.taxonomy || c.links || c.scope || c.removed.length || !f) return true;
     // A board Change under a scope can change who is in it; one that removed the board clears it.
     if (c.scopeCleared || (c.boards && store.scope !== null)) return true;
-    // With a filter on, a ranked or newly matching reference changes the Ranked list too.
+    // A reference on show in Ranked or Links (a renamed title, Task 3c) changes them too.
+    const linked = new Set(linksOf(f).flatMap((l) => [l.fromRef, l.toRef]));
+    if (c.references.some((r) => S.ranked.includes(r.id) || linked.has(r.id))) return true;
+    // With a filter on, a newly matching reference changes the Ranked list too.
     const filtered = new Set(S.filter.techniques);
-    if (
-      filtered.size &&
-      c.references.some((r) => S.ranked.includes(r.id) || r.tags.some((t) => t.techniqueId && filtered.has(t.techniqueId)))
-    )
-      return true;
+    if (filtered.size && c.references.some((r) => r.tags.some((t) => t.techniqueId && filtered.has(t.techniqueId)))) return true;
     const techs = new Set(f.tags.map((t) => t.techniqueId).filter(Boolean));
     const branches = new Set(f.tags.map((t) => t.branchId).filter(Boolean));
     return c.references.some(
@@ -848,6 +849,7 @@ export function mountReference(
     // A library switch starts a fresh history; Rust clears the undo trail, the Store its flags.
     S.trail = c.reset ? [] : S.trail.filter((id) => store.refs.has(id));
     if (c.reset) {
+      details?.close(); // it belonged to the old library
       const html = warningHTML(store.warning) + integrityHTML(store.integrity);
       if (html) notify(html);
       else $<HTMLElement>("#import-notice")!.hidden = true; // the old library's notice is stale

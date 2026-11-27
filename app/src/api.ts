@@ -105,8 +105,7 @@ export type DemoExample = { techniqueId: string; title: string; path: string };
 export type NewTechnique = { name: string; description: string; operationId: string; domainId: string };
 /** Tag this reference with the new technique in the same undo step. */
 export type TagFor = { refId: string; region?: Region };
-/** Absent keeps the field, `null` clears it; Rust trims, and `""` clears too. */
-/** Absent keeps a field, null (or "") clears it. Plan 6 Task 3c adds the four detail fields (title can't be cleared). */
+/** Absent keeps a field, null (or "") clears it; Rust trims. Plan 6 Task 3c adds the four detail fields (title can't be cleared). */
 export type FieldPatch = {
   note?: string | null;
   sourceUrl?: string | null;
