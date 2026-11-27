@@ -29,8 +29,10 @@ export function openDetails(root: HTMLElement, ref: Reference, api: Api, store: 
     const input =
       k === "credit"
         ? `<textarea id="${id}" name="${k}" rows="5" maxlength="${max}">${esc(was[k])}</textarea>`
-        : `<input id="${id}" name="${k}" type="text" maxlength="${max}" value="${esc(was[k])}">`;
-    return `<div class="dt-row"><label for="${id}">${label}</label>${input}</div>`;
+        : `<input id="${id}" name="${k}" type="text" maxlength="${max}" value="${esc(was[k])}"${k === "year" ? ` aria-describedby="dt-year-hint"` : ""}>`;
+    // Year is free text: museums give ranges and circa dates (Task 3c).
+    const hint = k === "year" ? `<p class="dt-hint" id="dt-year-hint">As the source gives it, such as c. 1906 or 1892–95.</p>` : "";
+    return `<div class="dt-row"><label for="${id}">${label}</label>${input}${hint}</div>`;
   };
   el.innerHTML = `<div class="st-sheet dt-sheet">
     <div class="st-head"><h1 class="st-title" id="dt-heading">Details</h1></div>

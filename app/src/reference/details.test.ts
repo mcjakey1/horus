@@ -45,6 +45,8 @@ describe("the Details dialog (Plan 6 Task 3c)", () => {
       expect(f.value).toBe(value);
     }
     expect(field("credit").tagName).toBe("TEXTAREA");
+    const hint = document.getElementById(field("year").getAttribute("aria-describedby")!)!;
+    expect(hint.textContent).toBe("As the source gives it, such as c. 1906 or 1892–95.");
     expect(document.activeElement).toBe(field("title"));
     expect($("main").inert).toBe(true);
   });
