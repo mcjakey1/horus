@@ -3,6 +3,8 @@
 # Never runs on an ordinary push. It runs only:
 #   - by hand (workflow_dispatch), on any branch: build, test and upload the artefacts to the
 #     run; no release is made;
+#   - on a push to a ci/** branch (a test build; workflow_dispatch only lists workflows on the
+#     default branch): the same as by hand, no release;
 #   - on a pushed tag v*: the same, with `release-check --final` (no tag publishes while a
 #     release gate is open), then ONE draft prerelease, "(unsigned beta)", carrying every
 #     artefact and one SHA256SUMS over all of them.
@@ -14,6 +16,7 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+    branches: ["ci/**"]
 
 permissions:
   contents: read
