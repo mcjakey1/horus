@@ -20,14 +20,20 @@ use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 /// The bundled ONNX Runtime library (Plan 5, B1), as fetched by `npm run fetch:ort`.
 fn ort_library_name() -> String {
-    format!("{}onnxruntime{}", std::env::consts::DLL_PREFIX, std::env::consts::DLL_SUFFIX)
+    format!(
+        "{}onnxruntime{}",
+        std::env::consts::DLL_PREFIX,
+        std::env::consts::DLL_SUFFIX
+    )
 }
 
 /// Absolute path of the bundled ORT library, for `ort::init_from` (Task 0 load rules: never a
 /// bare name). Find similar loads it only when the feature is on.
 pub fn ort_library(app: &tauri::AppHandle) -> tauri::Result<std::path::PathBuf> {
-    app.path()
-        .resolve(format!("ort/{}", ort_library_name()), BaseDirectory::Resource)
+    app.path().resolve(
+        format!("ort/{}", ort_library_name()),
+        BaseDirectory::Resource,
+    )
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -199,7 +205,8 @@ mod tests {
     fn ort_library_matches_fetch_script() {
         let script = include_str!("../../scripts/fetch-ort.mjs");
         assert!(script.contains(&format!("native/{}\"", super::ort_library_name())));
-        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
         assert_eq!(conf["bundle"]["resources"]["ort/*"], "ort/");
     }
 }
