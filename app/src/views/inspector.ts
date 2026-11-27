@@ -10,6 +10,7 @@ import { EXTRA_INKS, opInk, opLabel, SEED_INK } from "../ops";
 import { tileBox, type Box } from "../reference/tile";
 import { branchLabel, confirmDelete, openMoveBranches, openMoveTags, READ_ONLY, refsUsing, Said, sayError } from "./move-tags";
 import { mountTechniqueForm } from "./technique-form";
+import { glyphFor } from "../glyphs/glyphs";
 
 export { READ_ONLY, sayError } from "./move-tags";
 
@@ -176,7 +177,8 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     body = E
       ? `<h2 class="insp-title" tabindex="-1">${edit("name", d?.name ?? node.domainId)}</h2>${area("Description", d?.description ?? "")}
       <h3 class="insp-h">Icon</h3><div class="insp-icons" role="group" aria-label="Icon">${DOMAIN_ICONS.map(
-        (i) => `<button class="insp-icon" data-icon="${esc(i)}" aria-pressed="${i === d?.icon}">${esc(i)}</button>`).join("")}</div>`
+        // The glyph, named (and titled) by its description (Plan 6 art).
+        (i) => `<button class="insp-icon" data-icon="${esc(i)}" aria-pressed="${i === d?.icon}" aria-label="${esc(i)}" title="${esc(i)}">${glyphFor(i)}</button>`).join("")}</div>`
       : `<h2 class="insp-title" tabindex="-1">${esc(d?.name ?? node.domainId)}</h2><p class="insp-desc">${esc(d?.description ?? "")}</p>`;
     body += `
       <div class="insp-list">${(g.children.get(node.id) ?? [])

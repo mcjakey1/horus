@@ -11,6 +11,8 @@ describe("glyphFor", () => {
     expect(square).toContain("<svg");
     expect(glyphFor("")).toBe(square);
     expect(glyphFor("no such icon")).toBe(square);
+    expect(glyphFor("toString")).toBe(square); // never a prototype member
+    expect(glyphFor("__proto__")).toBe(square);
   });
 
   it("every icon in the seed taxonomy and DOMAIN_ICONS has an entry", () => {

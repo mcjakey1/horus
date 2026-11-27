@@ -297,7 +297,10 @@ describe("inspector editing", () => {
     render({ kind: "branch", id: "br:group.feature" });
     const icons = [...el.querySelectorAll<HTMLButtonElement>(".insp-icon")];
     expect(icons).toHaveLength(8);
-    expect(icons[0].textContent).toBe("a short strip of three swatches, dark to light");
+    // The glyph, named by its description (Plan 6: the art replaces the text).
+    expect(icons[0].querySelector("svg")).not.toBeNull();
+    expect(icons[0].getAttribute("aria-label")).toBe("a short strip of three swatches, dark to light");
+    expect(icons[0].textContent).toBe("");
     expect(icons[0].getAttribute("aria-pressed")).toBe("true");
     icons[7].click();
     await flush();
