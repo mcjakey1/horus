@@ -46,7 +46,7 @@ async function launch(tag) {
   page.on("request", (r) => { const u = new URL(r.url()); if (u.hostname === "ipc.localhost") ipcLog.push(decodeURIComponent(u.pathname.slice(1))); });
   page.on("console", (m) => { if (m.type() === "error") consoleErr.push(`${tag}: ${m.text().slice(0, 200)}`); });
   page.on("pageerror", (e) => ok(`page error (${tag})`, false, e.message));
-  page.setDefaultTimeout(8000); P = page;
+  page.setDefaultTimeout(8000); P = page; if (await page.waitForSelector(".intro", { timeout: 4000 }).catch(() => null)) { await page.keyboard.press("Shift"); await page.waitForSelector(".intro", { state: "detached", timeout: 5000 }).catch(() => {}); } // Plan 6: the intro plays on every fresh config
   await page.emulateMedia({ colorScheme: "light" });
   return { b, page };
 }
