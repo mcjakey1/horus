@@ -464,7 +464,7 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   - `index_on_any_change`: applying a `Change` whose `references` hold 2 new hashes (from a fake `import_bytes` and a fake redo) queues exactly those 2, and a `Change` with known hashes queues nothing.
   - `mode_cutoffs`: the fake cosines are derived from `SIGLIP_B16_Q8.sim_min_*`, not literals (C3). A fake text cosine of `sim_min_text + 0.01` is kept by `by_text`, and a fake image cosine of `sim_min_image − 0.01` is dropped by `by_ref`.
   - `switch_library_stops_indexer`: opening library B while A is indexing leaves A's `embeddings.bin` with no write after the switch, and B is indexed.
-  - `failed_switch_restarts_old_indexer`: an `open_library` that fails after the stop leaves the old library indexed again by the start hook (B4).
+  - `start_hook_restarts_after_switch`: the start hook, run with Find similar ready and no indexer, starts one for whichever library is open; with an indexer already running, it starts none. This covers the failed-switch path (B4) without forcing `install()` to fail.
   - `demo_seed_is_indexed`: `create_library` with `seed_demo` indexes the demo references through the start pass (B4).
   - `errors_are_copy_not_raw_text`: for every `DlError`, a load error and an unknown error, `SimilarStatus.error` is the copy table's text and contains none of the raw error text (R11).
 
