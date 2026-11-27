@@ -68,15 +68,38 @@ export type LabelBox = { id: string; x: number; y: number; w: number; h: number;
 /** Design review F5: labels hide by overlap, not by size. Lower ranks claim their space first, then
  * input order; a label that overlaps one already kept is hidden.
  * ponytail: O(n²) over the labels on screen (a few hundred at most); a grid if that ever shows. */
-export function labelsShown(boxes: LabelBox[]): Set<string> {
+export function labelsShown(boxes: LabelBox[], obstacles: LabelBox[] = []): Set<string> {
   const kept: LabelBox[] = [];
+  const shown = new Set<string>();
   const order = boxes.map((b, i) => [b, i] as const).sort((p, q) => p[0].rank - q[0].rank || p[1] - q[1]);
+  let walls = false;
   for (const [b] of order) {
+    // Obstacles (the Tree's bars) always hold, but only against ranked names: the selected and
+    // hovered ones (rank -1) show even on a bar, and never knock a bar out (quick look 2).
+    if (!walls && b.rank >= 0) (kept.push(...obstacles), (walls = true));
     const hit = kept.some((k) => Math.abs(k.x - b.x) < (k.w + b.w) / 2 + LABEL_GAP_PX && b.y < k.y + k.h && k.y < b.y + b.h);
-    if (!hit) kept.push(b);
+    if (!hit) (kept.push(b), shown.add(b.id));
   }
-  return new Set(kept.map((b) => b.id));
+  return shown;
 }
+
+/** The Tree's connector bars (a horizontal edge between two joints) as screen boxes for
+ * `labelsShown`: a name that would sit on a bar hides by rank, as on another name (quick look 2:
+ * at 760 the third domain row landed on the technique bar). Pass them as `labelsShown`'s obstacles. */
+export type Bar = { id: string; x0: number; x1: number; y: number };
+/** The bars among the edges: a horizontal edge between two text-less joints. Once per change. */
+export function barsOf(edges: SceneEdge[], nodes: Map<string, SceneNode>): Bar[] {
+  const out: Bar[] = [];
+  for (const e of edges) {
+    const a = nodes.get(e.from), b = nodes.get(e.to);
+    if (a?.kind !== "label" || b?.kind !== "label" || a.text || b.text || a.y !== b.y || a.x === b.x) continue;
+    out.push({ id: `bar:${e.from}>${e.to}`, x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), y: a.y });
+  }
+  return out;
+}
+/** The bars on screen, per frame. */
+export const barBoxes = (bars: Bar[], cam: Camera): LabelBox[] =>
+  bars.map((b) => ({ id: b.id, x: ((b.x0 + b.x1) / 2 - cam.x) * cam.scale, y: (b.y - cam.y) * cam.scale - 1, w: (b.x1 - b.x0) * cam.scale, h: 2, rank: 0 }));
 
 /** A canvas label: at most LABEL_CHARS characters plus "…". The inspector and crumb show the full name. */
 export const clipLabel = (s: string) => (s.length > LABEL_CHARS ? `${s.slice(0, LABEL_CHARS)}…` : s);
