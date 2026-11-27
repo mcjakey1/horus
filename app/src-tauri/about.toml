@@ -7,4 +7,7 @@ accepted = [
   "Zlib",
   "Unicode-3.0",
   "MPL-2.0",
+  # webpki-roots' Mozilla CA data (via rustls in ureq, the model download). A permissive
+  # data licence; controller ruling, flagged to the user under gate G8.
+  "CDLA-Permissive-2.0",
 ]

@@ -6639,6 +6639,10 @@ SOFTWARE.
 
 `msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll` and `vcruntime140_1.dll`, from the Microsoft Visual C++ Redistributable for Visual Studio, ship beside `horus.exe` so that ONNX Runtime runs on a computer without the redistributable installed. Copyright Microsoft Corporation. They are distributed under the Microsoft Visual C++ Redistributable licence terms (the Visual Studio licence's distributable code terms). Release gate G9 confirms from the terms that app-local distribution is allowed before a public release.
 
+## webpki-roots (Mozilla's CA certificates)
+
+The Find similar download checks Hugging Face's TLS certificate against Mozilla's root certificates, bundled by the `webpki-roots` crate (through `rustls`, in `ureq`). That certificate data is under the Community Data License Agreement – Permissive, Version 2.0 (CDLA-Permissive-2.0); the crate's licence text is listed with the Rust crates below. Accepting this data licence was a controller ruling, flagged to the user under release gate G8.
+
 ## tokenizers
 
 `tokenizers` (Hugging Face), https://github.com/huggingface/tokenizers . Licensed under the Apache License, Version 2.0 (full text above, under SigLIP base).
