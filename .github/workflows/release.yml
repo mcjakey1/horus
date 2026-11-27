@@ -1,0 +1,228 @@
+# Plan 6 Task 6: the three-platform release build, unsigned (Decision 2).
+#
+# Never runs on an ordinary push. It runs only:
+#   - by hand (workflow_dispatch), on any branch: build, test and upload the artefacts to the
+#     run; no release is made;
+#   - on a pushed tag v*: the same, with `release-check --final` (no tag publishes while a
+#     release gate is open), then ONE draft prerelease, "(unsigned beta)", carrying every
+#     artefact and one SHA256SUMS over all of them.
+# CI never runs ignored tests (`--ignored`, `--include-ignored`; Plan 5 rule, R8).
+
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+            args: ""
+            bundle: app/src-tauri/target/release/bundle
+          # Apple Silicon only (R7): an arm64 runner, one target.
+          - name: macos-arm64
+            os: macos-latest
+            args: "--target aarch64-apple-darwin"
+            bundle: app/src-tauri/target/aarch64-apple-darwin/release/bundle
+          - name: linux
+            os: ubuntu-22.04
+            args: ""
+            bundle: app/src-tauri/target/release/bundle
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: app
+    steps:
+      # 1. Checkout, Node 24, stable Rust, caches.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.name == 'macos-arm64' && 'aarch64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+
+      # fetch-ort.mjs skips a download when the pinned, verified files are already in place.
+      - name: Cache ONNX Runtime
+        uses: actions/cache@v4
+        with:
+          path: app/src-tauri/ort
+          key: ort-${{ runner.os }}-${{ hashFiles('app/scripts/fetch-ort.mjs') }}
+
+      - name: Linux prerequisites (Tauri v2)
+        if: runner.os == 'Linux'
+        working-directory: .
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      # 2. Dependencies, ONNX Runtime (R8), tests, the frontend build.
+      - run: npm ci
+
+      - name: Fetch ONNX Runtime (R8)
+        run: npm run fetch:ort
+
+      # B4: the four VC++ runtime DLLs ship app-local, beside onnxruntime.dll in src-tauri/ort/.
+      # fetch-ort.mjs copies them on Windows (Task 5); this step does the same through vswhere
+      # when they are missing, then checks that each is there and at least version 14.
+      - name: VC++ runtime DLLs (B4)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ort = "src-tauri/ort"
+          $dlls = "msvcp140.dll", "msvcp140_1.dll", "vcruntime140.dll", "vcruntime140_1.dll"
+          if ($dlls | Where-Object { -not (Test-Path (Join-Path $ort $_)) }) {
+            $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+            $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+            if (-not $vs) { throw "vswhere found no Visual Studio with the C++ tools" }
+            $crt = Get-ChildItem "$vs\VC\Redist\MSVC\*\x64\Microsoft.VC14*.CRT" -Directory | Sort-Object FullName | Select-Object -Last 1
+            if (-not $crt) { throw "no VC\Redist\MSVC\<ver>\x64\Microsoft.VC14*.CRT under $vs" }
+            foreach ($d in $dlls) { Copy-Item (Join-Path $crt.FullName $d) $ort -Force }
+            Write-Host "Copied the VC++ runtime from $($crt.FullName)"
+          }
+          foreach ($d in $dlls) {
+            $v = (Get-Item (Join-Path $ort $d)).VersionInfo.FileMajorPart
+            if ($v -lt 14) { throw "$d is version $v, under 14" }
+            Write-Host "$d $((Get-Item (Join-Path $ort $d)).VersionInfo.FileVersion)"
+          }
+
+      - name: cargo test
+        working-directory: app/src-tauri
+        run: cargo test
+
+      - run: npm test
+
+      - run: npm run build
+
+      # The notices (Task 5): generated here, never by hand. cargo-about and
+      # license-checker-rseidelsohn are build-time tools only, never shipped.
+      - name: Install cargo-about
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+
+      - name: Generate THIRD_PARTY_NOTICES.md
+        run: |
+          {
+            cat notices/manual.md
+            echo
+            (cd src-tauri && cargo about generate about.hbs)
+            echo
+            echo "## npm packages"
+            echo
+            npx --yes license-checker-rseidelsohn --production --plainVertical
+          } > THIRD_PARTY_NOTICES.md
+          wc -c THIRD_PARTY_NOTICES.md
+
+      # 3. The release check. On a tag, --final: an open gate in RELEASE-GATES.md fails the job
+      # before any build time is spent.
+      - name: release-check
+        run: npm run release-check -- ${{ startsWith(github.ref, 'refs/tags/v') && '--final' || '' }}
+
+      # 4. The bundles. No release here: the `release` job makes one draft for all three.
+      # No signing secrets are set, so everything is unsigned (macOS ad hoc: signingIdentity "-").
+      - name: Build the installers
+        uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: app
+          args: ${{ matrix.args }}
+
+      # checkBundle (Task 5) measures the artefacts against their size budgets, so it runs again
+      # now that they exist.
+      - name: release-check, with the bundles
+        run: npm run release-check -- ${{ startsWith(github.ref, 'refs/tags/v') && '--final' || '' }}
+
+      # 6. macOS only, the signing spike (B2): the app's ad-hoc signature verifies, and the ORT
+      # dylib in Contents/Frameworks is signed. Either failing fails the job.
+      - name: codesign spike (B2)
+        if: runner.os == 'macOS'
+        working-directory: .
+        run: |
+          app_path="${{ matrix.bundle }}/macos/Horus.app"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          codesign -dv --verbose=2 "$app_path/Contents/Frameworks/libonnxruntime.dylib"
+
+      # The installers and their sizes, kept with the run (and handed to the release job).
+      - name: Collect the artefacts
+        working-directory: .
+        run: |
+          mkdir -p out
+          b="${{ matrix.bundle }}"
+          for f in "$b"/nsis/*.exe "$b"/msi/*.msi "$b"/dmg/*.dmg "$b"/appimage/*.AppImage "$b"/deb/*.deb; do
+            if [ -f "$f" ]; then cp "$f" out/; fi
+          done
+          # Tauri writes .app.tar.gz only with updater artefacts (out of v1.0), so pack it here.
+          if [ -d "$b/macos/Horus.app" ]; then
+            ref="${GITHUB_REF_NAME//\//-}" # a branch name may hold a slash
+            tar -czf "out/Horus_${ref}_aarch64.app.tar.gz" -C "$b/macos" Horus.app
+          fi
+          ls out/* > /dev/null
+          for f in out/*; do
+            printf '%s\t%s\n' "$(wc -c < "$f" | tr -d ' ')" "$(basename "$f")"
+          done | tee "out/sizes-${{ matrix.name }}.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: horus-${{ matrix.name }}
+          path: out/
+          if-no-files-found: error
+
+  # 5. Tags only: one draft prerelease, "(unsigned beta)", with every artefact and SHA256SUMS.
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # The sizes files stay with the run's artefacts; the release carries installers only.
+      - name: SHA256SUMS
+        working-directory: dist
+        run: |
+          mkdir -p ../sizes
+          mv sizes-*.txt ../sizes/
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS ../sizes/*
+
+      - name: Draft prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/* \
+            --draft --prerelease \
+            --title "Horus ${{ github.ref_name }} (unsigned beta)" \
+            --notes-file docs/release/INSTALL-UNSIGNED.md \
+            --verify-tag
