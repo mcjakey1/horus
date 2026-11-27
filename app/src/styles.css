@@ -635,7 +635,7 @@ kbd { font: 500 12px var(--mono); padding: 0 4px; border: 1px solid var(--line-2
 .cmp-top > .cmp-value { margin-left: auto; } /* the score moved to the Shared column: the actions stay right */
 .cmp-score { margin: 0; }
 .cmp-num { display: block; font: 500 16px var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); } /* Readout */
-.cmp-mid li .seg, .cmp-side li .seg { white-space: nowrap; } /* a path breaks only at › (§7) */
+.cmp-mid li .seg, .cmp-side li .seg { display: inline-block; max-width: 100%; overflow-wrap: anywhere; } /* a path breaks at › (§7); only a name wider than the column wraps inside */
 .cmp-cap { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-2); }
 .cmp-lb { padding-left: 0; padding-right: 0; } /* flush with the card's left edge */
 .cmp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 260px) minmax(0, 1fr); gap: 24px; padding-top: 16px; }
@@ -700,6 +700,7 @@ kbd { font: 500 12px var(--mono); padding: 0 4px; border: 1px solid var(--line-2
    menu); the border goes to secondary ink while a file is over it. */
 .sim-drop { display: none; position: absolute; top: calc(46px + var(--list-h, 0px)); left: 0; right: 0; min-height: 56px; padding: 12px; place-items: center; text-align: center; background: var(--panel); border: 1px solid var(--line-2); color: var(--ink-2); font-size: 12px; z-index: 20; }
 .search:has(#q-results:not([hidden])) .sim-drop, .search.is-drag .sim-drop { display: grid; }
+.search:has(#q-results[hidden]) .sim-drop { top: 38px; } /* a drag with the list closed: under the field */
 .search.is-drag .sim-drop { border-color: var(--ink-2); color: var(--ink); }
 /* Narrow windows: the field spans the bar, so the target takes the dropdown's place under it,
    during a drag only; the listbox steps aside for the drag. */

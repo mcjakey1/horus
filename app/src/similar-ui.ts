@@ -100,6 +100,7 @@ export function wireSimilar(
     // list's height, read as it changes, places the zone (0 while the list is hidden).
     const list = $("#q-results");
     if (list && typeof ResizeObserver === "function") {
+      zone.style.setProperty("--list-h", `${list.offsetHeight}px`); // before the first observation
       listObs = new ResizeObserver(() => zone.style.setProperty("--list-h", `${list.offsetHeight}px`));
       listObs.observe(list);
     }

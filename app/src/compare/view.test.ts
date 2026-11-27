@@ -56,7 +56,7 @@ describe("Compare", () => {
     const li = $('.cmp-shared li[data-tech="t2"]');
     expect(li.style.getPropertyValue("--t")).toBe("var(--x-rose-text)");
     expect(li.textContent).toBe("Beat › Feature › Tech t2"); // the full path (design judgement #5)
-    expect([...li.querySelectorAll(".seg")].map((s) => s.textContent)).toEqual(["Feature", "Tech t2"]); // breaks only at › (§7)
+    expect([...li.querySelectorAll(".seg")].map((s) => s.textContent)).toEqual(["Beat", "Feature", "Tech t2"]); // breaks at › (§7)
     expect([...document.querySelectorAll('.cmp-side[data-side="a"] .cmp-only li')].map((l) => l.textContent)).toEqual(["Beat › Feature › Tech t1"]);
     expect(document.querySelector(".cmp-branches")).toBeNull(); // its branch has a shared technique: no empty list (F7)
     expect($(".cmp-score").textContent).toBe("0.42 related by technique");
