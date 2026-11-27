@@ -39,7 +39,21 @@ export function labelRows(g: TaxGraph, p: Placed): Map<string, number> {
   for (const kind of ["op", "branch", "tech"] as const) {
     const band = [...g.nodes.values()].filter((n) => n.kind === kind && p.has(n.id)).map((n) => n.id);
     band.sort((a, b) => p.get(a)!.x - p.get(b)!.x);
-    band.forEach((id, k) => rows.set(id, k % 3));
+    if (kind !== "op") {
+      band.forEach((id, k) => rows.set(id, k % 3));
+      continue;
+    }
+    // Operations take the lowest row whose last name is 3 × GAP away, so the seed's four, far
+    // apart, all sit on row 0 (design quick look 3: Sequence on row 2 met the bar at 760). Ops are
+    // at least GAP apart, so at most 2 rows are ever blocked; k % 3 is only a guard.
+    const last = [-Infinity, -Infinity, -Infinity];
+    band.forEach((id, k) => {
+      const x = p.get(id)!.x;
+      const free = last.findIndex((l) => x - l >= 3 * GAP);
+      const r = free >= 0 ? free : k % 3;
+      last[r] = x;
+      rows.set(id, r);
+    });
   }
   return rows;
 }
