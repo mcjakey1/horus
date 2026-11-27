@@ -198,8 +198,11 @@ describe("first run", () => {
 
   it("firstrun_enable_failure_notice: the first error status shows its copy once, as a notice", async () => {
     const api = fakeApi(null);
-    let emit!: (s: Parameters<Parameters<Api["onSimilarStatus"]>[0]>[0]) => void;
-    vi.mocked(api.onSimilarStatus).mockImplementation(async (cb) => ((emit = cb), () => {}));
+    // Every subscriber hears it: Settings (Task 6) and the status bar (Task 7) both listen.
+    type Status = Parameters<Parameters<Api["onSimilarStatus"]>[0]>[0];
+    const subs: ((s: Status) => void)[] = [];
+    const emit = (s: Status) => subs.forEach((cb) => cb(s));
+    vi.mocked(api.onSimilarStatus).mockImplementation(async (cb) => (subs.push(cb), () => {}));
     const { done } = await begin(api, "on");
     $<HTMLButtonElement>("#fr-go").click();
     const view = await done;
@@ -269,8 +272,10 @@ describe("boot wiring (Task 9)", () => {
       getTaxonomy: vi.fn(async () => seedJson as unknown as Taxonomy),
       importPaths: vi.fn(async () => ({ report: { added: ["n1"], duplicates: [], skipped: [] }, change: { references: [mk("n1")], removed: [], canUndo: true, canRedo: false } })),
     };
-    let drop!: (e: { payload: DragDropEvent }) => void;
-    const win = { onDragDropEvent: vi.fn((cb: typeof drop) => ((drop = cb), Promise.resolve(() => {}))) };
+    // Every listener hears it: intake and Find similar's drop target (Plan 5 Task 7) both listen.
+    const drops: ((e: { payload: DragDropEvent }) => void)[] = [];
+    const drop = (e: { payload: DragDropEvent }) => drops.forEach((cb) => cb(e));
+    const win = { onDragDropEvent: vi.fn((cb: (e: { payload: DragDropEvent }) => void) => (drops.push(cb), Promise.resolve(() => {}))) };
     const view = await boot(document.body, api, win);
     await view.ready;
     await new Promise((r) => setTimeout(r, 260));

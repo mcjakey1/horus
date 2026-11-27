@@ -19,6 +19,7 @@ import { mountRadial } from "./views/radial";
 import { mountGalaxy } from "./views/galaxy";
 import { mountBoards } from "./boards/view";
 import { mountScopeStatus } from "./boards/status";
+import { wireSimilar } from "./similar-ui";
 import { CATCH_ALL, FIND_SIMILAR_COPY, fmtBytes } from "./settings/find-similar";
 import { mountSettings } from "./settings/panel";
 
@@ -51,9 +52,13 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   const openCompare = makeOpenCompare(root, api, store);
   // Plan 3: the view shell. Search hits from any view switch to the Reference view first (R5).
   const shell = mountViews(root, { showReference: (id) => view.show(id) });
+  // Plan 5 Task 7 (R14): Find similar hears every shown reference and gives search its option B.
+  let similar: ReturnType<typeof wireSimilar> | null = null;
   const view = mountReference(root, api, store, {
     onNavigate: () => shell.select("reference"),
     openCompare: (a, b) => openCompare(a, b), // no onClose: Esc only closes; filter and pins stay
+    onShow: (id) => similar?.show(id),
+    similar: () => similar?.search(),
   });
   // The graph views' read-only data seam; Tasks 6-8 pass it to their views.
   const source = storeSource(store);
@@ -107,12 +112,16 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   const unmountSaveDialog = mountSaveDialog(root, api);
   const unwireSaveStatus = wireSaveStatus(root, api);
   const settingsPanel = mountSettings(root, api); // Plan 5 Task 6: the top bar's gear
+  similar = wireSimilar(root, api, store, win ?? null, {
+    openReference: shell.openReference,
+    openSettings: () => settingsPanel.open("find-similar"),
+  });
   return {
     ...view,
     store,
     source,
     destroy: () =>
-      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), settingsPanel.close(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
+      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), settingsPanel.close(), similar?.destroy(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
   };
 }
 

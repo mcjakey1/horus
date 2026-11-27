@@ -27,8 +27,15 @@ export function mountReference(
   root: HTMLElement,
   api: Api,
   store: Store,
-  /** `openCompare`: boot()'s one Compare opener (Plan 4 Task 7); Shift-click and Shift+Enter call it. */
-  opts: { onNavigate?(): void; openCompare?(a: string, b: string): void } = {},
+  /** `openCompare`: boot()'s one Compare opener (Plan 4 Task 7); Shift-click and Shift+Enter call it.
+   * Plan 5 (R14): `onShow` hears every shown reference; `similar` gives search its option B, or
+   * undefined while Find similar is off. */
+  opts: {
+    onNavigate?(): void;
+    openCompare?(a: string, b: string): void;
+    onShow?(id: string): void;
+    similar?(): ((q: string) => Promise<string[]>) | undefined;
+  } = {},
 ): { show(id: string): void; ready: Promise<void>; destroy(): void } {
   const life = new AbortController();
   const signal = life.signal;
@@ -115,6 +122,7 @@ export function mountReference(
     }
     renderBack();
     renderStatus();
+    opts.onShow?.(id);
   }
 
   function paintFocus(ref: Reference) {
@@ -200,7 +208,7 @@ export function mountReference(
     // The library's warning lives in #import-notice only (982f8a6), never here as well.
     $("#data-source")!.textContent = `Library: ${folder}`;
     $("#data-source")!.title = store.root;
-    $("#find-similar")!.textContent = `Find similar: ${S.settings.findSimilar === "on" ? "on" : "off"}`;
+    // #find-similar is Plan 5's live status, kept by wireSimilar (similar-ui.ts).
   }
 
   function renderBoxes(ref: Reference) {
@@ -574,6 +582,10 @@ export function mountReference(
     // R5: search works from any view; onNavigate (the shell's select("reference")) runs first.
     onTechnique: (id) => (opts.onNavigate?.(), applyFilter(id)),
     onReference: (id) => (opts.onNavigate?.(), show(id)),
+    // Read on each keystroke: Find similar can turn on or off while the view is up.
+    get similar() {
+      return opts.similar?.();
+    },
   }, signal);
 
   const notify = mountImport(root, api, {
