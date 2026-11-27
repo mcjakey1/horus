@@ -7,7 +7,8 @@ import {
   buildGrids,
   classifyDrag,
   clipLabel,
-  labelShown,
+  labelsShown,
+  LABEL_PX,
   mountCanvasOrFallback,
   nodeRect,
   planFrame,
@@ -102,10 +103,22 @@ describe("planFrame", () => {
     expect(plan.lod.get("r")).toBe("dot");
   });
 
-  it("labels hide below 8 screen px and are cut at 24 characters (final review I1)", () => {
-    expect(labelShown(0.5)).toBe(false); // 6.5 px
-    expect(labelShown(1)).toBe(true);
-    expect(labelShown(8 / 13)).toBe(true);
+  it("labels hide by overlap, not by size: operations, then branches, then techniques (design review F5)", () => {
+    const box = (id: string, x: number, y: number, rank: number, w = 60) => ({ id, x, y, w, h: 16, rank });
+    const shown = labelsShown([
+      box("tech:a", 0, 0, 2), // overlaps the branch below: the branch wins
+      box("br:b", 10, 4, 1),
+      box("op:o", 200, 0, 0),
+      box("tech:c", 230, 10, 2), // overlaps the operation
+      box("tech:d", 400, 0, 2),
+      box("tech:e", 459, 0, 2), // touches d's right edge minus 1 px: overlaps, the earlier one stays
+      box("tech:f", 470, 0, 2), // clear of d once e is hidden
+    ]);
+    expect([...shown].sort()).toEqual(["br:b", "op:o", "tech:d", "tech:f"]);
+    expect(LABEL_PX).toBe(12);
+  });
+
+  it("labels are cut at 24 characters (final review I1)", () => {
     expect(clipLabel("Rim light")).toBe("Rim light");
     expect(clipLabel("x".repeat(24))).toBe("x".repeat(24));
     expect(clipLabel("Complementary pairing of warm and cool")).toBe("Complementary pairing of…");

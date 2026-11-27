@@ -11,7 +11,9 @@ import {
   buildGrids,
   classifyDrag,
   EdgeGate,
-  labelShown,
+  labelsShown,
+  LABEL_PX,
+  type LabelBox,
   sameLook,
   nodeRect,
   planFrame,
@@ -309,6 +311,8 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     }
     let loading = false;
     const wanted = new Set<string>(); // URLs drawn as thumbnails this frame
+    const names: LabelBox[] = []; // the taxonomy names on screen this frame (F5)
+    const named = new Map<string, PixiNS.Text>();
     for (const id of plan.visible) {
       const n = nodes.get(id)!;
       let o = objs.get(id);
@@ -323,7 +327,15 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       o.dot.visible = !thumb;
       o.dot.scale.set(1 / cam.scale); // a 3 px dot at every zoom
       o.body.visible = thumb;
-      if (o.label) o.label.visible = labelShown(cam.scale); // a taxonomy name (I1)
+      if (o.label && thumb && n.kind !== "ref" && n.kind !== "label") {
+        // A taxonomy name, LABEL_PX tall on screen at every zoom; which ones show is decided by
+        // overlap once every name on screen is known (design review F5).
+        o.label.scale.set(LABEL_PX / (LABEL_FONT * cam.scale));
+        const top = n.y + n.size / 2 + 4 + (n.labelDy ?? 0);
+        const rank = n.kind === "op" ? 0 : n.kind === "branch" ? 1 : 2;
+        names.push({ id, x: (n.x - cam.x) * cam.scale, y: (top - cam.y) * cam.scale, w: o.label.width * cam.scale, h: LABEL_PX * 1.25, rank });
+        named.set(id, o.label);
+      }
       if (n.kind === "ref" && o.sprite) {
         if (!thumb) {
           o.sprite.texture = PIXI.Texture.EMPTY;
@@ -339,6 +351,8 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         }
       }
     }
+    const keep = labelsShown(names);
+    for (const [id, label] of named) label.visible = keep.has(id);
     // By URL, not by node: one reference can be drawn under several techniques (Tree), and a node
     // can drop from thumb to dot while still on screen. Only loads a thumbnail wants stay in flight.
     for (const url of tex.loading()) if (!wanted.has(url)) tex.cancel(url);

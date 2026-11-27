@@ -2,7 +2,7 @@
 // fallback. Views and their tests import this; only scene.ts loads pixi.js.
 import type { Region } from "../api";
 import { viewRect, type Camera, type Rect } from "./camera";
-import { LABEL_CHARS, LABEL_FONT, LABEL_MIN_PX, NODE, TEX_CAP } from "./constants";
+import { LABEL_CHARS, NODE, TEX_CAP } from "./constants";
 import { lodFor, type Lod } from "./lod";
 import { SpatialGrid } from "./spatial";
 
@@ -55,8 +55,23 @@ function fallbackParagraph(): HTMLParagraphElement {
   return p;
 }
 
-/** A taxonomy node's label shows only while it is at least LABEL_MIN_PX tall on screen (final review I1). */
-export const labelShown = (scale: number) => LABEL_FONT * scale >= LABEL_MIN_PX;
+/** Taxonomy names are drawn this tall on screen at every zoom (design review F5). */
+export const LABEL_PX = 12;
+/** A label on screen: `x` is its centre, `y` its top (px); `rank` 0 operation, 1 branch, 2 technique. */
+export type LabelBox = { id: string; x: number; y: number; w: number; h: number; rank: number };
+
+/** Design review F5: labels hide by overlap, not by size. Lower ranks claim their space first, then
+ * input order; a label that overlaps one already kept is hidden.
+ * ponytail: O(n²) over the labels on screen (a few hundred at most); a grid if that ever shows. */
+export function labelsShown(boxes: LabelBox[]): Set<string> {
+  const kept: LabelBox[] = [];
+  const order = boxes.map((b, i) => [b, i] as const).sort((p, q) => p[0].rank - q[0].rank || p[1] - q[1]);
+  for (const [b] of order) {
+    const hit = kept.some((k) => Math.abs(k.x - b.x) * 2 < k.w + b.w && b.y < k.y + k.h && k.y < b.y + b.h);
+    if (!hit) kept.push(b);
+  }
+  return new Set(kept.map((b) => b.id));
+}
 
 /** A canvas label: at most LABEL_CHARS characters plus "…". The inspector and crumb show the full name. */
 export const clipLabel = (s: string) => (s.length > LABEL_CHARS ? `${s.slice(0, LABEL_CHARS)}…` : s);

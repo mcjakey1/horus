@@ -20,4 +20,3 @@ export const LABEL_CHARS = 24; // a canvas label longer than this is cut, plus "
 export const LABEL_W = 184; // world width kept for a label: 25 characters × 7, plus padding
 export const LABEL_ROW = 18; // the Tree staggers branch and technique labels over 3 rows this far apart
 export const LABEL_FONT = 13; // label size in world units
-export const LABEL_MIN_PX = 8; // a label smaller than this on screen is hidden
