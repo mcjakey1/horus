@@ -551,6 +551,16 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     dirty = true;
   });
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  // Names built before the serif web font loads keep the fallback's measure and face (a cut last
+  // glyph, a lighter name) until rebuilt: rebuild once it is ready (design quick look 2, Tree at 760).
+  void document.fonts
+    ?.load(`${LABEL_FONT}px "Source Serif 4"`)
+    .then(() => {
+      if (life.signal.aborted) return;
+      clearObjs();
+      dirty = true;
+    })
+    .catch(() => {}); // no such font (a test, a stripped build): the fallback stays, as before
   // A host shown or resized by CSS (no window resize): resizeTo alone would miss it.
   const resize = typeof ResizeObserver === "function"
     ? new ResizeObserver(() => {
