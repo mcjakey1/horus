@@ -4,7 +4,7 @@ import html from "../index.html?raw";
 import type { DragDropEvent } from "@tauri-apps/api/webview";
 import seedJson from "../src-tauri/resources/taxonomy.json";
 import type { Api, LibraryView, Reference, Tag, Taxonomy } from "./api";
-import { boot, FIND_SIMILAR_COPY, reloadThumbs } from "./firstrun";
+import { boot, FIND_SIMILAR_COPY, reloadThumbs, verifyImageFiles } from "./firstrun";
 import { createStore } from "./store";
 
 // Plan 4 Task 7 wiring: capture what boot() hands the Galaxy and what reaches the one openCompare.
@@ -102,7 +102,7 @@ function fakeApi(lastLibrary: string | null): Api {
     appVersion: vi.fn(async () => "1.0.0"),
     noticesPath: vi.fn(async () => "C:/Horus/THIRD_PARTY_NOTICES.md"),
     openPath: vi.fn(async () => {}),
-    verifyImageFiles: vi.fn(async () => []),
+    verifyImageFiles: vi.fn(async () => ({ changed: [], checked: 0, total: 0 })),
     cancelVerify: vi.fn(async () => {}),
     onVerifyProgress: vi.fn(async () => () => {}),
     onImportProgress: vi.fn(async () => () => {}),
@@ -479,6 +479,88 @@ describe("the intro in boot (Plan 6 Task 4, R12)", () => {
     expect(api.openLibrary).toHaveBeenCalledWith("C:/lib");
     expect(api.setSettings).toHaveBeenCalledWith({ introSeen: true });
     view.destroy();
+  });
+});
+
+describe("the Help menu (Plan 6 Task 4)", () => {
+  beforeEach(() => {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+  });
+  const library: LibraryView = { root: "C:/lib", references: [], links: [], boards: [], warning: null, taxonomyReadOnly: false };
+  async function booted() {
+    let menu: ((id: "play-intro" | "about" | "verify") => void) | null = null;
+    const api: Api = {
+      ...fakeApi("C:/lib"),
+      openLibrary: vi.fn(async () => library),
+      getTaxonomy: vi.fn(async () => seedJson as unknown as Taxonomy),
+      onMenu: vi.fn(async (cb) => ((menu = cb), () => {})),
+    };
+    const view = await boot(document.body, api);
+    await vi.waitFor(() => expect(menu).not.toBeNull());
+    return { api, view, menu: menu! };
+  }
+
+  it("About closes an open Settings first, then opens over everything", async () => {
+    const { view, menu } = await booted();
+    document.querySelector<HTMLButtonElement>("#settings")!.click();
+    expect(document.querySelector(".settings:not(.about)")).not.toBeNull();
+    menu("about");
+    await vi.waitFor(() => expect(document.querySelector(".about")).not.toBeNull());
+    expect(document.querySelector(".settings:not(.about)")).toBeNull();
+    expect(document.querySelector(".about")!.textContent).toContain("Version 1.0.0");
+    view.destroy();
+    expect(document.querySelector(".about")).toBeNull();
+  });
+
+  it("Play intro replays it and leaves introSeen alone", async () => {
+    const { api, view, menu } = await booted();
+    menu("play-intro");
+    expect(document.querySelector(".intro")).not.toBeNull();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "x" }));
+    await vi.waitFor(() => expect(document.querySelector(".intro")).toBeNull());
+    expect(api.setSettings).not.toHaveBeenCalledWith({ introSeen: true });
+    view.destroy();
+  });
+});
+
+describe("Verify image files (Plan 6 Task 4)", () => {
+  beforeEach(() => {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+  });
+  const say = (h: string) => {
+    const n = document.querySelector<HTMLElement>("#import-notice")!;
+    n.querySelector("[data-body]")!.innerHTML = h;
+    n.hidden = false;
+  };
+
+  it("shows progress with Cancel, then the changed files with Show them", async () => {
+    let progress: ((p: { done: number; total: number }) => void) | null = null;
+    let finish: (r: { changed: string[]; checked: number; total: number }) => void = () => {};
+    const api = {
+      ...fakeApi("C:/lib"),
+      onVerifyProgress: vi.fn(async (cb: (p: { done: number; total: number }) => void) => ((progress = cb), () => {})),
+      verifyImageFiles: vi.fn(() => new Promise<{ changed: string[]; checked: number; total: number }>((r) => (finish = r))),
+    } as Api;
+    const run = verifyImageFiles(document, api, say);
+    await vi.waitFor(() => expect(progress).not.toBeNull());
+    progress!({ done: 3, total: 10 });
+    const n = document.querySelector("#import-notice")!;
+    expect(n.textContent).toContain("Verifying image files 3 of 10");
+    n.querySelector<HTMLButtonElement>("[data-cancel]")!.click();
+    expect(api.cancelVerify).toHaveBeenCalledTimes(1);
+    finish({ changed: ["a", "b"], checked: 10, total: 10 });
+    await run;
+    expect(n.textContent).toContain("2 image files have changed since they were added.");
+    expect(n.querySelector("[data-show-refs]")!.getAttribute("data-show-refs")).toBe("a b");
+  });
+
+  it("says when it was stopped, or when everything matches", async () => {
+    const api = { ...fakeApi("C:/lib"), verifyImageFiles: vi.fn(async () => ({ changed: [], checked: 4, total: 9 })) } as Api;
+    await verifyImageFiles(document, api, say);
+    expect(document.querySelector("#import-notice")!.textContent).toContain("Verify stopped after 4 of 9 image files.");
+    vi.mocked(api.verifyImageFiles).mockResolvedValueOnce({ changed: [], checked: 9, total: 9 });
+    await verifyImageFiles(document, api, say);
+    expect(document.querySelector("#import-notice")!.textContent).toContain("All 9 image files match the library.");
   });
 });
 

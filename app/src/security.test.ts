@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import html from "../index.html?raw";
 import seedJson from "../src-tauri/resources/taxonomy.json";
 import type { Api, Board, LibraryView, Link, Reference, SimilarStatus, Taxonomy } from "./api";
+import { demoCredits, FONTS, mountAbout } from "./about";
 import { mountBoards } from "./boards/view";
 import { mountCompare } from "./compare/view";
 import type { Snapshot } from "./data";
@@ -313,4 +314,19 @@ describe("untrusted text renders as text (Plan 6 Task 3)", () => {
     noMarkup();
     expect(unnamed(n)).toEqual([]);
   });
+
+  it("About: a hostile demo credit and version (Plan 6 Task 4)", () => {
+    const about = mountAbout(document.body, {
+      version: TITLE,
+      fonts: FONTS,
+      noticesPath: FILE,
+      demoCredits: demoCredits([{ title: TITLE, credit: CREDIT + NOTE, rights: WHY }]),
+    }, { openNotices: () => {} });
+    const d = document.querySelector<HTMLElement>(".about")!;
+    readsAsText(d, [TITLE, CREDIT + NOTE, WHY]);
+    noMarkup();
+    expect(unnamed(d)).toEqual([]);
+    about.close();
+  });
 });
+

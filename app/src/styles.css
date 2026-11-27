@@ -630,3 +630,17 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
   .search:not(.is-drag):has(#q-results:not([hidden])) .sim-drop { display: none; }
   .search.is-drag .q-results { display: none; }
 }
+
+/* Plan 6 Task 4: the intro card (above Settings 45 and first run 50). A placeholder frame, the
+   wordmark centred, until the design pass; its look stays in this block and its tokens. */
+.intro { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; background: var(--shell); color: var(--ink); }
+.intro-mark { margin: 0; font: 600 56px/1 var(--serif); letter-spacing: -.01em; animation: intro-in 1.2s ease-out both; }
+.intro.is-still .intro-mark { animation: none; }
+@media (prefers-reduced-motion: reduce) { .intro-mark { animation: none; } }
+@keyframes intro-in { from { opacity: 0; transform: translateY(6px); } }
+/* About: Settings' dialog and sheet, plus its lists. */
+.ab-version { margin: 0 0 12px; color: var(--ink-2); font-size: 13px; }
+.ab-h { margin: 16px 0 6px; font-size: 13px; font-weight: 600; }
+.ab-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
+.ab-credits { max-height: 40vh; overflow: auto; }
+.ab-rights { color: var(--ink-2); }

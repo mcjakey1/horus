@@ -58,6 +58,9 @@ export type LibraryView = {
   integrity?: IntegrityReport | null;
 };
 
+/** Plan 6 Task 4: Help > Verify image files… `changed`: reference ids whose file no longer matches. */
+export type VerifyReport = { changed: string[]; checked: number; total: number };
+
 /** Plan 6 Task 4: the Help menu's items, as Rust emits them on `menu://action`. */
 export type MenuId = "play-intro" | "about" | "verify";
 
@@ -208,8 +211,8 @@ export interface Api {
   noticesPath(): Promise<string>;
   /** The capability allows exactly one path: the notices (R10). */
   openPath(path: string): Promise<void>;
-  /** Ids whose original no longer matches its hash; [] when cancelled early. */
-  verifyImageFiles(): Promise<string[]>;
+  /** Hashes every original; `checked < total` when cancelled. Never changes the library. */
+  verifyImageFiles(): Promise<VerifyReport>;
   cancelVerify(): Promise<void>;
   onVerifyProgress(cb: (p: { done: number; total: number }) => void): Promise<() => void>;
   importPaths(paths: string[], meta?: IntakeMeta): Promise<ImportResult>;

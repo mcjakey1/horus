@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 // @ts-expect-error type error without @types/node package (as vite.config.ts)
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import manifest from "../src-tauri/resources/demo/manifest.json";
-import { aboutHTML, type AboutInfo, demoCredits, FONTS, PRIVACY } from "./about";
+import { aboutHTML, type AboutInfo, demoCredits, FONTS, mountAbout, PRIVACY } from "./about";
 
 const text = (h: string) => {
   const d = document.createElement("div");
@@ -56,3 +56,34 @@ describe("About (Plan 6 Task 4)", () => {
     expect(d.textContent).toContain("<img src=x onerror=1>");
   });
 });
+
+describe("the About dialog", () => {
+  it("holds the window, opens the notices, and Esc closes it back to its opener", () => {
+    document.body.innerHTML = `<main><button id="opener">Help</button></main>`;
+    const opener = document.querySelector<HTMLButtonElement>("#opener")!;
+    opener.focus();
+    const openNotices = vi.fn();
+    const about = mountAbout(document.body, info(), { openNotices });
+    const dlg = document.querySelector<HTMLElement>(".about")!;
+    expect(dlg.getAttribute("role")).toBe("dialog");
+    expect(dlg.getAttribute("aria-modal")).toBe("true");
+    expect(document.querySelector<HTMLElement>("main")!.inert).toBe(true);
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Close About");
+    dlg.querySelector<HTMLButtonElement>("[data-notices]")!.click();
+    expect(openNotices).toHaveBeenCalledWith("C:/Horus/THIRD_PARTY_NOTICES.md");
+    dlg.querySelector<HTMLElement>("[data-close]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.querySelector(".about")).toBeNull();
+    expect(document.querySelector<HTMLElement>("main")!.inert).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    about.close(); // a second close is harmless
+  });
+
+  it("Esc reaches it even when focus fell to the page (holdModal)", () => {
+    document.body.innerHTML = "<main></main>";
+    mountAbout(document.body, info(), { openNotices: () => {} });
+    (document.activeElement as HTMLElement | null)?.blur();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(document.querySelector(".about")).toBeNull();
+  });
+});
+

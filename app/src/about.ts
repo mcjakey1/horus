@@ -2,6 +2,7 @@
 // built here from data; the dialog shell is a modal like Settings.
 import manifest from "../src-tauri/resources/demo/manifest.json";
 import { esc } from "./esc";
+import { holdModal } from "./modal";
 
 export type AboutInfo = {
   version: string;
@@ -36,7 +37,7 @@ export function aboutHTML(info: AboutInfo): string {
   const credits = info.demoCredits
     .map((c) => `<li><span class="ab-credit">${esc(c.credit)}</span> <span class="ab-rights">${esc(c.rights)}</span></li>`)
     .join("");
-  return `<div class="ab-sheet">
+  return `<div class="st-sheet ab-sheet">
     <div class="st-head">
       <h1 class="st-title" id="ab-title">Horus</h1>
       <button type="button" class="icon-btn" data-close aria-label="Close About">
@@ -51,4 +52,40 @@ export function aboutHTML(info: AboutInfo): string {
     <h2 class="ab-h">Demo set</h2>
     <ul class="ab-list ab-credits">${credits}</ul>
   </div>`;
+}
+
+/** The About dialog: a modal like Settings (Task 3b's `holdModal`). Esc, Close or a click on the
+ * backdrop closes it, and focus returns to whatever opened it. */
+export function mountAbout(root: HTMLElement, info: AboutInfo, opts: { openNotices(path: string): void }): { close(): void } {
+  const opener = document.activeElement as HTMLElement | null;
+  const el = document.createElement("div");
+  el.className = "settings about";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-modal", "true");
+  el.setAttribute("aria-labelledby", "ab-title");
+  el.tabIndex = -1;
+  el.innerHTML = aboutHTML(info);
+  root.append(el);
+  let open = true;
+  const close = () => {
+    if (!open) return;
+    open = false;
+    release();
+    el.remove();
+    if (opener?.isConnected) opener.focus();
+  };
+  const release = holdModal(el, close);
+  el.addEventListener("keydown", (e) => {
+    e.stopPropagation(); // no key reaches the views underneath
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    close();
+  });
+  el.addEventListener("click", (e) => {
+    const t = e.target as Element;
+    if (t.closest("[data-notices]")) return opts.openNotices(info.noticesPath);
+    if (t.closest("[data-close]") || t === el) close();
+  });
+  el.querySelector<HTMLElement>("[data-close]")!.focus();
+  return { close };
 }

@@ -221,18 +221,31 @@ fn blake3_of(path: &Path, cancel: &AtomicBool) -> io::Result<Option<String>> {
 /// On demand (Task 4's menu): ids whose original's BLAKE3 is not its hash. A missing or
 /// unreadable original is `check`'s business, not listed here. `cancel` stops it early.
 pub fn verify_hashes(lib: &Library, cancel: &AtomicBool) -> Vec<String> {
+    verify_with(lib, cancel, &mut |_, _| {}).0
+}
+
+/// `verify_hashes`, calling `on(done, total)` after each file; also returns how many were done.
+pub fn verify_with(
+    lib: &Library,
+    cancel: &AtomicBool,
+    on: &mut dyn FnMut(usize, usize),
+) -> (Vec<String>, usize) {
+    let total = lib.data.references.len();
     let mut bad = vec![];
-    for r in &lib.data.references {
-        let Ok(path) = image_path_in(&lib.root, &r.file) else {
-            continue;
-        };
-        match blake3_of(&path, cancel) {
-            Ok(Some(h)) if h != r.hash => bad.push(r.id.clone()),
-            Ok(None) => break,
-            _ => {}
+    for (i, r) in lib.data.references.iter().enumerate() {
+        if cancel.load(Ordering::SeqCst) {
+            return (bad, i);
         }
+        if let Ok(path) = image_path_in(&lib.root, &r.file) {
+            match blake3_of(&path, cancel) {
+                Ok(Some(h)) if h != r.hash => bad.push(r.id.clone()),
+                Ok(None) => return (bad, i),
+                _ => {}
+            }
+        }
+        on(i + 1, total);
     }
-    bad
+    (bad, total)
 }
 
 #[cfg(test)]
@@ -440,6 +453,24 @@ pub(crate) mod tests {
         let junk = images_dir(&lib.root).join(format!("{}.png", "ef".repeat(32)));
         fs::write(&junk, b"not an image").unwrap();
         assert!(recovered_reference(&lib.root, &junk).is_none());
+    }
+
+    #[test]
+    fn verify_with_reports_progress_and_stops_on_cancel() {
+        let (_d, lib) = library(&["small.jpg", "p3_red.png", "rotated.jpg"]);
+        let cancel = AtomicBool::new(false);
+        let mut seen = vec![];
+        let (bad, done) = verify_with(&lib, &cancel, &mut |d, t| {
+            seen.push((d, t));
+            if d == 1 {
+                cancel.store(true, Ordering::SeqCst); // Cancel pressed after the first file
+            }
+        });
+        assert!(bad.is_empty());
+        assert_eq!(done, 1);
+        assert_eq!(seen, vec![(1, 3)]);
+        let go = AtomicBool::new(false);
+        assert_eq!(verify_with(&lib, &go, &mut |_, _| {}).1, 3);
     }
 
     #[test]
