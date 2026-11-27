@@ -25,7 +25,9 @@ The optional Find similar feature runs Google SigLIP on Microsoft ONNX Runtime 1
 **Checks (Task 2 Step 3, 2026-11-27, Windows 11, debug build):**
 - `dumpbin /dependents horus.exe` lists only Windows system DLLs and the CRT. There is no `onnxruntime`, `DirectML`, `D3D12` or `DXCORE` import and no delay-load section.
 - `horus.exe` starts and closes normally with ORT never called. The running process has no `onnxruntime`, `DirectML`, `D3D12` or `DXCORE` module loaded.
-- Peak RSS with the vision session, with both sessions, and seconds per image at `intra_threads = 2`: **not measured yet**. They need the hand-downloaded model (`HORUS_SIGLIP_DIR`), which was not on this machine; record them before Task 4's indexing budget is relied on.
+- **Real model (`real_model_semantics`, pinned files hand-downloaded and SHA-256-checked, debug test build, ORT 1.31.1 CPU):** passes. "a photo of a cat" scores 0.0956 against `cat.jpg` and 0.0327 against `dog.jpg` (cosine).
+  - Working set with the vision session loaded: about **184 MB**. With both sessions loaded: about **304 MB**, peak seen **317 MB** (sampled every 200 ms with `Get-Process`, so the true peak can be slightly higher).
+  - Seconds per image at `intra_threads = 2`: **0.22–0.24 s** (mean of 10 encodes of a 330×220 JPEG, preprocessing included; two runs).
 
 **Ignored tests** (CI never runs them; run them on their own, never with `--include-ignored`):
 - `HORUS_ORT_LIB=<abs path to src-tauri/ort/onnxruntime.dll> cargo test similar::encoder -- --ignored`

@@ -105,6 +105,11 @@ fn dim_ok(d: i64, want: i64) -> bool {
     d == want || d < 0
 }
 
+/// An embedding output is `[batch, dim]`; a symbolic `dim` is checked again at run time (`embed`).
+fn embed_dims_ok(d: &[i64], dim: usize) -> bool {
+    d.len() == 2 && dim_ok(d[1], dim as i64)
+}
+
 /// The single input's name, after checking its shape is `[batch, rest...]`.
 fn input_name(s: &Session, rest: &[i64]) -> Result<String, LoadError> {
     let [input] = s.inputs() else {
@@ -126,7 +131,7 @@ fn output_name(s: &Session, preferred: &str, dim: usize) -> Result<String, LoadE
         .or_else(|| s.outputs().iter().find(|o| o.name().ends_with("pooler_output")))
         .ok_or_else(|| layout(&format!("no `{preferred}` or `pooler_output` output")))?;
     let d = dims(out, "output")?;
-    if d.len() != 2 || d[1] != dim as i64 {
+    if !embed_dims_ok(d, dim) {
         return Err(layout(&format!("output `{}` has shape {d:?}", out.name())));
     }
     Ok(out.name().to_string())
@@ -290,6 +295,15 @@ mod tests {
     }
 
     #[test]
+    fn embed_output_shape_accepts_symbolic_dims() {
+        assert!(embed_dims_ok(&[1, 768], 768));
+        assert!(embed_dims_ok(&[-1, 768], 768));
+        assert!(embed_dims_ok(&[-1, -1], 768));
+        assert!(!embed_dims_ok(&[1, 512], 768));
+        assert!(!embed_dims_ok(&[1, 196, 768], 768));
+    }
+
+    #[test]
     fn load_rejects_missing_lib() {
         // Relies on ENV still being empty: never run with `--include-ignored` (see the plan).
         let dir = tempfile::tempdir().unwrap();
@@ -336,10 +350,25 @@ mod tests {
     fn real_model_semantics() {
         let lib = env_path("HORUS_ORT_LIB").expect("HORUS_ORT_LIB");
         let dir = env_path("HORUS_SIGLIP_DIR").expect("HORUS_SIGLIP_DIR");
+        // Phase markers with wall-clock times, so an outside RSS sampler can be lined up (README).
+        let mark = |what: &str| {
+            let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap();
+            eprintln!("[{:.1}] {what}", t.as_secs_f64());
+        };
+        mark("start");
         let mut enc = SiglipEncoder::load(&lib, &dir, &SIGLIP_B16_Q8, 2).unwrap();
-        let cat = enc.image(&image::open(format!("{FIX}/cat.jpg")).unwrap().to_rgb8()).unwrap();
+        mark("vision session loaded");
+        let cat_img = image::open(format!("{FIX}/cat.jpg")).unwrap().to_rgb8();
+        let cat = enc.image(&cat_img).unwrap();
         let dog = enc.image(&image::open(format!("{FIX}/dog.jpg")).unwrap().to_rgb8()).unwrap();
+        let n = 10;
+        let started = std::time::Instant::now();
+        for _ in 0..n {
+            enc.image(&cat_img).unwrap();
+        }
+        mark(&format!("seconds per image at intra_threads 2: {:.3}", started.elapsed().as_secs_f64() / n as f64));
         let t = enc.text("a photo of a cat").unwrap();
+        mark("text session loaded");
         assert_eq!((cat.len(), t.len()), (768, 768));
         let dot = |a: &[f32], b: &[f32]| a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
         eprintln!("cat {} dog {}", dot(&t, &cat), dot(&t, &dog));
