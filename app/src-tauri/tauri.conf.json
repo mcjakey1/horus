@@ -29,13 +29,18 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis", "msi", "dmg", "app", "appimage", "deb"],
+    "publisher": "Jake Manahan",
+    "copyright": "© 2026 Jake Manahan",
+    "category": "GraphicsAndDesign",
+    "shortDescription": "A local reference workbench for artists",
     "resources": {
       "resources/taxonomy.json": "resources/taxonomy.json",
       "resources/demo/manifest.json": "resources/demo/manifest.json",
       "resources/demo/images/*": "resources/demo/images/",
       "../src/fonts/OFL-*.txt": "licenses/",
-      "ort/*": "ort/"
+      "ort/*": "ort/",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
     },
     "icon": [
       "icons/32x32.png",
@@ -43,6 +48,16 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "webviewInstallMode": { "type": "embedBootstrapper" },
+      "nsis": { "installMode": "currentUser" },
+      "digestAlgorithm": "sha256"
+    },
+    "macOS": { "minimumSystemVersion": "11.0", "signingIdentity": "-" },
+    "linux": {
+      "deb": { "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"] },
+      "appimage": { "bundleMediaFramework": false }
+    }
   }
 }

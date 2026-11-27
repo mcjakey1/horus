@@ -255,3 +255,101 @@ describe("checkNotices", () => {
     expect(checkNotices(readFileSync(new URL("../notices/manual.md", import.meta.url), "utf8"))).toEqual([]);
   });
 });
+
+// ---------- Plan 6 Task 5 ----------
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { checkBudgets, checkBundle, checkGlyphs, peMajorVersion } from "./release-check.mjs";
+
+describe("checkGlyphs", () => {
+  const tax = { operations: [{ icon: "a" }], domains: [{ icon: "b" }], techniques: [{ icon: "c" }, { icon: "" }] };
+  const art = (extra = "") => `<svg viewBox="0 0 24 24"${extra}></svg>`;
+  it("fails an undrawn icon, always", () => {
+    const set = { a: art(), b: art(), "a plain square": art() };
+    expect(checkGlyphs(tax, ["d"], set, false).join()).toMatch(/"c"/);
+    expect(checkGlyphs(tax, ["d"], set, false).join()).toMatch(/"d"/);
+  });
+  it("fails placeholder art only in a final run (the user approves the real set)", () => {
+    const set = { a: art(), b: art(), c: art(' data-placeholder=""'), "a plain square": art() };
+    expect(checkGlyphs(tax, [], set, false)).toEqual([]);
+    expect(checkGlyphs(tax, [], set, true).join()).toMatch(/placeholder.*"c"/);
+  });
+  it("passes the real set outside a final run", () => {
+    const seed = JSON.parse(readFileSync(new URL("../src-tauri/resources/taxonomy.json", import.meta.url), "utf8"));
+    const set = JSON.parse(readFileSync(new URL("../src/glyphs/glyphs.json", import.meta.url), "utf8"));
+    expect(checkGlyphs(seed, [], set, false)).toEqual([]);
+  });
+});
+
+describe("checkBundle", () => {
+  /** A fresh src-tauri-like tree; returns its path. */
+  function tree({ icons = ["icons/a.png"], ort = { "onnxruntime.dll": 10 }, vc = 14 } = {}) {
+    const dir = mkdtempSync(join(tmpdir(), "horus-bundle-"));
+    for (const p of icons) {
+      mkdirSync(join(dir, p, ".."), { recursive: true });
+      writeFileSync(join(dir, p), "");
+    }
+    mkdirSync(join(dir, "ort"));
+    writeFileSync(join(dir, "ort/.gitkeep"), "");
+    for (const [n, size] of Object.entries(ort)) writeFileSync(join(dir, "ort", n), Buffer.alloc(size));
+    if (vc !== null) for (const d of ["msvcp140.dll", "msvcp140_1.dll", "vcruntime140.dll", "vcruntime140_1.dll"]) writeFileSync(join(dir, "ort", d), pe(vc));
+    mkdirSync(join(dir, "resources"));
+    writeFileSync(join(dir, "resources/taxonomy.json"), "{}");
+    return dir;
+  }
+  /** Bytes holding a VS_FIXEDFILEINFO with file version `major`.0. */
+  const pe = (major) => {
+    const b = Buffer.alloc(64);
+    b.writeUInt32LE(0xfeef04bd, 16);
+    b.writeUInt32LE(major << 16, 24);
+    return b;
+  };
+  const conf = (over = {}) => ({
+    bundle: {
+      targets: ["nsis", "msi", "dmg", "app", "appimage", "deb"],
+      icon: ["icons/a.png"],
+      resources: { "resources/taxonomy.json": "resources/taxonomy.json", "ort/*": "ort/" },
+      ...over,
+    },
+  });
+  const pins = { "win32-x64": { path: "runtimes/win-x64/native/onnxruntime.dll", size: 10 } };
+  const opts = (dir, bundles = true) => ({ tauriDir: dir, platform: "win32", arch: "x64", pins, bundles });
+
+  it("passes a complete tree", () => {
+    expect(checkBundle(conf(), opts(tree()))).toEqual([]);
+  });
+  it("fails a missing icon, a resource matching nothing, and a third-party resource", () => {
+    const dir = tree();
+    expect(checkBundle(conf({ icon: ["icons/gone.png"] }), opts(dir)).join()).toMatch(/icons\/gone\.png/);
+    expect(checkBundle(conf({ resources: { "resources/none/*": "x/" } }), opts(dir)).join()).toMatch(/matches no file/);
+    expect(checkBundle(conf({ resources: { "reference/frame-036s.jpg": "x.jpg" } }), opts(dir)).join()).toMatch(/reference\//);
+    expect(checkBundle(conf({ targets: "all" }), opts(dir)).join()).toMatch(/targets/);
+  });
+  it("with bundles: fails an ort/ with only .gitkeep, a wrong-size ORT, and a missing or pre-14 VC++ DLL (R8, B4)", () => {
+    expect(checkBundle(conf(), opts(tree({ ort: {} }))).join()).toMatch(/onnxruntime\.dll is missing/);
+    expect(checkBundle(conf(), opts(tree({ ort: { "onnxruntime.dll": 9 } }))).join()).toMatch(/size/);
+    expect(checkBundle(conf(), opts(tree({ vc: null }))).join()).toMatch(/msvcp140\.dll is missing/);
+    expect(checkBundle(conf(), opts(tree({ vc: 12 }))).join()).toMatch(/version 12/);
+  });
+  it("before the build, ORT and the VC++ DLLs are not checked", () => {
+    expect(checkBundle(conf(), opts(tree({ ort: {}, vc: null }), false))).toEqual([]);
+  });
+  it("reads a PE file version", () => {
+    expect(peMajorVersion(pe(14))).toBe(14);
+    expect(peMajorVersion(Buffer.alloc(8))).toBeNull();
+  });
+  it("passes the real configuration before the build", () => {
+    const real = JSON.parse(readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
+    expect(checkBundle(real, { tauriDir: new URL("../src-tauri/", import.meta.url), bundles: false })).toEqual([]);
+  });
+});
+
+describe("checkBudgets", () => {
+  it("fails an artefact over its budget; no budget means no ceiling yet (R9)", () => {
+    const files = [{ kind: "nsis", name: "Horus.exe", size: 120 }, { kind: "dmg", name: "Horus.dmg", size: 999 }];
+    expect(checkBudgets({ nsis: 100, dmg: null }, files).join()).toMatch(/Horus\.exe.*120.*100/);
+    expect(checkBudgets({ nsis: 150, dmg: null }, files)).toEqual([]);
+    expect(checkBudgets({ nsis: 150 }, [])).not.toEqual([]); // --bundles with nothing built
+  });
+});

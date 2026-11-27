@@ -52,6 +52,39 @@ static ENV: OnceLock<Environment> = OnceLock::new();
 /// Serializes the first init so `build()` runs at most once.
 static ENV_INIT: Mutex<()> = Mutex::new(());
 
+/// Plan 6 B4: loads `onnxruntime.dll` with its own folder on the search path for its
+/// dependencies, and keeps the module loaded for the process, so `init_from`'s plain
+/// `LoadLibraryExW(path, 0)` finds it already resolved. Called under `ENV_INIT`.
+#[cfg(windows)]
+fn preload(lib: &Path) -> Result<(), LoadError> {
+    use std::ffi::c_void;
+    use std::os::windows::ffi::OsStrExt;
+    const LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR: u32 = 0x0000_0100;
+    const LOAD_LIBRARY_SEARCH_DEFAULT_DIRS: u32 = 0x0000_1000;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn LoadLibraryExW(name: *const u16, file: *mut c_void, flags: u32) -> *mut c_void;
+    }
+    let wide: Vec<u16> = lib.as_os_str().encode_wide().chain(Some(0)).collect();
+    // SAFETY: `wide` is a NUL-terminated UTF-16 path that outlives the call; the handle is
+    // never freed, so the module stays loaded for the process (as the environment does).
+    let module = unsafe {
+        LoadLibraryExW(
+            wide.as_ptr(),
+            std::ptr::null_mut(),
+            LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
+        )
+    };
+    if module.is_null() {
+        return Err(LoadError::Lib(format!(
+            "couldn't load {}: {}",
+            lib.display(),
+            std::io::Error::last_os_error()
+        )));
+    }
+    Ok(())
+}
+
 /// The process-wide environment, created once with telemetry off (R2).
 fn environment(ort_lib: &Path) -> Result<&'static Environment, LoadError> {
     if let Some(env) = ENV.get() {
@@ -67,6 +100,10 @@ fn environment(ort_lib: &Path) -> Result<&'static Environment, LoadError> {
             ort_lib.display()
         )));
     }
+    // B4: Windows only searches ort/ for onnxruntime.dll's own dependencies (the app-local
+    // VC++ DLLs in dev runs) when the DLL is loaded this way first.
+    #[cfg(windows)]
+    preload(ort_lib)?;
     // `LoadDynamicError` becomes a String here: no `ort` call before init_from succeeded.
     let builder = ort::init_from(ort_lib).map_err(|e| LoadError::Lib(e.to_string()))?;
     let env = builder
