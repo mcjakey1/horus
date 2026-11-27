@@ -2,6 +2,7 @@
 //! Off by default; nothing else in the app depends on it.
 
 pub mod download;
+pub mod encoder;
 pub mod model;
 
 /// At most this many "Looks similar" results, highest first.
