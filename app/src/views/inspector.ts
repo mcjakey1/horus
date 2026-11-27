@@ -185,7 +185,7 @@ export function renderInspector(el: HTMLElement, s: Snapshot, sel: Selection, op
     const tiles = (g.children.get(node.id) ?? []).map((id) => {
       const r = g.nodes.get(id) as Extract<TaxNode, { kind: "ref" }>;
       const ref = s.refs.get(r.refId)!;
-      return `<button class="thumb" data-open="${esc(ref.id)}" title="${esc(ref.title)}"><span class="t"><span class="tplate">${opts.assetUrl ? `<img alt="" src="${esc(opts.assetUrl(ref.thumb256))}">` : ""}</span>${r.via.region ? `<span class="treg"></span>` : ""}</span></button>`;
+      return `<button class="thumb" data-open="${esc(ref.id)}" title="${esc(ref.title)}" aria-label="Open ${esc(ref.title)}"><span class="t"><span class="tplate">${opts.assetUrl ? `<img alt="" src="${esc(opts.assetUrl(ref.thumb256))}">` : ""}</span>${r.via.region ? `<span class="treg"></span>` : ""}</span></button>`;
     });
     const refsHTML = `<h3 class="insp-h">References ${count(node.count)}</h3>
       ${tiles.length ? `<div class="thumbs">${tiles.join("")}</div>` : `<p class="none">No reference has this technique yet.</p>`}`;
