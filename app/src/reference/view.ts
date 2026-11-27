@@ -670,11 +670,12 @@ export function mountReference(
     picker = mine;
   }
   // Design review F1: Tag…, Link…, Boards… and Open lightbox share one row, clear of the readout.
-  $("#lab")!.insertAdjacentHTML("beforeend", `<div class="lab-actions"></div>`);
-  const actions = $<HTMLElement>("#lab .lab-actions")!;
+  // Design judgement #7: that row is a hairline toolbar above the card, never on it (Constant Card Rule).
+  $("#lab")!.insertAdjacentHTML("beforebegin", `<div class="lab-actions" role="toolbar" aria-label="This reference"></div>`);
+  const actions = $<HTMLElement>(".work > .lab-actions")!;
   signal.addEventListener("abort", () => actions.remove());
   actions.insertAdjacentHTML("beforeend", `<button type="button" class="tag-open" aria-keyshortcuts="t">Tag…</button>`);
-  const tagOpen = $<HTMLButtonElement>("#lab .tag-open")!;
+  const tagOpen = $<HTMLButtonElement>(".lab-actions .tag-open")!;
   tagOpen.addEventListener("click", openPicker, { signal });
   signal.addEventListener("abort", () => {
     closePicker();
@@ -697,7 +698,7 @@ export function mountReference(
     "beforeend",
     `<button type="button" class="link-handle" aria-keyshortcuts="k" title="Drag onto a reference to link it, or click to choose one">Link…</button>`,
   );
-  const handle = $<HTMLButtonElement>("#lab .link-handle")!;
+  const handle = $<HTMLButtonElement>(".lab-actions .link-handle")!;
   let drag: { x: number; y: number; moved: boolean; cancelled: boolean; leader: HTMLElement } | null = null;
   let justDragged = false; // the click that follows a drag's pointerup must not open a second editor
   function endDrag() {
@@ -773,7 +774,7 @@ export function mountReference(
     boardsLine.querySelector("[data-v]")!.textContent = names.length ? names.join(" · ") : "On no board";
     boardsLine.hidden = false;
   }
-  const boardsOpen = $<HTMLButtonElement>("#lab .boards-open")!;
+  const boardsOpen = $<HTMLButtonElement>(".lab-actions .boards-open")!;
   const offBoard = $<HTMLElement>("#lab .off-board")!;
   boardsOpen.addEventListener("click", openBoardMenu, { signal });
   signal.addEventListener("abort", () => {
@@ -796,7 +797,7 @@ export function mountReference(
     });
   }
   actions.insertAdjacentHTML("beforeend", `<button type="button" class="lb-open" aria-keyshortcuts="l">Open lightbox</button>`);
-  const lbOpen = $<HTMLButtonElement>("#lab .lb-open")!;
+  const lbOpen = $<HTMLButtonElement>(".lab-actions .lb-open")!;
   lbOpen.addEventListener("click", openLb, { signal });
   signal.addEventListener("abort", () => {
     lightbox?.close();
@@ -806,7 +807,7 @@ export function mountReference(
   // ---------- Details (Plan 6 Task 3c, R27): title, creator, year and credit ----------
   let details: { close(): void } | null = null;
   actions.insertAdjacentHTML("beforeend", `<button type="button" class="details-open">Details…</button>`);
-  const detailsOpen = $<HTMLButtonElement>("#lab .details-open")!;
+  const detailsOpen = $<HTMLButtonElement>(".lab-actions .details-open")!;
   detailsOpen.addEventListener("click", () => {
     const ref = focusRef();
     if (!ref) return;

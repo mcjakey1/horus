@@ -431,7 +431,7 @@ describe("Reference view", () => {
       references: ids.map((id) => ({ ...store.refs.get(id)!, ...(patch as object) })),
       removed: [], canUndo: true, canRedo: false,
     }));
-    $<HTMLButtonElement>("#lab .details-open").click();
+    $<HTMLButtonElement>(".lab-actions .details-open").click();
     const f = (n: string) => document.querySelector<HTMLInputElement>(`.details [name="${n}"]`)!;
     f("title").value = "Harbour at dusk";
     f("creator").value = "A. Painter";
@@ -457,7 +457,7 @@ describe("Reference view", () => {
   });
 
   it("details_closes_when_the_focus_moves", async () => {
-    $<HTMLButtonElement>("#lab .details-open").click();
+    $<HTMLButtonElement>(".lab-actions .details-open").click();
     expect(document.querySelector(".details")).not.toBeNull();
     view.show("b");
     expect(document.querySelector(".details")).toBeNull();
@@ -520,9 +520,11 @@ describe("Reference view", () => {
 
   // ---------- Plan 6 Task 3b, design review F1 and F2 ----------
   it("lab_actions_one_row (F1): Tag, Link, Boards and the lightbox share one row, apart from the readout", () => {
-    const row = $(".lab .lab-actions");
+    const row = $(".work > .lab-actions");
     expect([...row.querySelectorAll("button")].map((b) => b.className)).toEqual(["tag-open", "link-handle", "boards-open", "lb-open", "details-open"]); // Task 3c adds Details…
     expect(row.contains($("#lab-meta"))).toBe(false);
+    expect($("#lab").contains(row)).toBe(false); // design judgement #7: a toolbar above the card, not on it
+    expect(row.nextElementSibling).toBe($("#lab"));
   });
 
   it("readout_drops_what_the_credit_repeats (F2): only the credit shrinks, with its full text as a tooltip", async () => {
@@ -561,7 +563,7 @@ describe("Reference view", () => {
   });
 
   it("tag_button_on_the_plate_opens_the_picker", () => {
-    const btn = document.querySelector<HTMLButtonElement>("#lab .tag-open")!;
+    const btn = document.querySelector<HTMLButtonElement>(".lab-actions .tag-open")!;
     expect(btn.textContent).toBe("Tag…");
     btn.click();
     expect(document.querySelector<HTMLElement>(".margin .picker")?.dataset.ref).toBe("a");
@@ -635,7 +637,7 @@ describe("Reference view", () => {
   });
 
   it("open_lightbox_button_on_the_plate", () => {
-    const btn = $<HTMLButtonElement>("#lab .lb-open");
+    const btn = $<HTMLButtonElement>(".lab-actions .lb-open");
     expect(btn.textContent).toBe("Open lightbox");
     btn.focus();
     btn.click();
@@ -645,7 +647,7 @@ describe("Reference view", () => {
   });
 
   it("tagging a region drawn while zoomed in keeps the zoom (Task 8 F2)", async () => {
-    $<HTMLButtonElement>("#lab .lb-open").click();
+    $<HTMLButtonElement>(".lab-actions .lb-open").click();
     const stage = $(".lb-stage");
     stage.getBoundingClientRect = () =>
       ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect;
@@ -665,7 +667,7 @@ describe("Reference view", () => {
 
   it("region_drag_docks_the_picker_inside_the_lightbox", async () => {
     keyOn("t", document.body); // a margin picker is open first
-    $<HTMLButtonElement>("#lab .lb-open").click();
+    $<HTMLButtonElement>(".lab-actions .lb-open").click();
     expect(document.querySelector(".margin .picker")).toBeNull(); // it would sit behind the modal
     const stage = $(".lb-stage");
     stage.getBoundingClientRect = () =>
@@ -693,7 +695,7 @@ describe("Reference view", () => {
 
   /** Opens the lightbox on "a" and drags a box, so a picker docks inside it. */
   function dockPickerInLightbox() {
-    $<HTMLButtonElement>("#lab .lb-open").click();
+    $<HTMLButtonElement>(".lab-actions .lb-open").click();
     const stage = $(".lb-stage");
     stage.getBoundingClientRect = () =>
       ({ left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0, toJSON() {} }) as DOMRect;
@@ -1171,7 +1173,7 @@ describe("links you draw", () => {
 
     it("dropping on a [data-ref-id] tile opens the editor with toRef set", async () => {
       await mount();
-      const handle = $("#lab .link-handle");
+      const handle = $(".lab-actions .link-handle");
       const target = $('#pane-ranked .row[data-ref-id="b"]');
       document.elementFromPoint = vi.fn(() => target);
       fire(handle, "pointerdown", 10, 10);
@@ -1191,7 +1193,7 @@ describe("links you draw", () => {
       const pin = $<HTMLButtonElement>("#pane-callouts .call .pin");
       pin.click();
       expect(pin.getAttribute("aria-pressed")).toBe("true");
-      const handle = $("#lab .link-handle");
+      const handle = $(".lab-actions .link-handle");
       fire(handle, "pointerdown", 10, 10);
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); // cancels the drag only
       expect(pin.getAttribute("aria-pressed")).toBe("true");
@@ -1202,7 +1204,7 @@ describe("links you draw", () => {
 
     it("dropping on empty space, or cancelling, opens nothing", async () => {
       await mount();
-      const handle = $("#lab .link-handle");
+      const handle = $(".lab-actions .link-handle");
       document.elementFromPoint = vi.fn(() => document.body);
       fire(handle, "pointerdown", 10, 10);
       fire(handle, "pointermove", 200, 120);
@@ -1217,7 +1219,7 @@ describe("links you draw", () => {
 
     it("Esc mid-drag aborts: the pointerup and the click after it open nothing", async () => {
       await mount();
-      const handle = $("#lab .link-handle");
+      const handle = $(".lab-actions .link-handle");
       document.elementFromPoint = vi.fn(() => $('#pane-ranked .row[data-ref-id="b"]'));
       fire(handle, "pointerdown", 10, 10);
       fire(handle, "pointermove", 200, 120);
@@ -1236,7 +1238,7 @@ describe("links you draw", () => {
 
     it("dropping on the focus itself opens nothing", async () => {
       await mount();
-      const handle = $("#lab .link-handle");
+      const handle = $(".lab-actions .link-handle");
       const self = document.createElement("div");
       self.dataset.refId = "a";
       document.body.append(self);
@@ -1383,7 +1385,7 @@ describe("board scope in the Reference view", () => {
     expect($(".margin .board-menu")).not.toBeNull();
     $(".board-menu").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(document.querySelector(".board-menu")).toBeNull();
-    $<HTMLButtonElement>("#lab .boards-open").click();
+    $<HTMLButtonElement>(".lab-actions .boards-open").click();
     expect($(".board-menu").getAttribute("aria-label")).toBe("Boards for Plate A");
   });
 });

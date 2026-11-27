@@ -118,10 +118,13 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .lab-meta { max-width: calc(100% - 32px); display: flex; white-space: nowrap; overflow: hidden; }
 .lab-meta .lab-credit { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .lab-meta span + span::before { content: " · "; white-space: pre; }
-/* Design review F1: the plate's actions in one row at the top left, clear of the readout. */
-/* The plate sits 48 px down and a number badge reaches 13 px above it, so the row ends by 31 px
-   (6 + 25): it never covers a badge. Buttons stay at least 24 px tall (F12). */
-.lab-actions { position: absolute; top: 6px; left: 16px; display: flex; gap: 6px; }
+/* Design review F1: the plate's actions in one row, clear of the readout. Design judgement #7:
+   the row is a hairline toolbar between the record header and the card, so nothing of the chrome
+   sits on the judging ground. Buttons stay at least 24 px tall (F12). */
+.work { grid-template-rows: auto minmax(0, 1fr); }
+.work > .lab-actions { grid-column: 1; grid-row: 1; display: flex; flex-wrap: wrap; gap: 6px; margin-left: 20px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.work > .lab { grid-column: 1; grid-row: 2; }
+.work > .margin { grid-column: 2; grid-row: 1 / 3; }
 .lab-actions > button { padding-top: 4px; padding-bottom: 4px; }
 .leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .leaders path { fill: none; stroke: var(--card-ink); stroke-width: 1; opacity: 0; transition: opacity .2s; } /* at rest: no lines over the art */
@@ -205,11 +208,12 @@ button.settings { color: var(--ink); text-underline-offset: 3px; margin-left: 4p
   .record .back { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); min-height: 40px; max-width: none; }
   .cell:nth-child(3) { border-left: 0; }
   .cell:nth-child(n+3) { border-top: 1px solid var(--line); }
-  .work { grid-template-columns: 1fr; }
+  .work { grid-template-columns: 1fr; grid-template-rows: auto auto auto; }
   .lab { margin: 16px; height: auto; display: flex; flex-direction: column; align-items: center; padding: 16px; gap: 16px; }
   .specimen { width: min(100%, calc(58vh * var(--ar, .75))); max-width: calc(100% - 40px); height: auto; max-height: none; }
   .lab-meta { position: static; align-self: stretch; display: flex; flex-wrap: wrap; max-width: none; }
-  .lab-actions { position: static; order: -1; align-self: stretch; flex-wrap: wrap; }
+  .work > .lab-actions { margin: 0 16px; }
+  .work > .margin { grid-column: 1; grid-row: 3; }
   .lab-actions > button { padding-top: 5px; padding-bottom: 5px; }
   .off-board { position: static; order: -1; align-self: flex-start; }
   .lab-meta span + span::before { content: none; }
