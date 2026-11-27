@@ -1141,7 +1141,7 @@ mod tests {
                 cmd: "delete_technique".into(),
                 callback: tauri::ipc::CallbackFn(0),
                 error: tauri::ipc::CallbackFn(1),
-                url: "http://tauri.localhost".parse().unwrap(),
+                url: webview.url().unwrap(), // the app's own origin on every platform (Linux CI)
                 body: serde_json::json!({ "id": "rim-light", "moveTo": {"kind": "partial"} })
                     .into(),
                 headers: Default::default(),
