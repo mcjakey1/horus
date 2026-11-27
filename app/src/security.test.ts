@@ -321,7 +321,7 @@ describe("untrusted text renders as text (Plan 6 Task 3)", () => {
       fonts: FONTS,
       noticesPath: FILE,
       demoCredits: demoCredits([{ title: TITLE, credit: CREDIT + NOTE, rights: WHY }]),
-    }, { openNotices: () => {} });
+    }, { openNotices: async () => {} });
     const d = document.querySelector<HTMLElement>(".about")!;
     readsAsText(d, [TITLE, CREDIT + NOTE, WHY]);
     noMarkup();

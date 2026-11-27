@@ -38,7 +38,9 @@ describe("the intro card (Plan 6 Task 4)", () => {
     vi.advanceTimersByTime(100);
     const below = vi.fn();
     document.body.addEventListener(type, below);
-    document.body.dispatchEvent(new Event(type, { bubbles: true }));
+    const ev = new Event(type, { bubbles: true, cancelable: true });
+    document.body.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true); // a skipping Space or Enter clicks nothing underneath
     expect(await p).toBe("skipped");
     expect(below).not.toHaveBeenCalled(); // the skip key never reaches first run or the views
     expect(document.querySelector(".intro")).toBeNull();

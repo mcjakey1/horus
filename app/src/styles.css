@@ -670,8 +670,10 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 @keyframes intro-hot { from { border-color: color-mix(in srgb, var(--card-ink) 70%, transparent); box-shadow: none; } }
 @keyframes intro-out { to { opacity: 0; } }
 /* About: Settings' dialog and sheet, plus its lists. */
-.ab-version { margin: 0 0 12px; color: var(--ink-2); font-size: 13px; }
-.ab-h { margin: 16px 0 6px; font-size: 13px; font-weight: 600; }
+.ab-body > p { margin: 0; }
+.ab-version { color: var(--ink-2); font-size: 13px; }
+.ab-err { color: var(--ink); font-size: 13px; } /* as .insp-err: errors are plain ink */
+.ab-h { margin: 4px 0 0; font-size: 13px; font-weight: 600; }
 .ab-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
 .ab-credits { max-height: 40vh; overflow: auto; }
 .ab-rights { color: var(--ink-2); }

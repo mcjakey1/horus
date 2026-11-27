@@ -44,19 +44,22 @@ export function aboutHTML(info: AboutInfo): string {
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
       </button>
     </div>
-    <p class="ab-version">Version ${esc(info.version)}</p>
-    <p>${esc(PRIVACY)}</p>
-    <h2 class="ab-h">Fonts</h2>
-    <ul class="ab-list">${fonts}</ul>
-    <p><button type="button" class="text-btn" data-notices>Third-party notices</button></p>
-    <h2 class="ab-h">Demo set</h2>
-    <ul class="ab-list ab-credits">${credits}</ul>
+    <div class="st-section ab-body">
+      <p class="ab-version">Version ${esc(info.version)}</p>
+      <p>${esc(PRIVACY)}</p>
+      <h2 class="ab-h">Fonts</h2>
+      <ul class="ab-list">${fonts}</ul>
+      <p><button type="button" class="text-btn" data-notices>Third-party notices</button></p>
+      <p class="ab-err" role="status" hidden></p>
+      <h2 class="ab-h">Demo set</h2>
+      <ul class="ab-list ab-credits">${credits}</ul>
+    </div>
   </div>`;
 }
 
 /** The About dialog: a modal like Settings (Task 3b's `holdModal`). Esc, Close or a click on the
  * backdrop closes it, and focus returns to whatever opened it. */
-export function mountAbout(root: HTMLElement, info: AboutInfo, opts: { openNotices(path: string): void }): { close(): void } {
+export function mountAbout(root: HTMLElement, info: AboutInfo, opts: { openNotices(path: string): Promise<void> }): { close(): void } {
   const opener = document.activeElement as HTMLElement | null;
   const el = document.createElement("div");
   el.className = "settings about";
@@ -83,7 +86,16 @@ export function mountAbout(root: HTMLElement, info: AboutInfo, opts: { openNotic
   });
   el.addEventListener("click", (e) => {
     const t = e.target as Element;
-    if (t.closest("[data-notices]")) return opts.openNotices(info.noticesPath);
+    if (t.closest("[data-notices]")) {
+      // Shown here, not in #import-notice: that one sits behind this dialog (AGY #2).
+      const err = el.querySelector<HTMLElement>(".ab-err")!;
+      err.hidden = true;
+      void opts.openNotices(info.noticesPath).catch(() => {
+        err.textContent = "Horus couldn't open the third-party notices.";
+        err.hidden = false;
+      });
+      return;
+    }
     if (t.closest("[data-close]") || t === el) close();
   });
   el.querySelector<HTMLElement>("[data-close]")!.focus();

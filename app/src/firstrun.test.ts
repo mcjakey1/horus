@@ -512,6 +512,17 @@ describe("the Help menu (Plan 6 Task 4)", () => {
     expect(document.querySelector(".about")).toBeNull();
   });
 
+  it("a menu item closes an open About first", async () => {
+    const { view, menu } = await booted();
+    menu("about");
+    await vi.waitFor(() => expect(document.querySelector(".about")).not.toBeNull());
+    menu("play-intro");
+    expect(document.querySelector(".about")).toBeNull();
+    expect(document.querySelector(".intro")).not.toBeNull();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "x" }));
+    view.destroy();
+  });
+
   it("Play intro replays it and leaves introSeen alone", async () => {
     const { api, view, menu } = await booted();
     menu("play-intro");
@@ -552,6 +563,24 @@ describe("Verify image files (Plan 6 Task 4)", () => {
     await run;
     expect(n.textContent).toContain("2 image files have changed since they were added.");
     expect(n.querySelector("[data-show-refs]")!.getAttribute("data-show-refs")).toBe("a b");
+  });
+
+  it("runs once at a time: a second click keeps the live progress", async () => {
+    let finish: (r: { changed: string[]; checked: number; total: number }) => void = () => {};
+    const api = {
+      ...fakeApi("C:/lib"),
+      verifyImageFiles: vi.fn(() => new Promise<{ changed: string[]; checked: number; total: number }>((r) => (finish = r))),
+    } as Api;
+    const first = verifyImageFiles(document, api, say);
+    await verifyImageFiles(document, api, say); // returns at once
+    expect(api.verifyImageFiles).toHaveBeenCalledTimes(1);
+    expect(document.querySelector("#import-notice [data-cancel]")).not.toBeNull();
+    finish({ changed: [], checked: 1, total: 1 });
+    await first;
+    const again = verifyImageFiles(document, api, say); // free again once it ended
+    expect(api.verifyImageFiles).toHaveBeenCalledTimes(2);
+    finish({ changed: [], checked: 1, total: 1 });
+    await again;
   });
 
   it("says when it was stopped, or when everything matches", async () => {

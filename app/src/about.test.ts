@@ -62,7 +62,7 @@ describe("the About dialog", () => {
     document.body.innerHTML = `<main><button id="opener">Help</button></main>`;
     const opener = document.querySelector<HTMLButtonElement>("#opener")!;
     opener.focus();
-    const openNotices = vi.fn();
+    const openNotices = vi.fn(async () => {});
     const about = mountAbout(document.body, info(), { openNotices });
     const dlg = document.querySelector<HTMLElement>(".about")!;
     expect(dlg.getAttribute("role")).toBe("dialog");
@@ -80,10 +80,20 @@ describe("the About dialog", () => {
 
   it("Esc reaches it even when focus fell to the page (holdModal)", () => {
     document.body.innerHTML = "<main></main>";
-    mountAbout(document.body, info(), { openNotices: () => {} });
+    mountAbout(document.body, info(), { openNotices: async () => {} });
     (document.activeElement as HTMLElement | null)?.blur();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(document.querySelector(".about")).toBeNull();
+  });
+
+  it("a failed notices open says so inside the dialog, not behind it", async () => {
+    document.body.innerHTML = "<main></main>";
+    const about = mountAbout(document.body, info(), { openNotices: async () => Promise.reject(new Error("denied")) });
+    document.querySelector<HTMLButtonElement>("[data-notices]")!.click();
+    const err = document.querySelector<HTMLElement>(".about .ab-err")!;
+    await vi.waitFor(() => expect(err.hidden).toBe(false));
+    expect(err.textContent).toBe("Horus couldn't open the third-party notices.");
+    about.close();
   });
 });
 

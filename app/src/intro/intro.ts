@@ -44,7 +44,12 @@ export function playIntro(root: HTMLElement, opts: { reducedMotion: boolean }): 
     };
     // Capture on the document, so the skip input never reaches first run or the views.
     for (const type of SKIP) {
-      document.addEventListener(type, (e) => (e.stopPropagation(), end("skipped")), { capture: true, signal: life.signal });
+      // preventDefault too: a skipping Space or Enter must not click the control underneath.
+      document.addEventListener(type, (e) => (e.preventDefault(), e.stopPropagation(), end("skipped")), {
+        capture: true,
+        passive: false,
+        signal: life.signal,
+      });
     }
     // Under reduced motion the still frame stays until an input.
     if (!opts.reducedMotion) timer = setTimeout(() => end("done"), INTRO_MAX_MS);

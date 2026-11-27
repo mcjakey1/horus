@@ -146,13 +146,15 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
       api.appVersion().catch(() => "unknown"),
       api.noticesPath().catch(() => ""),
     ]);
+    if (destroyed) return; // boot was torn down while the version was read
     about?.close();
     about = mountAbout(root, { version, fonts: FONTS, noticesPath, demoCredits: demoCredits() }, {
-      openNotices: (p) => void api.openPath(p).catch(() => notice(`<p>Horus couldn't open the third-party notices.</p>`)),
+      openNotices: (p) => api.openPath(p),
     });
   };
   void api.onMenu((id) => {
     settingsPanel.close();
+    about?.close(); // its holdModal would keep the notice inert and catch the intro's keys
     if (id === "play-intro") void playIntro(root, { reducedMotion: reducedMotion() }); // introSeen stays
     else if (id === "about") void openAbout();
     else if (id === "verify") void verifyImageFiles(root, api, notice);
@@ -172,7 +174,11 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
 
 /** Help > Verify image files…: progress and Cancel in the notice (D15's surface), then one line.
  * The ids it finds go to "Show them", like a missing original's. */
+let verifying = false;
+
 export async function verifyImageFiles(root: ParentNode, api: Api, notice: (html: string) => void) {
+  if (verifying) return; // one run: a second click would replace the live progress and Cancel
+  verifying = true;
   const prog = showProgress(root, "Verifying image files", () => void api.cancelVerify().catch(() => {}));
   const unlisten = api.onVerifyProgress((p) => prog.update(p.done, p.total)).catch(() => null);
   try {
@@ -189,6 +195,7 @@ export async function verifyImageFiles(root: ParentNode, api: Api, notice: (html
     prog.stop();
     notice(`<p>${esc(String(err))}</p>`);
   } finally {
+    verifying = false;
     void unlisten.then((u) => u?.());
   }
 }

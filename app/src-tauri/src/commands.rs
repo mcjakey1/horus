@@ -757,6 +757,14 @@ pub fn verify_image_files<R: Runtime>(app: AppHandle<R>) -> Result<VerifyReport,
     if st.verify_running.swap(true, Ordering::SeqCst) {
         return Err("Horus is already verifying the image files.".into());
     }
+    /// Clears `verify_running` on every exit, a panic included.
+    struct Running<'a>(&'a AtomicBool);
+    impl Drop for Running<'_> {
+        fn drop(&mut self) {
+            self.0.store(false, Ordering::SeqCst);
+        }
+    }
+    let _running = Running(&st.verify_running);
     st.verify_cancel.store(false, Ordering::SeqCst);
     let snapshot = {
         let open = lock(&st.open);
@@ -767,20 +775,18 @@ pub fn verify_image_files<R: Runtime>(app: AppHandle<R>) -> Result<VerifyReport,
         })
     };
     let Some(lib) = snapshot else {
-        st.verify_running.store(false, Ordering::SeqCst);
         return Err(NO_LIBRARY.into());
     };
-    let mut last = Instant::now() - Duration::from_secs(1);
+    let mut last: Option<Instant> = None;
     let (changed, checked) = integrity::verify_with(&lib, &st.verify_cancel, &mut |done, total| {
-        if done == total || last.elapsed() >= Duration::from_millis(100) {
-            last = Instant::now();
+        if done == total || last.is_none_or(|t| t.elapsed() >= Duration::from_millis(100)) {
+            last = Some(Instant::now());
             let _ = app.emit(
                 "verify://progress",
                 serde_json::json!({ "done": done, "total": total }),
             );
         }
     });
-    st.verify_running.store(false, Ordering::SeqCst);
     Ok(VerifyReport {
         changed,
         checked,
