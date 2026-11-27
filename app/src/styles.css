@@ -568,7 +568,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .cmp-link[hidden] { display: none; }
 .cmp-score { margin: 0 auto 0 0; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
 .cmp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 260px) minmax(0, 1fr); gap: 24px; padding-top: 16px; }
-.cmp-title { margin: 0 0 10px; font: 500 18px/1.3 var(--serif); }
+.cmp-title { margin: 0 0 10px; font: 500 18px/1.3 var(--serif); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } /* F7: two lines at most */
 .cmp-tile { position: relative; width: min(420px, 100%); height: auto; aspect-ratio: 1; background: var(--card); } /* the plate is placed in % of it (final review I5) */
 .cmp-plate { position: absolute; box-shadow: 0 1px 2px rgb(0 0 0 / .25), 0 14px 34px rgb(0 0 0 / .22); }
 .cmp-plate img { display: block; width: 100%; height: 100%; }

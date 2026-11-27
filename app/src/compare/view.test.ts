@@ -57,7 +57,7 @@ describe("Compare", () => {
     expect(li.style.getPropertyValue("--t")).toBe("var(--x-rose-text)");
     expect(li.textContent).toBe("Beat › Tech t2");
     expect([...document.querySelectorAll('.cmp-side[data-side="a"] .cmp-only li')].map((l) => l.textContent)).toEqual(["Beat › Tech t1"]);
-    expect($(".cmp-branches").textContent).toBe(""); // its branch has a shared technique
+    expect(document.querySelector(".cmp-branches")).toBeNull(); // its branch has a shared technique: no empty list (F7)
     expect($(".cmp-score").textContent).toBe("0.42 · related by technique");
     // hovering a technique outlines its region on the image that carries it, in its ink
     li.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
@@ -65,6 +65,31 @@ describe("Compare", () => {
     expect(out.hidden).toBe(false);
     expect(out.style.getPropertyValue("--c")).toBe("var(--x-rose)");
     expect($('.cmp-side[data-side="b"] .cmp-out').hidden).toBe(true); // b's tag is whole-image
+  });
+
+  it("value view, swap and lightbox are buttons too (design review F3)", async () => {
+    open("a", "b");
+    await tick();
+    const btn = (s: string) => $<HTMLButtonElement>(`.cmp-top ${s}`);
+    expect(btn(".cmp-value").getAttribute("aria-pressed")).toBe("false");
+    btn(".cmp-value").click();
+    expect(btn(".cmp-value").getAttribute("aria-pressed")).toBe("true");
+    expect([...document.querySelectorAll(".cmp-tile")].every((t) => t.classList.contains("is-value"))).toBe(true);
+    btn(".cmp-swap").click();
+    expect($('.cmp-side[data-side="a"] .cmp-title').textContent).toBe("Plate b");
+    expect(btn(".cmp-value").getAttribute("aria-pressed")).toBe("true"); // a swap keeps the value view
+    expect(btn(".cmp-lb").textContent).toBe("Lightbox");
+  });
+
+  it("headings over empty lists stay out (design review F7)", async () => {
+    vi.mocked(api.scorePair).mockResolvedValue(scored(0));
+    store.apply({ references: [ref("b", [tag("b1", "t1")])], removed: [], canUndo: true, canRedo: false });
+    open("a", "b");
+    await tick();
+    const heads = (side: string) => [...document.querySelectorAll(`.cmp-side[data-side="${side}"] .cmp-h`)].map((h) => h.textContent);
+    expect(heads("a")).toEqual(["Only here"]); // a has t2 on its own
+    expect(heads("b")).toEqual([]); // b's only technique is shared
+    expect([...document.querySelectorAll(".cmp-mid .cmp-h")].map((h) => h.textContent)).toEqual(["Shared"]);
   });
 
   it("x swaps the sides and v toggles the value view on both plates", async () => {
@@ -106,7 +131,7 @@ describe("Compare", () => {
     const A2 = { ...A, tags: [...A.tags, tag("a3", "t3")] };
     store.apply({ references: [A2], removed: [], canUndo: true, canRedo: false });
     expect(shared()).toEqual(["t2", "t3"]); // the local intersection while the reply is out: nothing vanishes
-    expect($('.cmp-side[data-side="b"] .cmp-only').textContent).toBe("");
+    expect(document.querySelector('.cmp-side[data-side="b"] .cmp-only')).toBeNull(); // nothing only on b now (F7)
     store.apply({ references: [A2], removed: [], canUndo: true, canRedo: false }); // a second change
     await tick();
     expect(api.scorePair).toHaveBeenCalledTimes(3);
