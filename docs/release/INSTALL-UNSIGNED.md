@@ -109,7 +109,7 @@ sudo apt install ./Horus_1.0.0_amd64.deb
 
 Your library folder stays. Horus never deletes it. It holds your images, tags and boards.
 
-These folders also stay. You can delete them if you do not need them:
+These folders also stay, unless on Windows you tick the uninstaller's box (see below). You can delete them if you do not need them:
 
 | | Settings | Find similar model and app data | Cache |
 |---|---|---|---|
@@ -118,6 +118,12 @@ These folders also stay. You can delete them if you do not need them:
 | Linux | `~/.config/art.horus.app` | `~/.local/share/art.horus.app` | `~/.cache/art.horus.app` |
 
 The Find similar model is in the `models` folder of the app data folder. It is approximately 213 MB.
+
+On Windows, the uninstaller has a box labelled "Delete the application data":
+
+- If you tick it, the uninstaller deletes `%APPDATA%\art.horus.app` and `%LOCALAPPDATA%\art.horus.app`. This includes the Find similar model.
+- If you do not tick it, both folders stay.
+- In both cases, the uninstaller does not touch your library folder.
 
 ## 6. Signed builds
 

@@ -51,8 +51,8 @@ export function aboutHTML(info: AboutInfo): string {
       <ul class="ab-list">${fonts}</ul>
       <p><button type="button" class="text-btn" data-notices>Third-party notices</button></p>
       <p class="ab-err" role="status" hidden></p>
-      <h2 class="ab-h">Demo set</h2>
-      <ul class="ab-list ab-credits">${credits}</ul>
+      <h2 class="ab-h" id="ab-demo-h">Demo set</h2>
+      <ul class="ab-list ab-credits" tabindex="0" aria-labelledby="ab-demo-h">${credits}</ul>
     </div>
   </div>`;
 }

@@ -114,6 +114,16 @@ describe("technique picker", () => {
     expect(icon.textContent).toBe("");
   });
 
+  it("the technique grid is a listbox only while it holds options (QA F1)", () => {
+    const { el } = mount();
+    const grid = el.querySelector<HTMLElement>(".pk-grid")!;
+    expect(grid.hasAttribute("role")).toBe(false); // "Choose an operation…" is no option
+    key(row(el), "1");
+    expect(grid.getAttribute("role")).toBe("listbox");
+    expect(grid.getAttribute("aria-label")).toBe("Techniques");
+    expect(grid.querySelector('[role="option"]')).not.toBeNull();
+  });
+
   it("seed_buttons: plain labels in taxonomy order, and 2 selects Group", () => {
     const { el } = mount();
     expect(ops(el).map((b) => b.querySelector(".serif")!.textContent)).toEqual([
