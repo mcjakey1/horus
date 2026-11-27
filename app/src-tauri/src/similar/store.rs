@@ -39,25 +39,13 @@ fn model_key(spec: &ModelSpec) -> [u8; 32] {
     key
 }
 
-/// 64 lowercase hex characters (a BLAKE3 hash as Horus writes it), else `None`.
+/// A BLAKE3 hash as 64 hex characters, else `None`.
 fn parse_hash(s: &str) -> Option<[u8; 32]> {
-    let b = s.as_bytes();
-    if b.len() != 64
-        || !b
-            .iter()
-            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(c))
-    {
-        return None;
-    }
-    let mut out = [0; 32];
-    for (i, o) in out.iter_mut().enumerate() {
-        *o = u8::from_str_radix(&s[2 * i..2 * i + 2], 16).ok()?;
-    }
-    Some(out)
+    blake3::Hash::from_hex(s).ok().map(|h| *h.as_bytes())
 }
 
 fn to_hex(k: &[u8; 32]) -> String {
-    k.iter().map(|b| format!("{b:02x}")).collect()
+    blake3::Hash::from(*k).to_hex().to_string()
 }
 
 fn u32_at(b: &[u8], at: usize) -> u32 {
@@ -130,6 +118,20 @@ impl EmbStore {
         parse_hash(hash).is_some_and(|k| self.by_hash.contains_key(&k))
     }
 
+    /// The stored vector for one image hash (Task 5's `by_ref` query, `NotIndexedYet` if none).
+    pub fn get(&self, hash: &str) -> Option<&[f32]> {
+        parse_hash(hash).and_then(|k| self.by_hash.get(&k).map(Vec::as_slice))
+    }
+
+    /// How many images are indexed (Task 5's `SimilarStatus.indexed`).
+    pub fn len(&self) -> usize {
+        self.by_hash.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.by_hash.is_empty()
+    }
+
     /// Ignores a hash Horus didn't write, or a vector of the wrong width.
     pub fn put(&mut self, hash: &str, v: Vec<f32>) {
         if let (Some(k), true) = (parse_hash(hash), v.len() == self.dim) {
@@ -146,7 +148,7 @@ impl EmbStore {
     }
 
     /// Up to `k` hashes scoring `>= min` against `q` (dot product of L2-normalised vectors),
-    /// highest first, never `exclude`.
+    /// highest first, never `exclude`. Equal scores order by hash, so results are stable.
     // ponytail: brute force over every vector, fine at library sizes (2,500 × 768 is ~2M
     // multiply-adds); an ANN index only if a library grows by orders of magnitude.
     pub fn top_k(
@@ -167,7 +169,7 @@ impl EmbStore {
             .map(|(h, v)| (h, v.iter().zip(q).map(|(a, b)| a * b).sum::<f32>()))
             .filter(|(_, s)| *s >= min) // NaN never passes
             .collect();
-        hits.sort_by(|a, b| b.1.total_cmp(&a.1));
+        hits.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(b.0)));
         hits.truncate(k);
         hits.into_iter().map(|(h, s)| (to_hex(h), s)).collect()
     }
@@ -210,6 +212,12 @@ mod tests {
             assert!(v.iter().zip(w).all(|(a, b)| a.to_bits() == b.to_bits()));
         }
         assert!(back.has(&h('a')) && back.has(&h('b')) && back.has(&h('c')));
+        assert_eq!(back.len(), 3);
+        assert_eq!(
+            back.get(&h('a')),
+            Some(&s.by_hash[&parse_hash(&h('a')).unwrap()][..])
+        );
+        assert_eq!(back.get(&h('d')), None);
     }
 
     #[test]
@@ -318,6 +326,22 @@ mod tests {
         assert_eq!(all.len(), 3);
         assert!(all.iter().all(|(k, sc)| *k != h('0') && *sc >= 0.2));
         assert_eq!(s.top_k(&at(0.0), 10, 0.2, None)[0].0, h('0'));
+    }
+
+    #[test]
+    fn top_k_ties_order_by_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = EmbStore::load(dir.path(), &SIGLIP_B16_Q8);
+        let v = unit(SIGLIP_B16_Q8.dim, 0);
+        for c in ['9', '2', '5'] {
+            s.put(&h(c), v.clone());
+        }
+        let keys: Vec<_> = s
+            .top_k(&v, 3, 0.0, None)
+            .into_iter()
+            .map(|(k, _)| k)
+            .collect();
+        assert_eq!(keys, [h('2'), h('5'), h('9')]);
     }
 
     #[test]
