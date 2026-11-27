@@ -13,7 +13,7 @@ Cross-check: AGY #3 (`9639ac0d-afd6-4032-905f-456e5be2c893`), through `agent-log
 |---|---|
 | Branch | `plan5-similar` |
 | Main pass | `fa42df5` (debug exe SHA-256 `76fa8570…baa0`) |
-| Re-check | `bac92d1` (final-review fixes; debug exe SHA-256 `cef59122…4281`). Re-checked (a) first-run save and (b) the disk line; ran the Plan 4 regression and all unit tests. |
+| Re-check | `bac92d1` (final-review fixes; debug exe SHA-256 `cef59122…4281`). Re-checked (a) first-run save (both "Turn on now" quit-before-Begin and the full `notnow` phase) and (b) the disk line; ran the Plan 4 regression and all unit tests. |
 | Build | `npx tauri build --debug --no-bundle`, `CARGO_BUILD_JOBS=1`, shared `CARGO_TARGET_DIR` (`.worktrees/p5-t1/app/src-tauri/target`, which held no release build). A release LTO build at JOBS=1 would not fit the 10-minute foreground limit, and the low-memory reaper kills background shells. Task 8 measured that ORT dominates, so debug and release behave about the same here. The exe plus `ort/`, `resources/` and `licenses/` was copied to a scratch folder and driven from there. |
 | Machine | Windows 11, 16 GB RAM, AVX2, DPR 1, window 1280×800 |
 | Model | Pinned files in `%LOCALAPPDATA%\art.horus.app\models\siglip-b16-224-q8`, kept (R17). Moved aside only for the download and damaged-model phases, then restored and checked (`.ok` plus the three pinned sizes). |
@@ -26,7 +26,7 @@ Cross-check: AGY #3 (`9639ac0d-afd6-4032-905f-456e5be2c893`), through `agent-log
 | `npx tsc --noEmit` | clean (fa42df5 and bac92d1) |
 | `npx vitest run` | **48 files, 656 pass** (fa42df5 and bac92d1) |
 | `cargo test` (bac92d1) | **320 pass, 4 ignored**; doc and integration targets 0 + 1 pass |
-| `mara-plan5.js` (new; this report) | main 49/3 fail (F1, F2 ×2; see below), restart 4/0, notnow 9/0, download 10 pass + 3 harness-race fails (re-run as `damaged`, 5/0), recheck 4/0, dark 1/0 |
+| `mara-plan5.js` (new; this report) | On fa42df5: main 49 pass, 3 fail (F1; F2 twice); restart 4/0; notnow 9/0; download 10 pass, 3 fail; damaged 5/0. On bac92d1: recheck 4/0; notnow 9/0; dark 1/0. Of the 3 download fails, 2 were harness races (status read before the phase changed), and the `damaged` phase re-ran both, settled, and passed. The third was a too-strict text check: the notice also ends in "Dismiss". I fixed that check but did not re-run it; the logged text is correct. |
 | Plan 4 regression: `mara-plan4.js` on bac92d1 | **50 pass, 3 fail, 1 note**, the same as the Plan 4 QA's final pass. The three fails are Plan 4's F1, F2 and J3, all deferred to Plan 6. No regression. |
 
 Harness: `docs/superpowers/qa/mara-plan5.js <work dir> <exe> <main|restart|notnow|download|damaged|recheck|dark>`, CDP port 9335 (not 9336), with its own WebView2 folder and temp libraries. It refuses to run if `%APPDATA%\art.horus.app` exists, and deletes it afterwards.
@@ -45,6 +45,8 @@ Harness: `docs/superpowers/qa/mara-plan5.js <work dir> <exe> <main|restart|notno
 
 The same drop with the dropdown open (type "boat" first) works: `similar_by_file` ×1, `import_paths` ×0, and 4 Lautrec rows.
 
+**Narrow windows make it worse (code reading, not run):** at `max-width: 760px` the zone shows *only* during a drag (`styles.css:629-631` hides it when the list is open). So there F1 leaves no working drop path at all.
+
 **Cause (code reading):** `app/src/similar-ui.ts:168` removes `is-drag` *before* the hit test at `:171`. `styles.css:624` shows `.sim-drop` only under `.search.is-drag` or an open listbox, so the zone is already `display: none` when `elementFromPoint` runs, and the hit test misses. `intake.ts:113` runs the same hit test, which also missed in this run (it imported). The jsdom tests mock `elementFromPoint`, so they can't see the CSS.
 
 **Fix direction (controller's call):** hit-test before clearing `is-drag`, in both listeners. For example, clear the class on the next frame, or have both read one hit decided while the zone is still shown. Then add a test that applies the real `display` rule.
@@ -56,9 +58,9 @@ The same drop with the dropdown open (type "boat" first) works: `similar_by_file
 **Repro** (`main`, blocks "settings" and "focus-leak"):
 1. Open Settings, then press Tab. Focus goes close → switch → Remove model → **`body`** → close …
 2. With focus on `body`, Esc does nothing: the keydown listener sits on the sheet (`app/src/settings/panel.ts:50`).
-3. Backspace goes through to the Reference view under the open modal: "Jane Avril" → "Divan Japonais".
+3. Backspace goes through to the Reference view under the open modal: "Jane Avril" → "Divan Japonais". Only Backspace (navigation) was tried. Shortcuts that change data (Ctrl+Z, Delete) were not probed behind the dialog.
 
-The plan asks for "focus trapped, Esc closes". The rest of the shell is `inert`, but nothing wraps focus. This is the same class as Plan 3 F1 and Plan 4 F1 (focus or Esc in modal layers), which are deferred to Plan 6. Mara can recover with the mouse, and nothing is lost.
+The plan asks for "focus trapped, Esc closes". The rest of the shell is `inert`, but nothing wraps focus. This is the same class as Plan 3 F1 and Plan 4 F1 (focus or Esc in modal layers), which are deferred to Plan 6. Mara can recover with the mouse, and the Backspace case loses nothing. Minor, unless a data-changing shortcut also passes through, which was not checked.
 
 ## What Mara gets (all PASS on the real app)
 
@@ -69,8 +71,8 @@ The plan asks for "focus trapped, Esc closes". The rest of the shell is `inert`,
 - "Turn on now" makes no `similar_enable` call before Begin.
 - **bac92d1 (a):** "Turn on now", then quit before Begin, saves nothing (no `settings.json`) and calls nothing (IPC: `intake_busy`, `get_settings`, `system_ram_gb`, `similar_status`). The next launch asks again. Begin then saves `on` and reaches ready.
 
-**Turn on now with the model installed:**
-- loading → indexing 0…50 of 50 → ready in **15.4 s** from Begin, with no download phase.
+**Turn on now with the model installed (fa42df5, main):**
+- **15.7 s** from Begin to ready (27 s from launch), with no download phase. The status bar showed: off → loading → ready → indexing 0…50 of 50 → ready (see N5).
 - `findSimilar: "on"` is saved, and the status bar reads "Find similar: ready".
 
 **Settings:**
@@ -114,8 +116,8 @@ The plan asks for "focus trapped, Esc closes". The rest of the shell is `inert`,
 - The switch, turned off with the Looks similar tab selected, removes the tab, pane, group and drop zone from the DOM, and Callouts becomes selected.
 - The files are kept (the disk line stays), and `findSimilar: "off"` is saved.
 - Typing calls only `search`. A drag shows no zone, and the drop imports as usual.
-- Turning it on again reaches ready in 0.9 s.
-- First run "Not now": nothing in the DOM, and **ORT is not among `horus.exe`'s loaded modules**. A keyboard-only Space on the Settings switch turns it on (ready 50/50, no download), after which ORT is loaded.
+- Turning it on again reaches ready in 0.8 s.
+- First run "Not now" (fa42df5 and bac92d1): nothing in the DOM, and **ORT is not among `horus.exe`'s loaded modules**. A keyboard-only Space on the Settings switch turns it on (ready 50/50, no download), after which ORT is loaded.
 
 **Restart:**
 - Ready in 0.3 s, with no download. `embeddings.bin` is not rewritten (530,832 B).
@@ -146,8 +148,10 @@ The plan asks for "focus trapped, Esc closes". The rest of the shell is `inert`,
 - **N2:** during Remove model, the first `off` status still carries the old `diskBytes` (213,528,341). It settles to 0 within about 1 s; the UI shows no disk line afterwards.
 - **N3:** the tab label "Looks similar" wraps onto two lines in the margin tab row at 1280 px (cosmetic).
 - **N4 (ruled):** the plan says "Downloading model · …", but the app says "Downloading the model · …". The status bar adds "downloading N%" and "loading". Both come from the T6 design review (progress.md: Q2, Q3).
+- **N5:** after loading, the status bar shows "Find similar: ready" for a moment, before "indexing 0 of 50". This happened in the main and notnow phases, on both builds. Mara sees "ready" flash and then change to indexing (cosmetic).
+- **H2 (unexplained, did not reproduce):** in the first download attempt, Try again with the proxy up failed at once with 0 MB relayed. The harness then crashed on a proxy-port clash (fixed) before it could log the proxy. The model was restored by hand and checked. The next run relayed normally, and the cause was not found.
 - **H1 (known harness issue):** the CDP dialog route missed the first-run pick 4/4 in one launch of the dark phase; a relaunch picked first time.
-- **Harness races (fixed):** pass 1 of `download` read status before the phase changed. Re-run as `damaged`, all five checks pass. One earlier download attempt crashed the harness (proxy port reuse) before its `finally` block ran; the model was restored by hand and checked. The harness now also restores the model on process exit.
+- **Harness races (fixed):** in pass 1, `download` read status before the phase changed. Re-run as `damaged`, all five checks pass. The harness now also restores the model on process exit.
 
 ## Not covered
 
