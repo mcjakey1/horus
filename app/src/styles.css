@@ -502,9 +502,6 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
   /* 3:2, canvas over inspector, at any height: the fit keeps more names (§7); the inspector scrolls. */
   .graph-host.tree, .graph-host.radial, .gx { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); }
   .graph-host .insp, .gx-insp { border-left: 0; border-top: 1px solid var(--line); }
-  /* Boards stack like the other views (§7): the list above, capped, the board below. */
-  .bd { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-  .bd-list { max-height: 30vh; border-right: 0; border-bottom: 1px solid var(--line); }
 }
 
 /* Task 11's speed check: dev or VITE_PERF builds only (scene.ts perfOverlay). */
@@ -564,6 +561,12 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .bd { display: grid; grid-template-columns: 220px 1fr; min-height: 0; height: 100%; }
 .bd-list { border-right: 1px solid var(--line); background: var(--panel); padding: 16px 12px; overflow: auto; }
 .bd-list ul { list-style: none; margin: 0; padding: 0; }
+/* Boards stack like the other views at 760 (§7): the list above, capped, the board below. After
+   the .bd rules, so it wins. */
+@media (max-width: 760px) {
+  .bd { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .bd-list { max-height: 30vh; border-right: 0; border-bottom: 1px solid var(--line); }
+}
 .bd-pick { display: flex; justify-content: space-between; gap: 8px; width: 100%; padding: 8px 6px; text-align: left; font: 500 15px/1.3 var(--serif); color: var(--ink); }
 .bd-pick:hover, .bd-pick[aria-current="true"] { background: var(--shell); }
 .bd-pick .count, .board-menu .count { font: 12px var(--mono); color: var(--ink-2); }
