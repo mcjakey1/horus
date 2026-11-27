@@ -151,7 +151,7 @@ describe("first run", () => {
     await tick();
     const fr = $(".firstrun");
     expect(fr.textContent).toContain(FIND_SIMILAR_COPY);
-    expect($("#fr-ram").textContent).toBe("This computer: 16 GB of RAM · Download: 213 MB");
+    expect($("#fr-ram").textContent).toBe("Download: 213 MB · This computer: 16 GB of RAM");
     const choices = [...fr.querySelectorAll<HTMLElement>("[data-fs]")];
     expect(choices.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false"]);
     expect(choices).not.toContain(document.activeElement);
@@ -210,6 +210,13 @@ describe("first run", () => {
     emit({ ...err, error: "Couldn't reach the download. Check your connection and try again." });
     expect(notice.hidden).toBe(false);
     expect(notice.textContent).toContain("Couldn't reach the download. Check your connection and try again.");
+    expect(notice.getAttribute("aria-label")).toBe("Notice");
+    // Open Settings goes straight to the Find similar section
+    $<HTMLButtonElement>("#import-notice [data-open-settings]").click();
+    await tick();
+    expect(document.querySelector('.settings[role="dialog"]')).not.toBeNull();
+    expect(document.activeElement?.getAttribute("role")).toBe("switch");
+    $(".settings").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     $<HTMLButtonElement>("#import-dismiss").click();
     emit({ ...err, error: "Find similar couldn't start on this computer." });
     expect(notice.textContent).not.toContain("couldn't start"); // once only

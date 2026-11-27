@@ -181,16 +181,16 @@ export function firstRun(
   };
 
   if (askFindSimilar) {
-    // R12: the existing RAM line, with the download size (always the model's total) after it.
+    // R12: the download size (always the model's total), then the existing RAM line.
     const ram = api.systemRamGb().then(
       (gb) => (gb ? `This computer: ${gb} GB of RAM` : "This computer: RAM could not be read"),
       () => "This computer: RAM could not be read",
     );
     const size = api.similarStatus().then(
-      (s) => ` · Download: ${fmtBytes(s.downloadTotal)}`,
+      (s) => `Download: ${fmtBytes(s.downloadTotal)} · `,
       () => "",
     );
-    void Promise.all([ram, size]).then(([r, d]) => ($("#fr-ram").textContent = r + d));
+    void Promise.all([size, ram]).then(([d, r]) => ($("#fr-ram").textContent = d + r));
   }
 
   return new Promise((resolve) => {
@@ -246,7 +246,7 @@ function enableInBackground(root: HTMLElement, api: Api) {
   const tell = (copy: string) => {
     if (told) return;
     done();
-    noticeIn(root)(`<p>${esc(copy)}</p>`);
+    noticeIn(root)(`<p>${esc(copy)}</p><button type="button" class="text-btn" data-open-settings>Open Settings</button>`);
   };
   void api
     .onSimilarStatus((s) => {

@@ -33,6 +33,7 @@ export function mountSettings(root: HTMLElement, api: Api): { open(section?: "fi
     el.setAttribute("role", "dialog");
     el.setAttribute("aria-modal", "true");
     el.setAttribute("aria-labelledby", "st-title");
+    el.tabIndex = -1; // a click on text keeps focus inside, so Esc still reaches the dialog
     el.innerHTML = `<div class="st-sheet">
       <div class="st-head">
         <h1 class="st-title" id="st-title">Settings</h1>
@@ -46,9 +47,9 @@ export function mountSettings(root: HTMLElement, api: Api): { open(section?: "fi
     const sheet = el;
     const fs = sheet.querySelector<HTMLElement>('[data-section="find-similar"]')!;
     sheet.addEventListener("keydown", (e) => {
+      e.stopPropagation(); // no key reaches the views underneath (v, t, Backspace, their Esc)
       if (e.key !== "Escape") return;
       e.preventDefault();
-      e.stopPropagation(); // the views underneath have their own Esc
       close();
     });
     sheet.addEventListener("click", (e) => {
@@ -66,5 +67,12 @@ export function mountSettings(root: HTMLElement, api: Api): { open(section?: "fi
   }
 
   root.querySelector<HTMLElement>("#settings")?.addEventListener("click", () => open());
+  // First run's failure notice links here (F4): "Open Settings" goes to the Find similar section.
+  const notice = root.querySelector<HTMLElement>("#import-notice");
+  notice?.addEventListener("click", (e) => {
+    if (!(e.target as Element).closest("[data-open-settings]")) return;
+    notice.hidden = true;
+    open("find-similar");
+  });
   return { open, close };
 }

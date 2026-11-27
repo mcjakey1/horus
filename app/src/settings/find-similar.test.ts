@@ -57,10 +57,12 @@ describe("Find similar section", () => {
       "It downloads a 150–350 MB image model and indexes your library in the background. Recommended for machines with 8 GB of RAM or more.",
     );
     expect(el.textContent).not.toContain("Turn on Find similar?");
+    const first = sw();
     sw().focus();
     sw().click();
     await tick();
     expect(api.similarEnable).toHaveBeenCalledTimes(1);
+    expect(sw()).toBe(first); // the switch survives a phase change, so its knob animates
     expect(sw().getAttribute("aria-checked")).toBe("true");
     expect(document.activeElement).toBe(sw()); // a re-render keeps focus on the control
     sw().click();
@@ -72,7 +74,7 @@ describe("Find similar section", () => {
   it("progress_text_by_phase", () => {
     const api = fakeApi();
     const line = (s: SimilarStatus) => (renderFindSimilar(el, s, api), $(el, "[data-line]").textContent);
-    expect(line(st({ phase: "downloading", downloadDone: 50_000_000 }))).toBe("Downloading model · 50 MB of 213 MB");
+    expect(line(st({ phase: "downloading", downloadDone: 50_000_000 }))).toBe("Downloading the model · 50 MB of 213 MB");
     const bar = $<HTMLProgressElement>(el, "progress");
     expect([bar.value, bar.max]).toEqual([50_000_000, 213_373_093]);
     expect(line(st({ phase: "verifying" }))).toBe("Checking the download…");
@@ -98,9 +100,68 @@ describe("Find similar section", () => {
     expect(api.similarPause).toHaveBeenLastCalledWith(false);
   });
 
-  it("shows disk space used", () => {
+  it("shows disk space used only when there is some", () => {
     renderFindSimilar(el, st({ diskBytes: 230_000_000 }), fakeApi());
     expect(el.textContent).toContain("Disk space used: 230 MB");
+    renderFindSimilar(el, st(), fakeApi());
+    expect(el.textContent).not.toContain("Disk space used");
+  });
+
+  it("a tick in the same phase patches the line and bar in place; a phase change rebuilds", () => {
+    const api = fakeApi();
+    renderFindSimilar(el, st({ phase: "downloading", downloadDone: 10_000_000 }), api);
+    const sw = $(el, '[role="switch"]');
+    const bar = $<HTMLProgressElement>(el, "progress");
+    renderFindSimilar(el, st({ phase: "downloading", downloadDone: 90_000_000 }), api);
+    expect($(el, '[role="switch"]')).toBe(sw); // same node: a click mid-tick still lands
+    expect($(el, "progress")).toBe(bar);
+    expect(bar.value).toBe(90_000_000);
+    expect($(el, "[data-line]").textContent).toBe("Downloading the model · 90 MB of 213 MB");
+    renderFindSimilar(el, st({ phase: "indexing", indexed: 1, total: 9 }), api);
+    const pause = $(el, '[data-act="pause"]');
+    renderFindSimilar(el, st({ phase: "indexing", indexed: 2, total: 9 }), api);
+    expect($(el, '[data-act="pause"]')).toBe(pause);
+    expect($(el, "[data-line]").textContent).toBe("Indexing your library · 2 of 9");
+  });
+
+  it("one persistent status line, updated on a phase change only", () => {
+    const api = fakeApi();
+    renderFindSimilar(el, st({ phase: "downloading", downloadDone: 10_000_000 }), api);
+    const live = $(el, '[role="status"]');
+    expect(live.textContent).toBe("Downloading the model · 10 MB of 213 MB");
+    renderFindSimilar(el, st({ phase: "downloading", downloadDone: 20_000_000 }), api);
+    expect(live.textContent).toBe("Downloading the model · 10 MB of 213 MB"); // not every tick
+    renderFindSimilar(el, st({ phase: "ready", indexed: 4, total: 4 }), api);
+    expect($(el, '[role="status"]')).toBe(live);
+    expect(live.textContent).toBe("Ready · 4 references indexed");
+    renderFindSimilar(el, st(), api);
+    expect(live.textContent).toBe("Find similar is off.");
+  });
+
+  it("the switch is disabled while a call is pending, so a double-click enables once", async () => {
+    const api = fakeApi();
+    let finish!: (s: SimilarStatus) => void;
+    vi.mocked(api.similarEnable).mockReturnValueOnce(new Promise((r) => (finish = r)));
+    renderFindSimilar(el, st(), api);
+    $<HTMLButtonElement>(el, '[role="switch"]').click();
+    expect($(el, '[role="switch"]').getAttribute("aria-disabled")).toBe("true");
+    renderFindSimilar(el, st(), api); // a status tick meanwhile keeps it disabled
+    $<HTMLButtonElement>(el, '[role="switch"]').click();
+    expect(api.similarEnable).toHaveBeenCalledTimes(1);
+    finish(st({ phase: "downloading" }));
+    await tick();
+    expect($(el, '[role="switch"]').getAttribute("aria-disabled")).toBe("false");
+  });
+
+  it("Esc in the Remove confirmation cancels it", () => {
+    const api = fakeApi();
+    renderFindSimilar(el, st({ phase: "ready", diskBytes: 1e8, indexed: 1, total: 1 }), api);
+    $<HTMLButtonElement>(el, '[data-act="remove"]').click();
+    const esc = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    $(el, '[data-act="remove-cancel"]').dispatchEvent(esc);
+    expect(esc.defaultPrevented).toBe(true);
+    expect(el.querySelector('[data-act="remove-confirm"]')).toBeNull();
+    expect(document.activeElement).toBe($(el, '[data-act="remove"]'));
   });
 
   it("remove_needs_confirmation", async () => {
@@ -164,7 +225,14 @@ describe("Settings panel", () => {
     expect($(dlg, "[data-line]").textContent).toBe("Indexing your library · 1 of 4");
     listener!(st({ phase: "indexing", indexed: 2, total: 4 }));
     expect($(dlg, "[data-line]").textContent).toBe("Indexing your library · 2 of 4");
+    // Keys stay in the dialog: the views behind it never see them (v, t, Backspace…).
+    const behind = vi.fn();
+    document.addEventListener("keydown", behind);
+    $(dlg, ".st-title").dispatchEvent(new KeyboardEvent("keydown", { key: "v", bubbles: true }));
+    expect(behind).not.toHaveBeenCalled();
+    expect(dlg.tabIndex).toBe(-1); // a click on text keeps focus in the dialog, so Esc still works
     dlg.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.removeEventListener("keydown", behind);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect($(document, "header").inert).toBe(false);
     expect(document.activeElement).toBe(gear);

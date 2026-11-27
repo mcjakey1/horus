@@ -24,7 +24,7 @@ const on = (s: SimilarStatus) => s.phase !== "off" && s.phase !== "error";
 function progress(s: SimilarStatus): { line: string; act?: [string, string]; bar?: boolean } | null {
   switch (s.phase) {
     case "downloading":
-      return { line: `Downloading model · ${num(fmtBytes(s.downloadDone))} of ${num(fmtBytes(s.downloadTotal))}`, bar: true };
+      return { line: `Downloading the model · ${num(fmtBytes(s.downloadDone))} of ${num(fmtBytes(s.downloadTotal))}`, bar: true };
     case "verifying":
       return { line: "Checking the download…" };
     case "loading":
@@ -42,18 +42,27 @@ function progress(s: SimilarStatus): { line: string; act?: [string, string]; bar
   }
 }
 
-/** (Re)renders the section into `el`; safe to call on every status event. Focus stays on the
- *  control it was on. */
+/** Renders the section into `el`; call it on every status event. The body is rebuilt only when
+ *  its shape changes (phase, confirmation, disk used): a tick patches the line and bar in place,
+ *  so a click mid-download still lands. One persistent status line speaks phase changes only. */
 export function renderFindSimilar(el: HTMLElement, s: SimilarStatus, api: Api): void {
-  const focused = el.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.act : undefined;
-  const confirming = el.dataset.confirm === "1";
-  const p = progress(s);
-  el.innerHTML = `<div class="fs-head">
+  // The status line and the switch persist (the knob animates); only the body below is rebuilt.
+  if (!el.querySelector("[data-announce]")) {
+    el.innerHTML = `<p class="sr-only" role="status" data-announce></p>
+    <div class="fs-head">
       <h2 class="st-h2" id="fs-label">Find similar</h2>
-      <button type="button" class="fs-switch" role="switch" aria-checked="${on(s)}" aria-labelledby="fs-label" aria-describedby="fs-desc" data-act="switch"><span class="fs-knob"></span></button>
+      <button type="button" class="fs-switch" role="switch" aria-checked="false" aria-labelledby="fs-label" aria-describedby="fs-desc" data-act="switch"><span class="fs-knob"></span></button>
     </div>
     <p class="fs-desc" id="fs-desc">${esc(DESCRIPTION)}</p>
-    ${
+    <div class="st-body" data-body></div>`;
+  }
+  const body = el.querySelector<HTMLElement>("[data-body]")!;
+  const confirming = el.dataset.confirm === "1";
+  const p = progress(s);
+  const shape = `${s.phase}|${confirming}|${s.diskBytes > 0}`;
+  if (el.dataset.shape !== shape) {
+    const focused = el.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.act : undefined;
+    body.innerHTML = `${
       p
         ? `<div class="fs-progress">
       <p class="fs-line" data-line>${p.line}</p>
@@ -62,41 +71,76 @@ export function renderFindSimilar(el: HTMLElement, s: SimilarStatus, api: Api): 
     </div>`
         : ""
     }
-    <p class="fs-disk">Disk space used: ${num(fmtBytes(s.diskBytes))}</p>
     ${
       s.diskBytes > 0
-        ? confirming
-          ? `<div class="fs-confirm" role="group" aria-labelledby="fs-confirm-q">
+        ? `<p class="fs-disk">Disk space used: <span class="mono" data-disk>${esc(fmtBytes(s.diskBytes))}</span></p>
+    ${
+      confirming
+        ? `<div class="fs-confirm" role="group" aria-labelledby="fs-confirm-q">
       <p id="fs-confirm-q">Remove the Find similar model and this library's index? You can download it again later.</p>
       <div class="fr-row"><button type="button" class="fr-btn" data-act="remove-confirm">Remove</button><button type="button" class="text-btn" data-act="remove-cancel">Cancel</button></div>
     </div>`
-          : `<button type="button" class="text-btn" data-act="remove">Remove model</button>`
+        : `<button type="button" class="text-btn" data-act="remove">Remove model</button>`
+    }`
         : ""
     }
     <p class="fs-credit">${esc(CREDIT)}</p>`;
-  if (focused) {
-    // Same control if it's still there; Pause and Resume swap; anything else falls back to the switch.
-    const q = (a: string) => el.querySelector<HTMLElement>(`[data-act="${a}"]`);
-    (q(focused) ?? (focused === "pause" || focused === "resume" ? q("pause") ?? q("resume") : null) ?? q("switch"))?.focus();
+    el.dataset.shape = shape;
+    if (focused) {
+      // Same control if it's still there; Pause and Resume swap; anything else falls back to the switch.
+      const q = (a: string) => el.querySelector<HTMLElement>(`[data-act="${a}"]`);
+      (q(focused) ?? (focused === "pause" || focused === "resume" ? q("pause") ?? q("resume") : null) ?? q("switch"))?.focus();
+    }
+    if (el.dataset.phase !== s.phase) {
+      el.dataset.phase = s.phase;
+      el.querySelector("[data-announce]")!.textContent = body.querySelector("[data-line]")?.textContent ?? "Find similar is off.";
+    }
+  } else {
+    const line = body.querySelector("[data-line]");
+    if (line && p) line.innerHTML = p.line;
+    const bar = body.querySelector<HTMLProgressElement>("progress");
+    if (bar) [bar.max, bar.value] = [s.downloadTotal, s.downloadDone];
+    const disk = body.querySelector("[data-disk]");
+    if (disk) disk.textContent = fmtBytes(s.diskBytes);
   }
+  // One call at a time, so a double-click enables once. aria-disabled, not disabled, so the
+  // switch keeps keyboard focus while the call is out.
+  const sw = el.querySelector<HTMLButtonElement>('[role="switch"]')!;
+  sw.setAttribute("aria-checked", String(on(s)));
+  const busy = () => el.dataset.busy === "1";
+  sw.setAttribute("aria-disabled", String(busy()));
 
-  const run = (call: () => Promise<SimilarStatus>) =>
-    call().then(
-      (next) => renderFindSimilar(el, next, api),
-      () => renderFindSimilar(el, { ...s, phase: "error", error: CATCH_ALL }, api),
-    );
+  const run = (call: () => Promise<SimilarStatus>) => {
+    el.dataset.busy = "1";
+    sw.setAttribute("aria-disabled", "true");
+    const done = (next: SimilarStatus) => {
+      el.dataset.busy = "";
+      renderFindSimilar(el, next, api);
+    };
+    return call().then(done, () => done({ ...s, phase: "error", error: CATCH_ALL }));
+  };
+  const confirm = (open: boolean) => {
+    el.dataset.confirm = open ? "1" : "";
+    renderFindSimilar(el, s, api);
+    body.querySelector<HTMLElement>(`[data-act="${open ? "remove-cancel" : "remove"}"]`)?.focus();
+  };
   el.onclick = (e) => {
     const act = (e.target as Element).closest<HTMLElement>("[data-act]")?.dataset.act;
+    if (busy() && act !== "remove" && act !== "remove-cancel") return;
     if (act === "switch") void run(on(s) ? api.similarDisable : api.similarEnable);
     else if (act === "retry") void run(api.similarEnable);
     else if (act === "pause" || act === "resume") void run(() => api.similarPause(act === "pause"));
-    else if (act === "remove" || act === "remove-cancel") {
-      el.dataset.confirm = act === "remove" ? "1" : "";
-      renderFindSimilar(el, s, api);
-      el.querySelector<HTMLElement>(`[data-act="${act === "remove" ? "remove-cancel" : "remove"}"]`)?.focus();
-    } else if (act === "remove-confirm") {
+    else if (act === "remove" || act === "remove-cancel") confirm(act === "remove");
+    else if (act === "remove-confirm") {
       el.dataset.confirm = "";
       void run(api.similarRemoveModel);
     }
+  };
+  // Esc in the confirmation cancels it, rather than closing the panel.
+  el.onkeydown = (e) => {
+    if (e.key !== "Escape" || el.dataset.confirm !== "1") return;
+    e.preventDefault();
+    e.stopPropagation();
+    confirm(false);
   };
 }
