@@ -80,6 +80,14 @@ describe("the Details dialog (Plan 6 Task 3c)", () => {
     expect(api.setField).not.toHaveBeenCalled();
   });
 
+  it("a click on the backdrop keeps the dialog and what was typed", () => {
+    open();
+    field("title").value = "typed";
+    $(".details").click(); // the backdrop is the dialog element itself
+    expect(document.querySelector(".details")).not.toBeNull();
+    expect(field("title").value).toBe("typed");
+  });
+
   it("Enter in Credit is a new line, not a save", () => {
     open();
     key(field("credit"), "Enter");

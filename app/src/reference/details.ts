@@ -28,7 +28,7 @@ export function openDetails(root: HTMLElement, ref: Reference, api: Api, store: 
     const id = `dt-${k}`;
     const input =
       k === "credit"
-        ? `<textarea id="${id}" name="${k}" rows="3" maxlength="${max}">${esc(was[k])}</textarea>`
+        ? `<textarea id="${id}" name="${k}" rows="5" maxlength="${max}">${esc(was[k])}</textarea>`
         : `<input id="${id}" name="${k}" type="text" maxlength="${max}" value="${esc(was[k])}">`;
     return `<div class="dt-row"><label for="${id}">${label}</label>${input}</div>`;
   };
@@ -84,7 +84,7 @@ export function openDetails(root: HTMLElement, ref: Reference, api: Api, store: 
   el.addEventListener("click", (e) => {
     const t = e.target as Element;
     if (t.closest("[data-save]")) return void save();
-    if (t.closest("[data-cancel]") || t === el) close();
+    if (t.closest("[data-cancel]")) close(); // never on a backdrop click: it would drop what was typed
   });
   el.querySelector<HTMLInputElement>('[name="title"]')!.focus();
   return { close };

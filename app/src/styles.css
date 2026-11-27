@@ -570,6 +570,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .bm-msg { margin: 0; min-height: 1.2em; font-size: 13px; color: var(--ink); }
 .bm-actions { display: flex; justify-content: space-between; }
 .boards-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
+.details-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; } /* Task 3c: a chip like its row */
 .off-board { position: absolute; top: 50px; left: 16px; padding: 3px 8px; background: var(--ink); color: var(--panel); font: 500 12px var(--mono); }
 .off-board[hidden] { display: none; }
 .off-board-note { color: var(--ink-2); font-style: italic; }
