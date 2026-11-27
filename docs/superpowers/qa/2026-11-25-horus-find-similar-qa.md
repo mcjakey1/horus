@@ -3,7 +3,7 @@
 QA session: `design-second-brain-b5`. Controller: `design-second-brain-02`. Persona and method: `QA-PERSONA.md`.
 Cross-check: AGY #3 (`9639ac0d-afd6-4032-905f-456e5be2c893`), through `agent-logs/agy-run.sh`.
 
-**Verdict: FAIL.** There is 1 Important finding (F1) and 1 Minor (F2). The rest of the plan works for Mara on the real app, including the download drill that Task 8 left unchecked.
+**Verdict: PASS WITH FIXES. Not a PASS yet: do not merge until F1 is fixed and re-verified.** There is 1 Important finding (F1) and 1 Minor (F2). The rest of the plan works for Mara on the real app, including the download drill that Task 8 left unchecked. After the fixes, QA re-verifies on the fix SHA (the `main` drop block and the Plan 4 baseline), and the plan closes as PASS after AGY #3 signs off (method step 11). I first labelled this FAIL; AGY #3 recommended PASS WITH FIXES, citing the Plan 2 precedent (1 Important + 1 Minor). I checked that precedent and adopted the label. The findings are unchanged.
 
 **F1 (Important):** if Mara drags an image onto the drop zone while the search field is empty, Horus imports the image into her library instead of searching with it. Dropping onto the same zone while the dropdown is open works.
 
@@ -26,7 +26,7 @@ Cross-check: AGY #3 (`9639ac0d-afd6-4032-905f-456e5be2c893`), through `agent-log
 | `npx tsc --noEmit` | clean (fa42df5 and bac92d1) |
 | `npx vitest run` | **48 files, 656 pass** (fa42df5 and bac92d1) |
 | `cargo test` (bac92d1) | **320 pass, 4 ignored**; doc and integration targets 0 + 1 pass |
-| `mara-plan5.js` (new; this report) | On fa42df5: main 49 pass, 3 fail (F1; F2 twice); restart 4/0; notnow 9/0; download 10 pass, 3 fail; damaged 5/0. On bac92d1: recheck 4/0; notnow 9/0; dark 1/0. Of the 3 download fails, 2 were harness races (status read before the phase changed), and the `damaged` phase re-ran both, settled, and passed. The third was a too-strict text check: the notice also ends in "Dismiss". I fixed that check but did not re-run it; the logged text is correct. |
+| `mara-plan5.js` (new; this report) | On fa42df5: main 49 pass, 3 fail (F1; F2 twice), 1 note; restart 4/0; notnow 9/0; download 10 pass, 3 fail; damaged 5/0. On bac92d1: recheck 4/0; notnow 9/0; dark 1/0. Of the 3 download fails, 2 were harness races (status read before the phase changed), and the `damaged` phase re-ran both, settled, and passed. The third was a too-strict text check: the notice also ends in "Dismiss". I fixed that check but did not re-run it; the logged text is correct. |
 | Plan 4 regression: `mara-plan4.js` on bac92d1 | **50 pass, 3 fail, 1 note**, the same as the Plan 4 QA's final pass. The three fails are Plan 4's F1, F2 and J3, all deferred to Plan 6. No regression. |
 
 Harness: `docs/superpowers/qa/mara-plan5.js <work dir> <exe> <main|restart|notnow|download|damaged|recheck|dark>`, CDP port 9335 (not 9336), with its own WebView2 folder and temp libraries. It refuses to run if `%APPDATA%\art.horus.app` exists, and deletes it afterwards.
@@ -110,7 +110,7 @@ The plan asks for "focus trapped, Esc closes". The rest of the shell is `inert`,
 - Indexing starts by itself.
 - A new reference shows "This reference isn't indexed yet.", then gets rows after ready.
 - Pause stops at most 1 image after the click. The line, status bar and Resume button all say paused, and focus stays on Pause/Resume. Resume continues.
-- **Galaxy pan while indexing (Task 8 NOT CHECKED):** rAF gaps p50 17.7 ms, p95 18.5 ms, max 18.9 ms. At ready: p95 18.2 ms. No stutter at this scale.
+- **Galaxy pan while indexing (Task 8 NOT CHECKED):** rAF gaps p50 17.7 ms, p95 18.2 ms, max 18.6 ms. At ready: p50 17.6 ms, p95 18.4 ms, max 18.8 ms (final `main` run). No stutter at this scale.
 
 **Off:**
 - The switch, turned off with the Looks similar tab selected, removes the tab, pane, group and drop zone from the DOM, and Callouts becomes selected.
@@ -168,4 +168,33 @@ The plan asks for "focus trapped, Esc closes". The rest of the shell is `inert`,
 
 ## AGY #3
 
-(pending)
+Run through `agent-logs/agy-run.sh` on 2026-11-27 22:51, against ca4426c. **Verdict, verbatim: `PASS WITH FIXES`.** I applied both of its edits (the Galaxy figures and the note count) and adopted its verdict label.
+
+Its answer, verbatim:
+
+> PASS WITH FIXES
+>
+> Strong QA work (real exe, proxy cut/resume, ORT module check, caught a real CSS/hit-test bug jsdom missed). Two small report edits before handing to controller (`line 113` Galaxy numbers; verdict label).
+>
+> ### 1. F1 cause reading
+> Verified exact:
+> - [similar-ui.ts:167-172](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/similar-ui.ts#L167-L172) removes `is-drag` at `:168` before calling `elementFromPoint` at `:171`.
+> - [styles.css:623-624](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/styles.css#L623-L624) hides `.sim-drop` unless `#q-results` is open or `.search.is-drag` is set, so on an empty search box `.sim-drop` is already `display: none` when both [similar-ui.ts:171](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/similar-ui.ts#L171) and [intake.ts:113](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/intake.ts#L113) hit-test — `similar-ui.ts` misses and `intake.ts` imports the file.
+> - Narrow-width rule ([styles.css:628-631](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/styles.css#L628-L631)) confirmed: at `<= 760px`, `.sim-drop` hides whenever `.is-drag` is absent even if `#q-results` is open, leaving zero working drop path.
+>
+> ### 2. Severities
+> - **F1 (`Important`):** Fair. Silently imports into the library when dropping on the search zone, violating Plan 5 Global Constraints ("never copied into the library") and breaking narrow-window drop-to-search completely.
+> - **F2 (`Minor`):** Fair. Verified at [settings/panel.ts:31,50-55](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/plan5-similar/app/src/settings/panel.ts#L31); same Plan 6 modal focus-trap class as Plan 3 F1 / Plan 4 F1, mouse recovery works, no data loss.
+>
+> ### 3. PASS claims vs results files
+> All numbers, timings, byte counts, and status-bar sequences match the 7 JSON files except one transcription slip:
+> - **[report:113](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/p5-qa/docs/superpowers/qa/2026-11-25-horus-find-similar-qa.md#L113) (Galaxy pan rAF gaps):** report says `p50 17.7 ms, p95 18.5 ms, max 18.9 ms. At ready: p95 18.2 ms.` Actual `results-main.json:221,226`: while indexing `p50 17.7, p95 18.2, max 18.6`; at ready `p50 17.6, p95 18.4, max 18.8`. Fix those two numbers.
+> - Minor: [report:29](file:///D:/Design%20Second%20Brain/taxonomy-of-visuals/.worktrees/p5-qa/docs/superpowers/qa/2026-11-25-horus-find-similar-qa.md#L29) lists `main 49 pass, 3 fail` (omits the 1 baseline note); trivial.
+>
+> ### 4. "Not covered" list
+> Honest and complete. Debug-vs-release build, dropdown-scope-by-absence, and unprobed data-mutating shortcuts behind Settings are all transparently disclosed in their respective sections.
+>
+> ### 5. `FAIL` vs `PASS WITH FIXES`
+> Recommend **`PASS WITH FIXES`** rather than `FAIL`:
+> - Matches Plan 2 QA precedent (1 Important + 1 Minor -> `PASS WITH FIXES`, fix, re-verify, close as `PASS`).
+> - Every other Plan 5 workflow (download/resume/checksum, lazy ORT, indexing/pause/Galaxy pan, Looks similar tab & dropdown, board scope, restart/rebuild, Remove model, Plan 4 regression) passed; F1 is a single localized hit-test-order bug, not a systemic failure.
