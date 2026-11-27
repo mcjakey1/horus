@@ -59,7 +59,8 @@ pub struct AppState {
     seed_taxonomy: PathBuf,
     /// The bundled demo set: `manifest.json` and `images/`.
     demo_dir: PathBuf,
-    /// Plan 5 Find similar (lock order: gate, `similar_start`, settings, state, `similar`).
+    /// Plan 5 Find similar (lock order: gate, `similar_start`, `similar_download`, settings,
+    /// state, `similar`).
     similar: Mutex<similar::SimilarState>,
     /// Single-flight for the indexer start hook (B4).
     similar_start: Mutex<()>,
@@ -116,11 +117,6 @@ impl ReferenceView {
     /// The image hash (R9): Find similar's embedding key.
     pub fn hash(&self) -> &str {
         &self.reference.hash
-    }
-
-    /// `thumbs/1024/<hash>.jpg` (R9): what Find similar embeds.
-    pub fn thumb1024(&self) -> &Path {
-        &self.thumb1024
     }
 }
 
@@ -561,7 +557,7 @@ fn create_inner<R: Runtime>(
         }
     }
     // B4: under the state guard, right before the swap (state then `similar`); the join waits
-    // for the guard to drop.
+    // for the state guard to drop (the import gate is still held; the worker never takes it).
     let (installed, old) = {
         let mut open = lock(&st.open);
         let old = similar::detach_indexer(&st);
@@ -612,7 +608,8 @@ fn open_inner<R: Runtime>(
         *old = similar::detach_indexer(&st);
         install(app, &mut open, lib, vec![])?
     };
-    // Joined with no lock held, before remember().
+    // Joined with the state guard dropped, before remember(). The import gate is still held:
+    // safe, the worker never takes it.
     if let Some(i) = old.take() {
         i.stop();
     }

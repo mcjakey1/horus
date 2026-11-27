@@ -1,9 +1,11 @@
 //! Plan 5 Task 5: the Find similar commands, their state, the status events and the B4
 //! indexer hooks around a library switch.
 //!
-//! Lock order: import gate, `similar_start`, settings, state, then `similar`. Under `similar`
-//! only fields flip and Arcs clone: no store or encoder lock, no file I/O, no emit, no join.
-//! An indexer is joined only with no lock held, and never from its own `on` callback.
+//! Lock order: import gate, `similar_start`, `similar_download`, settings, state, then
+//! `similar`. Under `similar` only fields flip and Arcs clone: no store or encoder lock, no
+//! file I/O, no emit, no join. An indexer is joined with no state or `similar` lock held (its
+//! events take both, through `publish`), never from its own `on` callback. A library switch
+//! joins under the import gate and a remove under `similar_start`: the worker takes neither.
 //! While an indexer runs it is the only writer of `embeddings.bin` (fixed `.tmp` name).
 
 use super::*;
@@ -163,8 +165,10 @@ fn disk_bytes(model_dir: Option<&Path>, root: Option<&Path>) -> u64 {
     model + emb
 }
 
+/// Reads the open library's root under the state lock on its own, never inside `similar`; so
+/// no caller may hold the state lock (or join an indexer under it: its events publish).
 fn build_status<R: Runtime>(app: &AppHandle<R>) -> SimilarStatus {
-    let (phase, download_done, indexed, total, error, root) = {
+    let (phase, download_done, indexed, total, error) = {
         let s = similar_of(app);
         (
             s.phase,
@@ -172,9 +176,12 @@ fn build_status<R: Runtime>(app: &AppHandle<R>) -> SimilarStatus {
             s.indexed,
             s.total,
             s.error.clone(),
-            s.root.clone(),
         )
     };
+    // The open library's file, not the last indexed one's (final review).
+    let root = lock(&app.state::<AppState>().open)
+        .as_ref()
+        .map(|o| o.lib.root.clone());
     let model_dir = app.try_state::<SimilarEnv>().map(|e| e.model_dir.clone());
     SimilarStatus {
         phase,
@@ -291,12 +298,17 @@ fn begin<R: Runtime>(app: &AppHandle<R>) -> Option<(u64, Arc<AtomicBool>)> {
 
 fn spawn_pipeline<R: Runtime>(app: &AppHandle<R>, run: u64, cancel: Arc<AtomicBool>) {
     publish(app, true);
-    let app = app.clone();
+    let worker = app.clone();
     let spawned = std::thread::Builder::new()
         .name("horus-similar".into())
-        .spawn(move || pipeline(&app, run, &cancel));
+        .spawn(move || pipeline(&worker, run, &cancel));
     if let Err(e) = spawned {
-        eprintln!("Find similar: couldn't start its thread: {e}");
+        // Else the phase would stay at Loading with nothing to move it on.
+        record_failure(
+            app,
+            run,
+            Failure::Other(format!("couldn't start its thread: {e}")),
+        );
     }
 }
 
@@ -367,7 +379,8 @@ fn pipeline<R: Runtime>(app: &AppHandle<R>, run: u64, cancel: &AtomicBool) {
     start_hook(app);
 }
 
-/// The indexer's events. Takes only `similar`; never joins (the worker is calling it).
+/// The indexer's events. Takes `similar`, and the state lock in `publish`; never joins (the
+/// worker is calling it).
 fn on_index<R: Runtime>(app: &AppHandle<R>, run: u64, base: usize) -> Box<dyn Fn(IdxEvent) + Send> {
     let app = app.clone();
     Box::new(move |e| match e {
@@ -550,7 +563,7 @@ pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
 }
 
 /// B4: takes the indexer out and bumps the generation, so the old worker's `still_current()`
-/// is already false. The caller joins it with no lock held.
+/// is already false. The caller joins it with the state guard dropped.
 pub(super) fn detach_indexer(st: &AppState) -> Option<Indexer> {
     let mut s = lock(&st.similar);
     s.generation.fetch_add(1, Ordering::SeqCst);
@@ -622,7 +635,7 @@ pub fn resume_on_start<R: Runtime>(app: &AppHandle<R>) {
 }
 
 /// Stops everything: the pipeline goes stale, the download cancels, the indexer and the
-/// encoder come out. The caller joins and drops them with no lock held.
+/// encoder come out. The caller joins and drops them with no state or `similar` lock held.
 fn shut_down(st: &AppState) -> (Option<Indexer>, Option<Shared<Box<dyn Embedder>>>) {
     let mut s = lock(&st.similar);
     s.run += 1;
@@ -729,8 +742,10 @@ pub fn similar_disable<R: Runtime>(app: AppHandle<R>) -> Result<SimilarStatus, S
         i.stop();
     }
     drop(encoder);
-    set_find_similar(&st, FindSimilar::Off)?;
+    // The phase is Off already: the UI hears that even when the settings write fails.
+    let saved = set_find_similar(&st, FindSimilar::Off);
     publish(&app, true);
+    saved?;
     Ok(build_status(&app))
 }
 
@@ -745,7 +760,10 @@ pub fn similar_remove_model<R: Runtime>(app: AppHandle<R>) -> Result<SimilarStat
         i.stop();
     }
     drop(encoder); // the model files are closed before they are deleted
-    set_find_similar(&st, FindSimilar::Off)?;
+    if let Err(e) = set_find_similar(&st, FindSimilar::Off) {
+        publish(&app, true); // the phase is Off already
+        return Err(e);
+    }
     let root = lock(&st.open).as_ref().map(|o| o.lib.root.clone());
     let gone = |r: std::io::Result<()>| match r {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
@@ -1004,10 +1022,10 @@ mod tests {
         }
     }
 
-    /// Serves `m.bin` ("abc") after a delay, logging (accepted, answered) per connection.
     /// (accepted, answered) per connection.
     type ConnLog = Arc<Mutex<Vec<(Instant, Instant)>>>;
 
+    /// Serves `m.bin` ("abc") after a delay, logging each connection.
     fn slow_server(delay: Duration) -> (String, ConnLog) {
         use std::io::{BufRead, BufReader, Write};
         let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1185,6 +1203,27 @@ mod tests {
         assert!(!embeddings_path(&r.root()).exists());
         assert_eq!((s.phase, s.disk_bytes), (Phase::Off, 0));
         assert_eq!(r.e.settings().find_similar, FindSimilar::Off);
+    }
+
+    #[test]
+    fn disk_bytes_follow_the_open_library() {
+        // Final review: the status counted the last indexed library's embeddings.bin, not the
+        // open one's, so a remove after a switch still showed A's file.
+        let r = rig();
+        r.import(&["small.jpg"]);
+        enable_ready(&r);
+        r.wait("indexed", |s| s.indexed == 1);
+        let a_file = embeddings_path(&r.root());
+        assert!(a_file.exists());
+        similar_disable(r.h()).unwrap();
+        let b = Path::new(&r.e.lib).with_file_name("libB");
+        create_library(r.h(), b.to_string_lossy().into_owned(), false).unwrap();
+        let s = similar_remove_model(r.h()).unwrap();
+        assert!(
+            a_file.exists(),
+            "a remove deletes only the open library's file"
+        );
+        assert_eq!((s.phase, s.disk_bytes), (Phase::Off, 0));
     }
 
     #[test]

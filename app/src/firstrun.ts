@@ -222,8 +222,8 @@ export function firstRun(
         el.querySelectorAll("[data-fs]").forEach((b) => b.setAttribute("aria-pressed", String(b === t.closest("[data-fs]"))));
         S.answered = true;
         S.findSimilar = fs;
-        // A click only records the choice (it can still change); Begin starts the download (R12).
-        api.setSettings({ findSimilar: fs }).catch((err) => (status.textContent = `Could not save that choice: ${String(err)}`));
+        // A click only records the choice in memory (it can still change, and quitting before
+        // Begin saves and downloads nothing); Begin saves it (R12).
       } else if (t.closest("#fr-go") && S.path) {
         S.busy = true;
         sync();
@@ -233,7 +233,11 @@ export function firstRun(
           const lib = S.mode === "create" ? await api.createLibrary(S.path, demo.checked) : await api.openLibrary(S.path);
           el.remove();
           shell.forEach((x) => (x.inert = false));
+          // "on": similarEnable saves it before it starts the download.
           if (S.findSimilar === "on") enableInBackground(root, api);
+          else if (S.findSimilar === "off") {
+            api.setSettings({ findSimilar: "off" }).catch((err) => noticeIn(root)(`<p>Could not save that choice: ${esc(String(err))}</p>`));
+          }
           resolve(lib);
           return;
         } catch (err) {
