@@ -1,6 +1,6 @@
 # Plan 6 Task 4, Step 3: the design pass (proposal, pending the user's approval)
 
-**Status: implemented on p6-t4 (commits e70bbbc and 24847d7), PENDING THE USER'S APPROVAL.** A Claude + impeccable stand-in proposed it while the user had delegated design calls. Every visual value is in `app/src/styles.css` (plus the intro's markup in `app/src/intro/intro.ts`), so any part reverts cheaply.
+**Status: implemented on p6-t4 (commits e70bbbc and 24847d7). APPROVED by the user on 2026-11-28 ("yes approve all four"): items 1-4 below. Item 5 (motion on macOS/Linux) is still a Task 8 check.** A Claude + impeccable stand-in proposed it while the user had delegated design calls. Every visual value is in `app/src/styles.css` (plus the intro's markup in `app/src/intro/intro.ts`), so any part reverts cheaply.
 
 ## Open for the user
 
