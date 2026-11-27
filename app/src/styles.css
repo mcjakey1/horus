@@ -616,6 +616,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .fs-knob { position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; background: var(--ink-2); transition: transform .2s var(--ease), background .2s var(--ease); }
 .fs-switch[aria-checked="true"] { background: var(--ink); border-color: var(--ink); }
 .fs-switch[aria-checked="true"] .fs-knob { transform: translateX(14px); background: var(--panel); }
+.fs-unsupported { margin: 0; color: var(--ink-2); } /* B1: muted, in place of the switch */
 .fs-desc { margin: 0; color: var(--ink-2); max-width: 60ch; }
 .fs-progress { display: grid; gap: 8px; justify-items: start; padding: 12px; background: var(--shell); border: 1px solid var(--line); }
 .fs-line { margin: 0; overflow-wrap: anywhere; }

@@ -211,6 +211,24 @@ describe("first run", () => {
     view.destroy();
   });
 
+  it("a computer that can't run Find similar sees the line instead of the choice, and Begin saves off (B1)", async () => {
+    const api = fakeApi(null);
+    vi.mocked(api.similarStatus).mockResolvedValue({ phase: "off", downloadDone: 0, downloadTotal: 213373093, indexed: 0, total: 0, diskBytes: 0, error: null, unsupported: "This computer's processor can't run Find similar." });
+    const done = boot(document.body, api);
+    await tick();
+    await tick();
+    expect(document.querySelector("[data-fs]")).toBeNull();
+    expect(document.querySelector(".fr-unsupported")!.textContent).toBe("This computer's processor can't run Find similar.");
+    $<HTMLButtonElement>('[data-pick="create"]').click();
+    await tick();
+    expect($<HTMLButtonElement>("#fr-go").disabled).toBe(false); // answered: off
+    $<HTMLButtonElement>("#fr-go").click();
+    const view = await done;
+    expect(api.setSettings).toHaveBeenCalledWith({ findSimilar: "off" });
+    expect(api.similarEnable).not.toHaveBeenCalled();
+    view.destroy();
+  });
+
   it("Not now never enables", async () => {
     const api = fakeApi(null);
     const { done } = await begin(api, "off");

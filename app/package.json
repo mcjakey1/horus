@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "test": "vitest run",
     "fetch:ort": "node scripts/fetch-ort.mjs",
-    "release-check": "node scripts/release-check.mjs"
+    "release-check": "node scripts/release-check.mjs",
+    "notices": "node scripts/notices.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

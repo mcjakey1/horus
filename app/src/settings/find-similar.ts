@@ -46,6 +46,14 @@ function progress(s: SimilarStatus): { line: string; act?: [string, string]; bar
  *  its shape changes (phase, confirmation, disk used): a tick patches the line and bar in place,
  *  so a click mid-download still lands. One persistent status line speaks phase changes only. */
 export function renderFindSimilar(el: HTMLElement, s: SimilarStatus, api: Api): void {
+  // B1: a computer that can't run it gets one muted line in place of the switch, no Try again.
+  if (s.unsupported) {
+    el.innerHTML = `<div class="fs-head"><h2 class="st-h2" id="fs-label">Find similar</h2></div>
+    <p class="fs-desc" id="fs-desc">${esc(DESCRIPTION)}</p>
+    <p class="fs-unsupported" data-unsupported>${esc(s.unsupported)}</p>`;
+    delete el.dataset.shape;
+    return;
+  }
   // The status line and the switch persist (the knob animates); only the body below is rebuilt.
   if (!el.querySelector("[data-announce]")) {
     el.innerHTML = `<p class="sr-only" role="status" data-announce></p>

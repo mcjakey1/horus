@@ -50,6 +50,14 @@ describe("Find similar section", () => {
     el = document.querySelector("section")!;
   });
 
+  it("a computer that can't run it shows one muted line, with no switch and no Try again (B1)", () => {
+    const api = fakeApi();
+    renderFindSimilar(el, st({ unsupported: "Find similar needs macOS 14 or later." }), api);
+    expect($(el, "[data-unsupported]").textContent).toBe("Find similar needs macOS 14 or later.");
+    expect(el.querySelector('[role="switch"]')).toBeNull();
+    expect(el.querySelector('[data-act="retry"]')).toBeNull();
+  });
+
   it("about_the_model_opens_the_notices (P5-R13, Plan 6 Task 4)", async () => {
     const api = fakeApi();
     renderFindSimilar(el, st(), api);

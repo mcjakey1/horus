@@ -195,6 +195,8 @@ export type SimilarStatus = {
   /** The model folder plus the open library's embeddings.bin. */
   diskBytes: number;
   error: string | null;
+  /** Plan 6 B1: why this computer can't run Find similar (copy), known from start-up. */
+  unsupported?: string | null;
 };
 /** Highest first; the UI shows rank order only, never the score (it differs by mode). */
 export type SimHit = { id: string; score: number };
