@@ -336,7 +336,9 @@ export function mountReference(
         return `<button class="row${prev.size && !prev.has(r.id) ? " is-new" : ""}" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>${esc(why)}</small></span><span class="sc">${r.id === ref.id ? "this" : fmt(x.score)}</span></button>`;
       })
       .join("");
-    const empty = filtering
+    const empty = f.refs
+      ? "These references aren't in this view."
+      : filtering
       ? `No reference has ${f.mode === "and" ? "all" : "any"} of these yet.`
       : "Nothing shares a technique with this reference yet.";
     pane.innerHTML = head + mine + (list.length ? rows : `<p class="none">${empty}</p>`);

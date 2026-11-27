@@ -439,6 +439,8 @@ fn write_thumb(dst: &Path, thumb: &RgbImage) -> io::Result<()> {
         drop(w);
         file.sync_all()?;
         drop(file);
+        #[cfg(test)]
+        crate::integrity::tests::slow(dst); // with the .tmp on disk, before the rename
         fs::rename(&tmp, dst)
     })();
     if result.is_err() {

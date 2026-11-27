@@ -392,14 +392,25 @@ describe("rebuilt thumbnails (Plan 6 Task 2)", () => {
     const order: string[] = [];
     const off = vi.fn();
     let heard: ((ids: string[]) => void) | null = null;
+    const early: Reference = {
+      id: "early", title: "Early", file: "early.jpg", hash: "early", width: 3, height: 4,
+      addedAt: "2026-11-28T00:00:00Z", tags: [], thumb256: "C:/lib/thumbs/256/early.jpg", thumb1024: "C:/lib/thumbs/1024/early.jpg",
+    };
+    const setSrc = vi.spyOn(HTMLImageElement.prototype, "src", "set");
     const api: Api = {
       ...fakeApi("C:/lib"),
-      openLibrary: vi.fn(async () => (order.push("open"), heard!(["early"]), { root: "C:/lib", references: [], links: [], boards: [], warning: null, taxonomyReadOnly: false })),
+      openLibrary: vi.fn(async () => (order.push("open"), heard!(["early"]), { root: "C:/lib", references: [early], links: [], boards: [], warning: null, taxonomyReadOnly: false })),
       getTaxonomy: vi.fn(async () => seedJson as unknown as Taxonomy),
       onThumbsRebuilt: vi.fn(async (cb) => ((heard = cb), order.push("subscribe"), off)),
     };
     const view = await boot(document.body, api);
     expect(order).toEqual(["subscribe", "open"]);
+    // The id heard during the open is replayed once the views exist: its <img> is re-requested.
+    const urls = [api.assetUrl(early.thumb256), api.assetUrl(early.thumb1024)];
+    expect(document.querySelector(`img[src="${urls[0]}"], img[src="${urls[1]}"]`)).not.toBeNull();
+    // The Inbox sets its tile's src once as it renders; the replay sets it once more.
+    expect(setSrc.mock.calls.filter(([v]) => v === urls[0])).toHaveLength(2);
+    setSrc.mockRestore();
     view.destroy();
     expect(off).toHaveBeenCalledTimes(1);
   });

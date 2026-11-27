@@ -3352,6 +3352,7 @@ mod tests {
             .join("images")
             .join(format!("{}.{ext}", hex.repeat(32)));
         fs::copy(fixture(fixture_name), &p).unwrap();
+        crate::integrity::tests::touch(&p); // newer than library.json, as a crash leaves it
         p
     }
 
@@ -3485,12 +3486,21 @@ mod tests {
         assert_eq!(u.removed.len(), 2);
         assert!(!u.can_undo, "one step");
         assert!(a.exists() && b.exists(), "the files stay");
-        let again = recover_orphans(e.handle()).unwrap();
-        assert_eq!(again.references.len(), 2, "still orphans after the undo");
-        assert!(
-            recover_orphans(e.handle()).unwrap().references.is_empty(),
-            "none left"
-        );
+        wait_saved(&e);
+        // The undo's save is newer than both files: an undone recovery, like an undone
+        // import, is not offered again (controller ruling).
+        assert!(recover_orphans(e.handle()).unwrap().references.is_empty());
+    }
+
+    #[test]
+    fn undone_import_is_not_offered_after_reopen() {
+        let e = created();
+        e.import("small.jpg").unwrap();
+        wait_saved(&e);
+        undo(e.handle()).unwrap();
+        wait_saved(&e);
+        let view = open_library(e.handle(), e.lib.clone()).unwrap();
+        assert!(view.integrity.is_none(), "{:?}", view.integrity);
     }
 
     #[test]
@@ -3559,6 +3569,8 @@ mod tests {
 
     #[test]
     fn rebuild_tmp_survives_reopen() {
+        // The slow hook sleeps between writing a thumbnail's .tmp and renaming it: a reopen in
+        // that window must wait for the gate, and its sweep must leave the live .tmp alone.
         let e = created();
         let id = e.import("small.jpg").unwrap().added[0].clone();
         wait_saved(&e);
@@ -3570,6 +3582,14 @@ mod tests {
             .push((root.clone(), Duration::from_millis(800)));
         open_library(e.handle(), e.lib.clone()).unwrap();
         std::thread::sleep(Duration::from_millis(200)); // the rebuild holds the gate, mid-image
+        let live = PathBuf::from(format!(
+            "{}.tmp",
+            thumb_path_in(&root, &id, 256).unwrap().display()
+        ));
+        assert!(
+            live.exists(),
+            "the rebuild's .tmp is on disk while it holds the gate"
+        );
         let t0 = Instant::now();
         let again = open_library(e.handle(), e.lib.clone()).unwrap();
         assert!(

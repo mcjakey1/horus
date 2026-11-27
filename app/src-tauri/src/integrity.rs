@@ -106,6 +106,19 @@ pub fn check(lib: &Library) -> IntegrityReport {
     }
     // A hash a reference already has, or a second file of one hash (another extension), is no
     // orphan to add: one reference per hash. Sorted first, so the kept file is stable.
+    // Only files newer than library.json count (controller ruling): a crash leaves an image
+    // written after the last save, while an undone import's image is older than the undo's
+    // save, so it is not offered back on every open. Image files are never deleted.
+    let saved = fs::metadata(lib.root.join("library.json"))
+        .and_then(|m| m.modified())
+        .ok();
+    let newer = |p: &Path| {
+        saved.is_none_or(|t| {
+            fs::metadata(p)
+                .and_then(|m| m.modified())
+                .is_ok_and(|m| m > t)
+        })
+    };
     let mut hashes: HashSet<String> = lib.data.references.iter().map(|x| x.hash.clone()).collect();
     let mut files: Vec<(String, PathBuf)> = fs::read_dir(images_dir(root))
         .map(|d| {
@@ -118,7 +131,8 @@ pub fn check(lib: &Library) -> IntegrityReport {
     for (name, path) in files {
         let ours = image_path_in(root, &name).is_ok() && path.is_file();
         let hash = name.split('.').next().unwrap_or_default();
-        if ours && !known.contains(name.as_str()) && hashes.insert(hash.to_string()) {
+        if ours && !known.contains(name.as_str()) && newer(&path) && hashes.insert(hash.to_string())
+        {
             r.orphans.push(path);
         }
     }
@@ -136,11 +150,7 @@ pub fn rebuild_thumbs(root: &Path, refs: &[(String, String, String)]) -> Vec<Str
         let rebuilt = image_path_in(root, file)
             .map_err(|e| e.to_string())
             .and_then(|p| decode_srgb(&p).map_err(|e| format!("{e:?}")))
-            .and_then(|d| {
-                #[cfg(test)]
-                tests::slow(root);
-                write_thumbs(root, hash, &on_white(&d.rgba)).map_err(|e| e.to_string())
-            });
+            .and_then(|d| write_thumbs(root, hash, &on_white(&d.rgba)).map_err(|e| e.to_string()));
         match rebuilt {
             Ok(()) => done.push(id.clone()),
             Err(e) => eprintln!("Couldn't rebuild the thumbnails of {id}: {e}"),
@@ -233,15 +243,16 @@ pub(crate) mod tests {
     use std::sync::Mutex;
     use std::time::Duration;
 
-    /// Roots whose rebuild sleeps before it writes (a slow fake decode for the command tests).
+    /// Library roots whose thumbnail writes sleep with the `.tmp` on disk, before the rename
+    /// (`import::write_thumb`): a slow rebuild for the command tests. Per thumbnail size.
     pub(crate) static SLOW: Mutex<Vec<(PathBuf, Duration)>> = Mutex::new(vec![]);
 
-    pub(crate) fn slow(root: &Path) {
+    pub(crate) fn slow(thumb: &Path) {
         let d = SLOW
             .lock()
             .unwrap()
             .iter()
-            .find(|(r, _)| r == root)
+            .find(|(r, _)| thumb.starts_with(r))
             .map(|x| x.1);
         if let Some(d) = d {
             std::thread::sleep(d);
@@ -252,6 +263,18 @@ pub(crate) mod tests {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures")
             .join(name)
+    }
+
+    /// `fs::copy` keeps the source's mtime (on Windows): make a planted file newer than the
+    /// library's last save, as a crash leftover is.
+    pub(crate) fn touch(p: &Path) {
+        let now = std::time::SystemTime::now();
+        fs::OpenOptions::new()
+            .write(true)
+            .open(p)
+            .unwrap()
+            .set_modified(now)
+            .unwrap();
     }
 
     fn seed() -> PathBuf {
@@ -327,6 +350,7 @@ pub(crate) mod tests {
         fs::remove_file(image_path_in(&lib.root, &gone.file).unwrap()).unwrap();
         let orphan = images_dir(&lib.root).join(format!("{}.png", "ab".repeat(32)));
         fs::copy(fixture("p3_red.png"), &orphan).unwrap();
+        touch(&orphan);
         fs::write(images_dir(&lib.root).join("notes.txt"), b"not ours").unwrap();
         let r = check(&lib);
         assert_eq!(r.missing_originals, vec![gone.id.clone()]);
@@ -341,6 +365,7 @@ pub(crate) mod tests {
         let known = &lib.data.references[0].hash;
         let dup = images_dir(&lib.root).join(format!("{known}.png"));
         fs::copy(fixture("p3_red.png"), &dup).unwrap();
+        touch(&dup);
         let h = "ab".repeat(32);
         let (jpg, png) = (
             images_dir(&lib.root).join(format!("{h}.jpg")),
@@ -348,11 +373,33 @@ pub(crate) mod tests {
         );
         fs::copy(fixture("small.jpg"), &jpg).unwrap();
         fs::copy(fixture("p3_red.png"), &png).unwrap();
+        touch(&jpg);
+        touch(&png);
         assert_eq!(
             check(&lib).orphans,
             vec![jpg],
             "a known hash and a second extension are skipped"
         );
+    }
+
+    #[test]
+    fn only_orphans_newer_than_the_save_count() {
+        let (_d, lib) = library(&[]);
+        let old = images_dir(&lib.root).join(format!("{}.jpg", "aa".repeat(32)));
+        fs::copy(fixture("small.jpg"), &old).unwrap();
+        let past = std::time::SystemTime::now() - Duration::from_secs(60);
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&old)
+            .unwrap()
+            .set_modified(past)
+            .unwrap();
+        assert!(
+            check(&lib).orphans.is_empty(),
+            "older than library.json: an undone import"
+        );
+        touch(&old);
+        assert_eq!(check(&lib).orphans, vec![old], "newer: a crash leftover");
     }
 
     #[test]

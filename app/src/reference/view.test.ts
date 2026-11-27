@@ -367,6 +367,13 @@ describe("Reference view", () => {
     expect($("#pane-ranked .pane-note").textContent).toContain("related");
   });
 
+  it("show_them_with_nothing_left_says_so", async () => {
+    store.reset({ ...library, integrity: { ...integrity, missingOriginals: ["gone"] } }, taxonomy);
+    await settle();
+    $<HTMLButtonElement>("[data-show-missing]").click();
+    expect($("#pane-ranked .none").textContent).toBe("These references aren't in this view.");
+  });
+
   it("integrity_notice_add_them_recovers", async () => {
     const R = ref("r1", "Recovered image r1r1r1r1", []);
     vi.mocked(api.recoverOrphans).mockResolvedValue({ references: [R], removed: [], canUndo: true, canRedo: false });
