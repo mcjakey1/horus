@@ -20,6 +20,7 @@ import { mountSettings } from "./settings/panel";
 import { wireSimilar } from "./similar-ui";
 import { createStore, type Store } from "./store";
 import { mountPicker } from "./tagging/picker";
+import { openDetails } from "./reference/details";
 import { renderInspector } from "./views/inspector";
 
 // ---------- the hostile fixture ----------
@@ -327,6 +328,17 @@ describe("untrusted text renders as text (Plan 6 Task 3)", () => {
     noMarkup();
     expect(unnamed(d)).toEqual([]);
     about.close();
+  });
+
+  it("Details: hostile title, creator, year and credit stay text (Plan 6 Task 3c)", () => {
+    const hostile = { ...store.refs.get("x1")!, year: WHY };
+    const d = openDetails(document.body, hostile, api, store);
+    const dlg = document.querySelector<HTMLElement>(".details")!;
+    const val = (n: string) => dlg.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${n}"]`)!.value;
+    expect([val("title"), val("creator"), val("year"), val("credit")]).toEqual([TITLE, CREDIT, WHY, CREDIT]);
+    noMarkup();
+    expect(unnamed(dlg)).toEqual([]);
+    d.close();
   });
 });
 

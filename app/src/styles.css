@@ -702,3 +702,12 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .ab-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
 .ab-credits { max-height: 40vh; overflow: auto; }
 .ab-rights { color: var(--ink-2); }
+
+/* Plan 6 Task 3c: Details (title, creator, year, credit), on Settings' dialog and sheet. Fields as
+   the link editor's (.le-why): names are serif text, as they read everywhere else. */
+.dt-row { display: grid; gap: 4px; }
+.dt-row label { font-size: 12px; color: var(--ink-2); }
+.dt-row input, .dt-row textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--line-2); background: var(--shell); color: var(--ink); font: 15px/1.45 var(--serif); }
+.dt-row textarea { resize: vertical; }
+.dt-err { margin: 0; font-size: 13px; color: var(--ink); }
+.dt-actions { display: flex; align-items: center; gap: 12px; }

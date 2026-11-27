@@ -16,6 +16,7 @@ import { mountPicker } from "../tagging/picker";
 import { type Filter, matchesFilter, toggle } from "./filter";
 import { drawLeaders, highlight } from "./leaders";
 import { tileHTML } from "./tile";
+import { openDetails } from "./details";
 
 const fmt = (n: number) => n.toFixed(2);
 const stateLabel = { full: "full tag", partial: "partial", region: "region" } as const;
@@ -798,6 +799,21 @@ export function mountReference(
   signal.addEventListener("abort", () => {
     lightbox?.close();
     lbOpen.remove();
+  });
+
+  // ---------- Details (Plan 6 Task 3c, R27): title, creator, year and credit ----------
+  let details: { close(): void } | null = null;
+  actions.insertAdjacentHTML("beforeend", `<button type="button" class="details-open">Details…</button>`);
+  const detailsOpen = $<HTMLButtonElement>("#lab .details-open")!;
+  detailsOpen.addEventListener("click", () => {
+    const ref = focusRef();
+    if (!ref) return;
+    details?.close();
+    details = openDetails(root, ref, api, store);
+  }, { signal });
+  signal.addEventListener("abort", () => {
+    details?.close();
+    detailsOpen.remove();
   });
 
   // ---------- the Store ----------
