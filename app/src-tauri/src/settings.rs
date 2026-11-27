@@ -29,6 +29,8 @@ pub struct Settings {
     pub last_library: Option<String>,
     pub theme: Theme,
     pub find_similar: FindSimilar,
+    /// Plan 6 Task 4: the intro played once (or was skipped); "Play intro" never changes it.
+    pub intro_seen: bool,
 }
 
 /// What `set_settings` receives: only the present fields change, so a theme toggle never
@@ -39,6 +41,7 @@ pub struct SettingsPatch {
     pub last_library: Option<String>,
     pub theme: Option<Theme>,
     pub find_similar: Option<FindSimilar>,
+    pub intro_seen: Option<bool>,
 }
 
 impl Settings {
@@ -51,6 +54,9 @@ impl Settings {
         }
         if let Some(f) = p.find_similar {
             self.find_similar = f;
+        }
+        if let Some(seen) = p.intro_seen {
+            self.intro_seen = seen;
         }
     }
 }
@@ -71,4 +77,30 @@ pub fn save(dir: &Path, s: &Settings) -> std::io::Result<()> {
     tmp.as_file().sync_all()?;
     tmp.persist(dir.join(FILE)).map_err(|e| e.error)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn patch_without_intro_keeps_it() {
+        let mut s = Settings {
+            intro_seen: true,
+            ..Settings::default()
+        };
+        s.merge(SettingsPatch {
+            theme: Some(Theme::Dark),
+            ..SettingsPatch::default()
+        });
+        assert!(s.intro_seen, "a patch without introSeen keeps it");
+        let mut fresh = Settings::default();
+        assert!(!fresh.intro_seen);
+        let p: SettingsPatch = serde_json::from_str(r#"{"introSeen":true}"#).unwrap();
+        fresh.merge(p);
+        assert!(fresh.intro_seen);
+        // An old settings.json without the key loads as not seen: the intro plays once.
+        let old: Settings = serde_json::from_str(r#"{"theme":"light"}"#).unwrap();
+        assert!(!old.intro_seen);
+    }
 }

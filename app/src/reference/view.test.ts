@@ -76,7 +76,7 @@ function fakeApi(): Api {
     graphEdges: vi.fn(),
     importPaths: vi.fn(async () => imported([])),
     search: vi.fn(async () => []),
-    getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "unset" as const })),
+    getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "unset" as const, introSeen: true })),
     setSettings: vi.fn(async () => {}),
     systemRamGb: vi.fn(async () => 16),
     pickFolder: vi.fn(async () => null),
@@ -132,6 +132,13 @@ function fakeApi(): Api {
     onSimilarStatus: vi.fn(async () => () => {}),
     recoverOrphans: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     onThumbsRebuilt: vi.fn(async () => () => {}),
+    onMenu: vi.fn(async () => () => {}),
+    appVersion: vi.fn(async () => "1.0.0"),
+    noticesPath: vi.fn(async () => "C:/Horus/THIRD_PARTY_NOTICES.md"),
+    openPath: vi.fn(async () => {}),
+    verifyImageFiles: vi.fn(async () => ({ changed: [], checked: 0, total: 0 })),
+    cancelVerify: vi.fn(async () => {}),
+    onVerifyProgress: vi.fn(async () => () => {}),
     onImportProgress: vi.fn(async () => () => {}),
     cancelImport: vi.fn(async () => {}),
   };
@@ -401,6 +408,15 @@ describe("Reference view", () => {
     $<HTMLButtonElement>("[data-recover]").click();
     await settle();
     expect($("#import-notice").textContent).toContain("Couldn't add them: Couldn't save the library.");
+  });
+
+  it("verify_show_them_filters_ranked_by_its_ids", async () => {
+    const n = $("#import-notice");
+    n.querySelector("[data-body]")!.innerHTML = `<p>1 image file has changed. <button type="button" data-show-refs="b gone">Show them</button></p>`;
+    n.hidden = false;
+    $<HTMLButtonElement>("[data-show-refs]").click();
+    expect($("#pane-ranked").textContent).toContain("Changed since added");
+    expect([...document.querySelectorAll<HTMLElement>("#pane-ranked .row:not(.linked)")].map((r) => r.dataset.go)).toEqual(["b"]);
   });
 
   it("clean_open_shows_no_integrity_notice", async () => {

@@ -84,7 +84,7 @@ export function renderFindSimilar(el: HTMLElement, s: SimilarStatus, api: Api): 
     }`
         : ""
     }
-    <p class="fs-credit">${esc(CREDIT)}</p>`;
+    <p class="fs-credit">${esc(CREDIT)} · <button type="button" class="text-btn" data-act="about-model">About the model</button></p>`;
     el.dataset.shape = shape;
     if (focused) {
       // Same control if it's still there; Pause and Resume swap; anything else falls back to the switch.
@@ -126,6 +126,8 @@ export function renderFindSimilar(el: HTMLElement, s: SimilarStatus, api: Api): 
   };
   el.onclick = (e) => {
     const act = (e.target as Element).closest<HTMLElement>("[data-act]")?.dataset.act;
+    // P5-R13: the model's licence is in the bundled notices, the one file the app may open.
+    if (act === "about-model") return void api.noticesPath().then((p) => api.openPath(p)).catch(() => {});
     if (busy() && act !== "remove" && act !== "remove-cancel") return;
     if (act === "switch") void run(on(s) ? api.similarDisable : api.similarEnable);
     else if (act === "retry") void run(api.similarEnable);

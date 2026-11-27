@@ -2,7 +2,7 @@
 import type { Reference } from "../api";
 
 /** `refs` (Plan 6 Task 2, "Show them"): only these references, before any technique test. */
-export type Filter = { techniques: string[]; mode: "and" | "or"; refs?: string[] };
+export type Filter = { techniques: string[]; mode: "and" | "or"; refs?: string[]; refsLabel?: string };
 
 /** An empty filter matches everything; a partial tag (no techniqueId) never matches. */
 export function matchesFilter(ref: Reference, f: Filter): boolean {

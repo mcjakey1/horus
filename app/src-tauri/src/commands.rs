@@ -69,6 +69,9 @@ pub struct AppState {
     similar_start: Mutex<()>,
     /// One writer per model folder: a re-enable or a remove waits out a cancelled download.
     similar_download: Mutex<()>,
+    /// Plan 6 Task 4: "Verify image files…" runs one at a time; Cancel sets `verify_cancel`.
+    verify_running: AtomicBool,
+    verify_cancel: AtomicBool,
 }
 
 impl AppState {
@@ -94,6 +97,8 @@ impl AppState {
             similar: Mutex::new(similar::SimilarState::default()),
             similar_start: Mutex::new(()),
             similar_download: Mutex::new(()),
+            verify_running: AtomicBool::new(false),
+            verify_cancel: AtomicBool::new(false),
         }
     }
 }
@@ -731,6 +736,74 @@ fn rebuild<R: Runtime>(app: &AppHandle<R>, root: &Path, items: Vec<(String, Stri
     let _ = app.emit("library://thumbs-rebuilt", &ids);
     similar::retry(app, &hashes);
     similar::start_hook(app);
+}
+
+/// Plan 6 Task 4: the open library's folder, for File > "Open library folder".
+pub fn open_root<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
+    let st = app.state::<AppState>();
+    lock(&st.open).as_ref().map(|o| o.lib.root.clone())
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyReport {
+    /// Reference ids whose original no longer matches its hash.
+    pub changed: Vec<String>,
+    pub checked: usize,
+    pub total: usize,
+}
+
+/// Plan 6 Task 4, Help > "Verify image files…": hashes every original on a snapshot, with no
+/// lock held, emitting `verify://progress` `{ done, total }` at most every 100 ms. One run at a
+/// time; `checked < total` means it was cancelled. Never changes the library.
+#[tauri::command(async)]
+pub fn verify_image_files<R: Runtime>(app: AppHandle<R>) -> Result<VerifyReport, String> {
+    let st = app.state::<AppState>();
+    if st.verify_running.swap(true, Ordering::SeqCst) {
+        return Err("Horus is already verifying the image files.".into());
+    }
+    /// Clears `verify_running` on every exit, a panic included.
+    struct Running<'a>(&'a AtomicBool);
+    impl Drop for Running<'_> {
+        fn drop(&mut self) {
+            self.0.store(false, Ordering::SeqCst);
+        }
+    }
+    let _running = Running(&st.verify_running);
+    st.verify_cancel.store(false, Ordering::SeqCst);
+    let snapshot = {
+        let open = lock(&st.open);
+        open.as_ref().map(|o| Library {
+            root: o.lib.root.clone(),
+            data: visible(&o.lib).into_owned(),
+            recovered_from_backup: false,
+        })
+    };
+    let Some(lib) = snapshot else {
+        return Err(NO_LIBRARY.into());
+    };
+    let mut last: Option<Instant> = None;
+    let (changed, checked) = integrity::verify_with(&lib, &st.verify_cancel, &mut |done, total| {
+        if done == total || last.is_none_or(|t| t.elapsed() >= Duration::from_millis(100)) {
+            last = Some(Instant::now());
+            let _ = app.emit(
+                "verify://progress",
+                serde_json::json!({ "done": done, "total": total }),
+            );
+        }
+    });
+    Ok(VerifyReport {
+        changed,
+        checked,
+        total: lib.data.references.len(),
+    })
+}
+
+#[tauri::command]
+pub fn cancel_verify<R: Runtime>(app: AppHandle<R>) {
+    app.state::<AppState>()
+        .verify_cancel
+        .store(true, Ordering::SeqCst);
 }
 
 /// Plan 6 Task 2, "Add them": the open library's orphans (image files no reference points
@@ -1928,7 +2001,7 @@ mod tests {
         let json = serde_json::to_value(&s).unwrap();
         assert_eq!(
             json,
-            serde_json::json!({"lastLibrary": null, "theme": "system", "findSimilar": "unset"})
+            serde_json::json!({"lastLibrary": null, "theme": "system", "findSimilar": "unset", "introSeen": false})
         );
     }
 
@@ -3687,5 +3760,63 @@ mod tests {
             "nothing swept, nothing left to rebuild: {:?}",
             again.integrity
         );
+    }
+
+    // ---------- Plan 6 Task 4: Verify image files ----------
+
+    #[test]
+    fn verify_image_files_reports_changed_and_progress() {
+        let e = created();
+        let id = e.import("small.jpg").unwrap().added[0].clone();
+        e.import("p3_red.png").unwrap();
+        let file = {
+            let st = e.app.state::<AppState>();
+            let open = lock(&st.open);
+            let o = open.as_ref().unwrap();
+            o.lib
+                .data
+                .references
+                .iter()
+                .find(|r| r.id == id)
+                .unwrap()
+                .file
+                .clone()
+        };
+        let path = root_of(&e).join("images").join(file);
+        let mut bytes = fs::read(&path).unwrap();
+        let mid = bytes.len() / 2;
+        bytes[mid] ^= 0xff;
+        fs::write(&path, bytes).unwrap();
+        let heard = Arc::new(Mutex::new(vec![]));
+        let h2 = heard.clone();
+        e.app.listen("verify://progress", move |ev| {
+            h2.lock().unwrap().push(ev.payload().to_string());
+        });
+        let r = verify_image_files(e.handle()).unwrap();
+        assert_eq!((r.changed, r.checked, r.total), (vec![id], 2, 2));
+        let last = heard.lock().unwrap().last().cloned().unwrap();
+        assert_eq!(last, r#"{"done":2,"total":2}"#);
+    }
+
+    #[test]
+    fn verify_runs_one_at_a_time_and_cancel_resets() {
+        let e = created();
+        e.import("small.jpg").unwrap();
+        let st = e.app.state::<AppState>();
+        st.verify_running.store(true, Ordering::SeqCst);
+        assert!(
+            verify_image_files(e.handle())
+                .unwrap_err()
+                .contains("already verifying")
+        );
+        st.verify_running.store(false, Ordering::SeqCst);
+        cancel_verify(e.handle()); // a Cancel left over from an earlier run
+        let r = verify_image_files(e.handle()).unwrap();
+        assert_eq!(
+            (r.checked, r.total),
+            (1, 1),
+            "a new run clears the old Cancel"
+        );
+        assert!(!st.verify_running.load(Ordering::SeqCst));
     }
 }

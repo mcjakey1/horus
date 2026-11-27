@@ -312,7 +312,7 @@ export function mountReference(
       `<button class="text-btn" data-mode="${m}" aria-pressed="${f.mode === m}">${label}</button>`;
     const head = filtering
       ? `<div class="filter"><div class="filter-mode" role="group" aria-label="Match">${mode("or", "Any of")}${mode("and", "All of")}</div>
-        <ul class="chips">${f.refs ? `<li class="chip"><span>Missing their image file</span><button class="chip-x" data-unrefs aria-label="Show all references again">×</button></li>` : ""}${f.techniques
+        <ul class="chips">${f.refs ? `<li class="chip"><span>${esc(f.refsLabel ?? "")}</span><button class="chip-x" data-unrefs aria-label="Show all references again">×</button></li>` : ""}${f.techniques
           .map((id) => `<li class="chip" data-t="${esc(id)}"><span>${esc(techName(id))}</span><button class="chip-x" data-untoggle="${esc(id)}" aria-label="Remove ${esc(techName(id))} from the filter">×</button></li>`)
           .join("")}</ul>
         <p class="pane-note">${list.length} references · <button class="settings" id="clear-filter">Clear</button></p></div>`
@@ -512,12 +512,19 @@ export function mountReference(
       return rerank({ ...S.filter, mode: m }, () => $(`#pane-ranked [data-mode="${m}"]`));
     }
     if (target.id === "clear-filter") return rerank(noFilter(), () => null);
-    if (target.closest("[data-unrefs]")) return rerank({ ...S.filter, refs: undefined }, () => null);
+    if (target.closest("[data-unrefs]")) return rerank({ ...S.filter, refs: undefined, refsLabel: undefined }, () => null);
     // Plan 6 Task 2: the integrity notice's two actions.
     if (target.closest("[data-show-missing]")) {
       const ids = (store.integrity?.missingOriginals ?? []).filter((id) => store.refs.has(id));
       selectPane("ranked");
-      return rerank({ ...noFilter(), refs: ids }, () => $('.m-tab[data-pane="ranked"]'));
+      return rerank({ ...noFilter(), refs: ids, refsLabel: "Missing their image file" }, () => $('.m-tab[data-pane="ranked"]'));
+    }
+    // Plan 6 Task 4: Verify image files' "Show them" carries its ids.
+    const showRefs = target.closest<HTMLElement>("[data-show-refs]");
+    if (showRefs) {
+      const ids = (showRefs.dataset.showRefs ?? "").split(" ").filter((id) => store.refs.has(id));
+      selectPane("ranked");
+      return rerank({ ...noFilter(), refs: ids, refsLabel: "Changed since added" }, () => $('.m-tab[data-pane="ranked"]'));
     }
     const recover = target.closest<HTMLButtonElement>("[data-recover]");
     if (recover) {

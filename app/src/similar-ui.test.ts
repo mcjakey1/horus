@@ -74,7 +74,7 @@ async function rig(phase: SimilarPhase): Promise<Rig> {
   let emit: (s: SimilarStatus) => void = () => {};
   let dropCb: ((e: { payload: never }) => void)[] = [];
   const base: Partial<Api> = {
-    getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "on" as const })),
+    getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "on" as const, introSeen: true })),
     getTaxonomy: vi.fn(async () => taxonomy),
     related: vi.fn(async () => []),
     search: vi.fn(async () => [{ kind: "technique" as const, id: "backlight", operationId: "differentiate", count: 2 }]),
