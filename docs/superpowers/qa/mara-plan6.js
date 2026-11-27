@@ -131,11 +131,16 @@ async function phaseMain() {
   const steps = [];
   const tabTo = async (pred, max = 12) => { for (let i = 0; i < max; i++) { const d = await activeDesc(); if (pred(d)) return d; await P.keyboard.press("Tab"); steps.push(await activeDesc()); } return null; };
   let picked = false;
-  for (let i = 0; i < 4 && !picked; i++) {
+  for (let i = 0; i < 6 && !picked; i++) {
+    if (i && i % 2 === 0) { // D5: the dialog route dies for a whole launch; relaunch on a fresh config
+      await closeApp(); fs.rmSync(CONFIG, { recursive: true, force: true });
+      await launch(`relaunch-${i}`); await P.waitForSelector(".firstrun"); await sleep(800);
+    }
+    const n1 = ipcLog.length;
     await tabTo((d) => d.includes("[pick=create]"));
     await P.keyboard.press("Enter");
     picked = !!(await until(() => P.evaluate(() => /New library in/.test(document.querySelector(".firstrun")?.textContent || "")), 8000, 200));
-    if (!picked) ok("first run pick (harness dialog route, D5)", null, `miss ${i + 1}`);
+    if (!picked) ok("first run pick (harness dialog route, D5)", null, `miss ${i + 1}; ipc after Enter: ${ipcLog.slice(n1).join(",") || "none"}; focus ${await activeDesc()}`);
   }
   const onBtn = await tabTo((d) => d.includes("[fs=on]"));
   await P.keyboard.press("Space"); await sleep(300);
@@ -187,7 +192,7 @@ async function phaseMain() {
     for (let i = 0; i < 9; i++) { await P.keyboard.press("Shift+Tab"); if (!(await inside())) out.push(await activeDesc()); }
     ok("Settings (holdModal): Tab and Shift+Tab x9 stay inside", !out.length, out.join(",") || "inside");
     await blur(); await P.keyboard.press("Escape"); await sleep(400);
-    ok("Settings: Esc with focus on body closes, focus returns to the gear", !(await has('.settings[role="dialog"]:not(.details)')) && (await activeDesc()) === "button#settings", await activeDesc());
+    ok("Settings: Esc with focus on body closes, focus returns to the gear", !(await has('.settings[role="dialog"]:not(.details)')) && (await activeDesc()).startsWith("button#settings"), await activeDesc());
   });
 
   await block("N3", async () => {
@@ -339,6 +344,8 @@ async function phaseOffline() {
   await P.click('[data-fs="on"]'); await P.waitForSelector("#fr-go:not([disabled])", { timeout: 15000 }); await P.click("#fr-go");
   await P.waitForSelector(".firstrun", { state: "detached", timeout: 600000 }); await sleep(1500);
   ok("9 offline: first run with the demo set still completes", (await count()) === 50, `count ${await count()}`);
+  const vis = await P.evaluate(() => { const a = [...document.querySelectorAll("img")].filter((i) => /asset/.test(i.src)); const inView = a.filter((i) => { const b = i.getBoundingClientRect(); return b.width && b.bottom > 0 && b.top < innerHeight && b.right > 0 && b.left < innerWidth; }); return { all: a.length, inView: inView.length, loaded: inView.filter((i) => i.complete && i.naturalWidth > 0).length, lazyOff: a.filter((i) => i.loading === "lazy" && !inView.includes(i)).length }; });
+  ok("4 (re-check) every on-screen asset thumbnail loads (off-screen ones are loading=lazy)", vis.inView > 0 && vis.loaded === vis.inView, vis);
   const s = await until(async () => { const s = await status(); return s.phase === "error" ? s : null; }, 60000, 500);
   const bar = await text("#find-similar");
   await P.click("#settings").catch(() => {}); await sleep(800);
@@ -346,6 +353,28 @@ async function phaseOffline() {
   await shot("offline-settings");
   ok("9 offline: Find similar's download reports it can't reach the network", !!s && /reach|connection|offline/i.test(`${s?.message} ${bar} ${line}`), `status ${JSON.stringify(s)}; bar "${bar}"; settings "${line}"`);
   await P.keyboard.press("Escape");
+  await closeApp();
+}
+
+// ---------------------------------------------------------------- d4 (Plan 4 QA J3): a full-tag region's hover label in the lightbox
+async function phaseD4() {
+  await launch("d4");
+  await P.waitForSelector(".firstrun", { timeout: 30000 }); await sleep(1200);
+  let picked = false;
+  for (let i = 0; i < 4 && !picked; i++) { await P.click('[data-pick="create"]'); picked = !!(await until(() => P.evaluate(() => /New library in/.test(document.querySelector(".firstrun")?.textContent || "")), 8000, 200)); }
+  await P.click('[data-fs="off"]'); await P.waitForSelector("#fr-go:not([disabled])", { timeout: 15000 }); await P.click("#fr-go");
+  await P.waitForSelector(".firstrun", { state: "detached", timeout: 600000 }); await sleep(1500);
+  await searchGo("Divan Japonais"); await blur(); await P.keyboard.press("l");
+  await P.waitForSelector(".lightbox .lb-stage", { timeout: 5000 }); await sleep(1500);
+  const n = await P.evaluate(() => document.querySelectorAll(".lb-box").length);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const r = await P.evaluate((i) => { const b = document.querySelectorAll(".lb-box")[i].getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }, i);
+    await P.mouse.move(r.x, r.y); await sleep(400);
+    out.push(await P.evaluate(() => { const b = document.querySelector(".lb-box.is-hot"); const t = b?.querySelector(".lb-tag"); return b ? { label: t?.textContent, vis: t ? getComputedStyle(t).visibility + "/" + getComputedStyle(t).display : null, w: t ? Math.round(t.getBoundingClientRect().width) : 0, sw: t ? t.scrollWidth : 0 } : null; }));
+  }
+  await shot("d4-hover");
+  ok("D4 lightbox: hovering a tagged region shows the full 'Operation › Technique' label, visible and not clipped", n > 0 && out.every((h) => h && / › /.test(h.label || "") && !/hidden|none/.test(h.vis || "") && h.sw <= h.w + 1), out);
   await closeApp();
 }
 
@@ -359,7 +388,7 @@ process.on("exit", () => { if (PHASE === "offline") try { restoreModel(); } catc
   if (fs.existsSync(CONFIG)) throw new Error("art.horus.app exists: refusing to touch it");
   fs.rmSync(LIB, { recursive: true, force: true }); fs.mkdirSync(LIB, { recursive: true });
   try {
-    await ({ main: phaseMain, offline: phaseOffline })[PHASE]();
+    await ({ main: phaseMain, offline: phaseOffline, d4: phaseD4 })[PHASE]();
   } catch (e) {
     ok(`${PHASE}: phase ran to the end`, false, String(e && e.stack || e).split("\n").slice(0, 3).join(" | "));
     if (B) { await shot("fatal"); await closeApp().catch(() => {}); }

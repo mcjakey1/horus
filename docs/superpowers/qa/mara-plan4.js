@@ -441,7 +441,7 @@ async function main() {
         await page.mouse.move(x1, y1); await page.mouse.down(); await page.mouse.move(x2, y2, { steps: 10 });
         Object.assign(pl, await rectOf(page, ".lb-plate")); zDraw2 = await text(page, ".lb-zoom");
         await page.mouse.up(); await page.waitForSelector(".lightbox .lb-side .picker"); await sleep(300);
-      } else await page.keyboard.press("Escape"); // clears the query
+      } else { await page.keyboard.press("Escape"); await page.evaluate(() => document.activeElement?.blur()); } // clears the query; Plan 6: focus stays in the search (F1 fixed), so leave it before "1"
       await sleep(300);
       const zPick = await text(page, ".lb-zoom");
       const nBox = await page.evaluate(() => document.querySelectorAll(".lb-box").length);
