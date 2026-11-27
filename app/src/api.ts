@@ -52,6 +52,20 @@ export type LibraryView = {
   seedWarnings?: string[];
   /** The seed fallback after a damaged taxonomy.json; taxonomy edits are refused. */
   taxonomyReadOnly: boolean;
+  /** Plan 6 Task 2: what the open found on disk; absent or null when nothing. */
+  integrity?: IntegrityReport | null;
+};
+
+/** Plan 6 Task 2. Paths are absolute; ids are reference ids. */
+export type IntegrityReport = {
+  sweptTmp: string[];
+  /** Never removed from the library: "Show them" lists them. */
+  missingOriginals: string[];
+  /** Rebuilt in the background; `onThumbsRebuilt` reports the ids. */
+  missingThumbs: string[];
+  /** Image files no reference points to: "Add them" makes them Inbox references. */
+  orphans: string[];
+  taxonomyBackupInvalid: boolean;
 };
 
 export type Operation = { id: string; name: string; plainLabel: string; color?: string | null; icon: string; description: string };
@@ -171,6 +185,10 @@ export interface Api {
   related(id: string): Promise<Scored[]>;
   /** The union of every visible reference's top `k` neighbours among those sharing a technique, deduplicated. */
   graphEdges(k: number): Promise<Edge[]>;
+  /** Plan 6 Task 2, "Add them": the open library's orphans as Inbox references, one undo step. */
+  recoverOrphans(): Promise<Change>;
+  /** Plan 6 Task 2: the reference ids whose thumbnails were rebuilt after an open. */
+  onThumbsRebuilt(cb: (ids: string[]) => void): Promise<() => void>;
   importPaths(paths: string[], meta?: IntakeMeta): Promise<ImportResult>;
   /** A pasted image: `name` is a file name (only its last part is kept). */
   importBytes(name: string, bytes: ArrayBuffer | Uint8Array, meta?: IntakeMeta): Promise<ImportResult>;
@@ -342,4 +360,6 @@ export const tauriApi: Api = {
   similarByText: (q) => invoke("similar_by_text", { q }),
   similarByFile: (path) => invoke("similar_by_file", { path }),
   onSimilarStatus: (cb) => listen<SimilarStatus>("similar://status", (e) => cb(e.payload)),
+  recoverOrphans: () => invoke("recover_orphans"),
+  onThumbsRebuilt: (cb) => listen<string[]>("library://thumbs-rebuilt", (e) => cb(e.payload)),
 };

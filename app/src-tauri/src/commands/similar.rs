@@ -139,6 +139,9 @@ pub struct SimilarState {
     pending: Vec<String>,
     /// Hashes that failed to index in this library: not retried until it is reopened.
     failed: HashSet<String>,
+    /// Plan 6 Task 2: hashes whose thumbnail was rebuilt while a pass ran; its `Finished`
+    /// does not record them as failed.
+    retry: HashSet<String>,
     last_emit: Option<Instant>,
 }
 
@@ -413,9 +416,13 @@ fn on_index<R: Runtime>(app: &AppHandle<R>, run: u64, base: usize) -> Box<dyn Fn
                     return;
                 }
                 for (hash, why) in failed {
+                    if s.retry.contains(&hash) {
+                        continue; // its thumbnail was rebuilt meanwhile (Plan 6 Task 2)
+                    }
                     eprintln!("Find similar: couldn't index {hash}: {why}");
                     s.failed.insert(hash);
                 }
+                s.retry.clear();
             }
             // A short thread takes this run's indexer and joins it, never the worker itself.
             let app = app.clone();
@@ -562,6 +569,18 @@ pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
     publish(app, true);
 }
 
+/// Plan 6 Task 2: these hashes' thumbnails were just rebuilt, so the next pass indexes them.
+/// Takes `similar` only; the caller then runs the start hook with no lock held.
+pub(crate) fn retry<R: Runtime>(app: &AppHandle<R>, hashes: &[String]) {
+    let mut s = similar_of(app);
+    for h in hashes {
+        s.failed.remove(h);
+    }
+    if s.indexer.is_some() {
+        s.retry.extend(hashes.iter().cloned());
+    }
+}
+
 /// B4: takes the indexer out and bumps the generation, so the old worker's `still_current()`
 /// is already false. The caller joins it with the state guard dropped.
 pub(super) fn detach_indexer(st: &AppState) -> Option<Indexer> {
@@ -569,6 +588,7 @@ pub(super) fn detach_indexer(st: &AppState) -> Option<Indexer> {
     s.generation.fetch_add(1, Ordering::SeqCst);
     s.indexer_run += 1;
     s.failed.clear(); // a reopened library retries what failed
+    s.retry.clear();
     if matches!(s.phase, Phase::Indexing | Phase::Paused) {
         s.phase = Phase::Ready;
     }
@@ -1471,5 +1491,62 @@ mod tests {
             assert_eq!(e, want);
             assert!(!e.contains(raw) && !e.contains("503"));
         }
+    }
+
+    /// Plan 6 Task 2: opens `libB` (small.jpg, then p3_red.png) with small.jpg's thumbnails gone
+    /// and its rebuild slowed, so the first pass fails it before the rebuild lands.
+    fn open_with_missing_thumb(r: &Rig) -> String {
+        let b = other_library(r, "libB", &["small.jpg", "p3_red.png"]);
+        let (root, x) = {
+            let st = r.e.app.state::<AppState>();
+            let open = lock(&st.open);
+            let lib = &open.as_ref().unwrap().lib;
+            let x = lib
+                .data
+                .references
+                .iter()
+                .find(|x| x.title == "small")
+                .unwrap()
+                .hash
+                .clone();
+            (lib.root.clone(), x)
+        };
+        for size in [256, 1024] {
+            fs::remove_file(thumb_path_in(&root, &x, size).unwrap()).unwrap();
+        }
+        crate::integrity::tests::SLOW
+            .lock()
+            .unwrap()
+            .push((root, Duration::from_millis(300)));
+        open_library(r.h(), r.e.lib.clone()).unwrap();
+        enable_ready(r);
+        open_library(r.h(), b).unwrap();
+        x
+    }
+
+    #[test]
+    fn rebuilt_thumb_is_indexed() {
+        let r = rig();
+        let x = open_with_missing_thumb(&r);
+        let s = r.wait("both indexed", |s| {
+            s.phase == Phase::Ready && s.indexed == 2
+        });
+        assert_eq!(s.total, 2);
+        assert!(!r.similar().failed.contains(&x));
+    }
+
+    #[test]
+    fn rebuilt_thumb_is_indexed_after_running_pass() {
+        // The pass fails small.jpg at once, then spends 1.5 s on p3_red.png: the rebuild lands
+        // while it runs, and its Finished must not record small.jpg as failed.
+        let r = rig_with(Duration::from_millis(1500), || true, true);
+        let x = open_with_missing_thumb(&r);
+        r.wait("indexing", |s| s.phase == Phase::Indexing);
+        let s = r.wait("both indexed", |s| {
+            s.phase == Phase::Ready && s.indexed == 2
+        });
+        assert_eq!(s.total, 2);
+        assert!(!r.similar().failed.contains(&x));
+        assert!(r.similar().retry.is_empty());
     }
 }

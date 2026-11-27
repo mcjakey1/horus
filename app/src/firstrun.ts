@@ -12,7 +12,7 @@ import { mountLibraryMenu } from "./library-menu";
 import { mountReference } from "./reference/view";
 import { mountSaveDialog, wireSaveStatus } from "./save-dialog";
 import { storeSource } from "./data";
-import { createStore } from "./store";
+import { createStore, type Store } from "./store";
 import { mountViews } from "./views";
 import { mountTree } from "./views/tree";
 import { mountRadial } from "./views/radial";
@@ -119,13 +119,30 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
     openSettings: () => settingsPanel.open("find-similar"),
   });
   if (lastShown) similar.show(lastShown);
+  // Plan 6 Task 2: a rebuilt thumbnail replaces the broken image wherever it shows.
+  let unThumbs: (() => void) | null = null;
+  void api.onThumbsRebuilt((ids) => reloadThumbs(root, api, store, ids)).then((u) => (unThumbs = u));
   return {
     ...view,
     store,
     source,
     destroy: () =>
-      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), settingsPanel.close(), similar?.destroy(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
+      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), settingsPanel.close(), similar?.destroy(), unThumbs?.(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
   };
+}
+
+/** Re-requests every `<img>` showing one of these references' thumbnails (they 404ed before). */
+export function reloadThumbs(root: ParentNode, api: Api, store: Store, ids: string[]) {
+  const urls = new Set(
+    ids.flatMap((id) => {
+      const r = store.refs.get(id);
+      return r ? [api.assetUrl(r.thumb256), api.assetUrl(r.thumb1024)] : [];
+    }),
+  );
+  root.querySelectorAll<HTMLImageElement>("img").forEach((img) => {
+    const src = img.getAttribute("src");
+    if (src && urls.has(src)) img.src = src;
+  });
 }
 
 /** Resolves once a library is created or opened. */
