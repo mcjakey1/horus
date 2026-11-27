@@ -12,7 +12,7 @@ vi.mock("@tauri-apps/api/core", async (orig) => {
 });
 
 /** Not commands of ours: the asset URL, event listeners, the raw-body paste and the plugin pickers. */
-const NON_IPC_KEYS = ["assetUrl", "onSaveStatus", "onSaveFailed", "onCloseWaiting", "importBytes", "pickFolder", "pickImages", "revealFolder"];
+const NON_IPC_KEYS = ["assetUrl", "onSaveStatus", "onSaveFailed", "onCloseWaiting", "onSimilarStatus", "importBytes", "pickFolder", "pickImages", "revealFolder"];
 
 const tag = { operationId: "op" };
 const rows: [keyof Api, string, string[], (a: Api) => Promise<unknown>][] = [
@@ -68,6 +68,15 @@ const rows: [keyof Api, string, string[], (a: Api) => Promise<unknown>][] = [
   ["exportBoard", "export_board", ["boardId", "dest"], (a) => a.exportBoard("b", "d")],
   ["scorePair", "score_pair", ["a", "b"], (a) => a.scorePair("a", "b")],
   ["lightboxSource", "lightbox_source", ["refId"], (a) => a.lightboxSource("r")],
+  // Plan 5 Task 5
+  ["similarStatus", "similar_status", [], (a) => a.similarStatus()],
+  ["similarEnable", "similar_enable", [], (a) => a.similarEnable()],
+  ["similarDisable", "similar_disable", [], (a) => a.similarDisable()],
+  ["similarRemoveModel", "similar_remove_model", [], (a) => a.similarRemoveModel()],
+  ["similarPause", "similar_pause", ["paused"], (a) => a.similarPause(true)],
+  ["similarByRef", "similar_by_ref", ["id"], (a) => a.similarByRef("r")],
+  ["similarByText", "similar_by_text", ["q"], (a) => a.similarByText("q")],
+  ["similarByFile", "similar_by_file", ["path"], (a) => a.similarByFile("p")],
 ];
 
 describe("IPC contract", () => {
