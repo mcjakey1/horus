@@ -7,7 +7,9 @@ export const MIN_SCALE = 0.05;
 export const MAX_SCALE = 4;
 export const EDGE_W0 = 0.75; // edge px = EDGE_W0 + EDGE_W1 * score
 export const EDGE_W1 = 2.25;
-export const BAND_GAP = 160; // world units between Tree bands and Radial rings
+export const BAND_GAP = 160; // world units between Radial rings
+// The Tree's band step: twice the ring gap, so a band's 3 staggered label rows clear the next band at fit (design judgement F3).
+export const TREE_BAND = 2 * BAND_GAP;
 export const NODE = 48; // reference node size in world units
 export const MAX_OPS = 9; // number keys 1–9 reach each operation
 export const COLLIDE_R = NODE * Math.SQRT1_2 + 2; // Galaxy: a square card's half-diagonal, plus 2 (final review M2)

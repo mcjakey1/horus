@@ -132,7 +132,7 @@ describe("technique picker", () => {
       "Lead the eye",
       "Make them think",
     ]);
-    expect(ops(el).map((b) => b.querySelector(".mono")!.textContent)).toEqual(["Differentiate", "Group", "Sequence", "Infer"]);
+    expect(ops(el).map((b) => b.querySelector(".pk-opname")!.textContent)).toEqual(["Differentiate", "Group", "Sequence", "Infer"]);
     expect(ops(el)[0].style.getPropertyValue("--c")).toBe("var(--diff)");
     key(row(el), "2");
     expect(chosen(el)).toBe("group");
@@ -346,6 +346,14 @@ describe("technique picker", () => {
     const { el, api } = mount();
     key(row(el), "Enter");
     expect(api.addTags).not.toHaveBeenCalled();
+  });
+
+  it("apply_is_disabled_until_an_operation_is_chosen (design judgement #11)", () => {
+    const { el } = mount();
+    const apply = el.querySelector<HTMLButtonElement>(".pk-apply")!;
+    expect(apply.disabled).toBe(true);
+    key(row(el), "3");
+    expect(apply.disabled).toBe(false);
   });
 
   const twoDiff = (): NewTag[] =>

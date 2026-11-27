@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { clipLabel } from "./frame";
-import { BAND_GAP, GAP, NODE, ROW } from "./constants";
+import { GAP, NODE, ROW, TREE_BAND } from "./constants";
 import { clashes, labelBox, nameOf, refOf, seed, snap, synth, tagOf } from "./fixtures.test-util";
 import { labelRows, layoutTree } from "./layout-tree";
 import { buildTaxGraph, type TaxGraph } from "./taxgraph";
 
-const BAND = { op: 0, branch: BAND_GAP, tech: 2 * BAND_GAP } as const;
+const BAND = { op: 0, branch: TREE_BAND, tech: 2 * TREE_BAND } as const;
 
 /** x values of a band's nodes, left to right. */
 function bandXs(g: TaxGraph, p: ReturnType<typeof layoutTree>, kind: "op" | "branch" | "tech") {
@@ -24,8 +24,8 @@ describe("layoutTree", () => {
     const p = layoutTree(g);
     expect(p.size).toBe(g.nodes.size);
     for (const n of g.nodes.values()) expect(p.get(n.id)!.y).toBe(n.kind === "ref" ? p.get(n.id)!.y : BAND[n.kind]);
-    for (const n of g.nodes.values()) if (n.kind === "ref") expect(p.get(n.id)!.y).toBeGreaterThanOrEqual(3 * BAND_GAP);
-    expect(p.get("ref:chiaroscuro:a")!.y).toBe(3 * BAND_GAP);
+    for (const n of g.nodes.values()) if (n.kind === "ref") expect(p.get(n.id)!.y).toBeGreaterThanOrEqual(3 * TREE_BAND);
+    expect(p.get("ref:chiaroscuro:a")!.y).toBe(3 * TREE_BAND);
   });
 
   it("tree_technique_once_between_parents", () => {
@@ -74,7 +74,7 @@ describe("layoutTree", () => {
       const tx = p.get(`tech:${tech}`)!.x;
       col.forEach((id, k) => {
         expect(p.get(id)!.x).toBe(tx);
-        expect(p.get(id)!.y).toBe(3 * BAND_GAP + k * (NODE + 8));
+        expect(p.get(id)!.y).toBe(3 * TREE_BAND + k * (NODE + 8));
       });
     }
   });
@@ -87,7 +87,7 @@ describe("layoutTree", () => {
     expect(pts).toHaveLength(1158);
     const ys = pts.map((q) => q.y);
     const xs = pts.map((q) => q.x);
-    expect(Math.min(...ys)).toBe(3 * BAND_GAP);
+    expect(Math.min(...ys)).toBe(3 * TREE_BAND);
     expect(Math.max(...ys) - Math.min(...ys)).toBeLessThanOrEqual(Math.ceil(Math.sqrt(1158)) * ROW);
     const tx = p.get("tech:chiaroscuro")!.x;
     expect(Math.min(...xs) + Math.max(...xs)).toBeCloseTo(2 * tx, 6); // centred under its technique

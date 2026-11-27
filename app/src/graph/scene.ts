@@ -250,7 +250,9 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         if (n.kind === "op") g.fill(ink);
         else g.fill(resolveColor("var(--panel)")).stroke({ width: 1, color: ink });
         body.addChild(g);
-        const t = new PIXI.Text({ text: n.label, style: { fontFamily: "Source Serif 4, Georgia, serif", fontSize: LABEL_FONT, fill: resolveColor("var(--ink)") } });
+        const t = new PIXI.Text({ text: n.label, style: { fontFamily: "Source Serif 4, Georgia, serif", fontSize: LABEL_FONT, fill: resolveColor("var(--ink)"),
+          // A shell-coloured halo: hierarchy lines pass behind a name, never through it (F3).
+          stroke: { color: resolveColor("var(--shell)"), width: 4, join: "round" } } });
         t.anchor.set(0.5, 0);
         // Placed per frame in update(): the offset is screen px (design review F5).
         body.addChild(t);
@@ -336,7 +338,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         o.label.position.set(0, n.size / 2 + dy / cam.scale);
         // The selected and hovered names always show (rank -1).
         const rank = id === selected || id === hovered ? -1 : n.kind === "op" ? 0 : n.kind === "branch" ? 1 : 2;
-        names.push({ id, x: (n.x - cam.x) * cam.scale, y: (n.y + n.size / 2 - cam.y) * cam.scale + dy, w: o.label.width * cam.scale, h: LABEL_PX * 1.25, rank });
+        names.push({ id, x: (n.x - cam.x) * cam.scale, y: (n.y + n.size / 2 - cam.y) * cam.scale + dy - 2, w: o.label.width * cam.scale + 4, h: LABEL_PX * 1.25 + 4, rank }); // 2 px margin all round: names that only touch hide by rank too (F3)
         named.set(id, o.label);
       }
       if (n.kind === "ref" && o.sprite) {

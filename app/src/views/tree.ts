@@ -4,7 +4,7 @@
 import type { Api, Change, Region } from "../api";
 import type { DataSource } from "../data";
 import { esc } from "../esc";
-import { BAND_GAP, NODE } from "../graph/constants";
+import { NODE, TREE_BAND } from "../graph/constants";
 import { clipLabel, mountCanvasOrFallback, type Scene, type SceneEdge, type SceneNode } from "../graph/frame";
 import { blockTech, labelRows, layoutTree } from "../graph/layout-tree";
 import { canvasKeys, move } from "../graph/navigate";
@@ -155,7 +155,7 @@ export function mountTree(
     // One expanded technique's block hangs from one joint above it; only the selected reference
     // gets its own connector, an elbow from that joint, so 1,000 references draw no fan (I5).
     const block = blockTech(g);
-    const top = 3 * BAND_GAP - NODE; // above the block's first row, below the label rows
+    const top = 3 * TREE_BAND - NODE; // above the block's first row, below the label rows
     for (const [parent, kids] of g.children) {
       const a = placed.get(parent)!;
       if (parent === block) {

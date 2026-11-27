@@ -1,7 +1,7 @@
 // The Tree layout (SPEC §4): four bands, operations on top. Each technique is placed once, at the
 // mean x of its parent branches, then pushed apart; edges are drawn as orthogonal hairlines from
 // each parent, so a DAG needs no duplicated nodes.
-import { BAND_GAP, GAP, ROW } from "./constants";
+import { GAP, ROW, TREE_BAND } from "./constants";
 import type { TaxGraph } from "./taxgraph";
 
 export type Placed = Map<string, { x: number; y: number }>;
@@ -61,7 +61,7 @@ export function layoutTree(g: TaxGraph): Placed {
     const start = left;
     for (const b of kids(n.id)) {
       const w = Math.max(1, kids(b).length) * GAP;
-      p.set(b, { x: left + w / 2, y: BAND_GAP });
+      p.set(b, { x: left + w / 2, y: TREE_BAND });
       left += w;
     }
     if (left === start) left += GAP; // an operation with no branches still takes a slot
@@ -76,7 +76,7 @@ export function layoutTree(g: TaxGraph): Placed {
   });
   const order = techs.map((_, i) => i).sort((a, b) => want[a] - want[b]); // stable: taxonomy order breaks ties
   const xs = spread(order.map((i) => want[i]), GAP);
-  order.forEach((i, k) => p.set(techs[i].id, { x: xs[k], y: 2 * BAND_GAP }));
+  order.forEach((i, k) => p.set(techs[i].id, { x: xs[k], y: 2 * TREE_BAND }));
   // References. One technique expanded (the default, decision 3): a square block centred under
   // it, so 1,000+ references stay fittable (final review I5; a plan delta to Tasks 5 and 6, which
   // drew one column). Show all: a column under each technique, as there is no room between slots
@@ -86,12 +86,12 @@ export function layoutTree(g: TaxGraph): Placed {
     const refs = kids(one);
     const tx = p.get(one)!.x;
     const cols = Math.ceil(Math.sqrt(refs.length));
-    refs.forEach((r, k) => p.set(r, { x: tx + (k % cols - (cols - 1) / 2) * ROW, y: 3 * BAND_GAP + Math.floor(k / cols) * ROW }));
+    refs.forEach((r, k) => p.set(r, { x: tx + (k % cols - (cols - 1) / 2) * ROW, y: 3 * TREE_BAND + Math.floor(k / cols) * ROW }));
     return p;
   }
   for (const t of techs) {
     const x = p.get(t.id)!.x;
-    kids(t.id).forEach((r, k) => p.set(r, { x, y: 3 * BAND_GAP + k * ROW }));
+    kids(t.id).forEach((r, k) => p.set(r, { x, y: 3 * TREE_BAND + k * ROW }));
   }
   return p;
 }

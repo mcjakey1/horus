@@ -332,7 +332,7 @@ export function mountReference(
           .map(({ link, other, score }) => {
             const r = store.refs.get(other)!;
             const sc = score === undefined ? `<small>not related by technique</small>` : fmt(score);
-            return `<button class="row linked" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>“${esc(link.why)}”</small>${store.inScope(r.id) ? "" : `<small class="off-board-note">Not on this board</small>`}</span><span class="sc">${sc}</span></button>`;
+            return `<button class="row linked" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b title="${esc(r.title)}">${esc(r.title)}</b><small>“${esc(link.why)}”</small>${store.inScope(r.id) ? "" : `<small class="off-board-note">Not on this board</small>`}</span><span class="sc">${sc}</span></button>`;
           })
           .join("")
       : "";
@@ -345,7 +345,7 @@ export function mountReference(
           : x.sharedBranches.length
             ? `same ${branchLabel(x.sharedBranches[0])}`
             : "";
-        return `<button class="row${prev.size && !prev.has(r.id) ? " is-new" : ""}" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>${esc(why)}</small></span><span class="sc">${r.id === ref.id ? "this" : fmt(x.score)}</span></button>`;
+        return `<button class="row${prev.size && !prev.has(r.id) ? " is-new" : ""}" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b title="${esc(r.title)}">${esc(r.title)}</b><small>${esc(why)}</small></span><span class="sc">${r.id === ref.id ? "this" : fmt(x.score)}</span></button>`;
       })
       .join("");
     const empty = f.refs
@@ -369,7 +369,7 @@ export function mountReference(
       .map((l) => {
         const other = store.refs.get(l.fromRef === ref.id ? l.toRef : l.fromRef)!;
         const t = esc(other.title);
-        return `<div class="link" data-link="${esc(l.id)}"><button class="row" data-go="${esc(other.id)}" data-ref-id="${esc(other.id)}"><span class="t">${img(other)}</span><span><b>${t}</b><small>your link</small></span><span></span></button><p class="why">“${esc(l.why)}”</p>
+        return `<div class="link" data-link="${esc(l.id)}"><button class="row" data-go="${esc(other.id)}" data-ref-id="${esc(other.id)}"><span class="t">${img(other)}</span><span><b title="${t}">${t}</b><small>your link</small></span><span></span></button><p class="why">“${esc(l.why)}”</p>
           <div class="link-actions"><button type="button" class="text-btn" data-link-edit="${esc(l.id)}" aria-label="Edit the note on the link to ${t}">Edit</button><button type="button" class="text-btn" data-link-del="${esc(l.id)}" aria-label="Delete the link to ${t}">Delete</button></div></div>`;
       })
       .join("");
