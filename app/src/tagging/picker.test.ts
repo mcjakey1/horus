@@ -102,6 +102,18 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 const sent = (api: Api) => vi.mocked(api.addTags).mock.calls;
 
 describe("technique picker", () => {
+  it("each technique card draws its glyph, named by the icon description (Plan 6)", () => {
+    const { el } = mount();
+    key(row(el), "1"); // an operation's techniques show as cards
+    const card = el.querySelector<HTMLElement>(".pk-card[data-tech]")!;
+    const t = seed.techniques.find((x) => x.id === card.dataset.tech)!;
+    const icon = card.querySelector<HTMLElement>(".pk-icon")!;
+    expect(icon.querySelector("svg")).not.toBeNull();
+    expect(icon.getAttribute("role")).toBe("img");
+    expect(icon.getAttribute("aria-label")).toBe(t.icon);
+    expect(icon.textContent).toBe("");
+  });
+
   it("seed_buttons: plain labels in taxonomy order, and 2 selects Group", () => {
     const { el } = mount();
     expect(ops(el).map((b) => b.querySelector(".serif")!.textContent)).toEqual([

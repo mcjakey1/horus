@@ -286,7 +286,9 @@ button.settings { color: var(--ink); text-underline-offset: 3px; margin-left: 4p
 .pk-name { font: 500 17px/1.25 var(--serif); }
 .pk-domain { font-size: 12px; color: var(--ink-2); padding: 0 6px; border: 1px solid var(--line); }
 .pk-domains { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; border: 0; font-size: 12px; color: var(--ink-2); }
-.pk-icon { font-size: 12px; color: var(--ink-3); }
+/* Plan 6: the technique's glyph, 24 px line art in currentColor (both themes). */
+.pk-icon { display: block; width: 24px; height: 24px; color: var(--ink-2); }
+.pk-icon svg { display: block; width: 24px; height: 24px; }
 .pk-desc { font-size: 13px; color: var(--ink-2); }
 .pk-exs { display: flex; gap: 8px; margin-top: 6px; }
 .pk-ex { position: relative; width: 52px; height: 52px; background: var(--card); overflow: hidden; box-shadow: inset 0 0 0 1px var(--line-2); }
@@ -434,8 +436,10 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .insp-inks { display: flex; gap: 10px; }
 .insp-ink { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line-2); border-radius: 50%; background: var(--c, var(--ink-2)); /* --c: opInk, set through the CSSOM */ }
 .insp-ink[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
-.insp-icons { display: grid; gap: 4px; }
-.insp-icon { padding: 6px 10px; border: 1px solid var(--line); background: var(--shell); text-align: left; font-size: 13px; color: var(--ink-2); }
+.insp-icons { display: grid; grid-template-columns: repeat(auto-fill, 40px); gap: 4px; }
+/* Plan 6: each domain icon as its 24 px glyph in a 40 px square (the description is its name and tooltip). */
+.insp-icon { width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); background: var(--shell); color: var(--ink-2); }
+.insp-icon svg { width: 24px; height: 24px; }
 .insp-icon[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
 .insp-slot:empty { display: none; }
 .insp-form { display: grid; gap: 8px; }
