@@ -30,12 +30,24 @@ const EXCLUDED = [
 ];
 const FOREIGN = /\bIris\b|Taxonomy of Visuals|Modern Art Direction/i;
 const URL_RE = /https?:\/\/[^\s"'`)<>\\]+/g;
-const LOCAL_URLS = [/^http:\/\/www\.w3\.org\/2000\/svg/, /^http:\/\/www\.w3\.org\/1999\/xlink/, /^http:\/\/asset\.localhost/, /^http:\/\/ipc\.localhost/];
-const INLINE_STYLE = /\bstyle=(["'`]|\$\{)/;
+// The hosts end at a delimiter, so a look-alike such as asset.localhost.example fails (AGY #2).
+const LOCAL_URLS = [/^http:\/\/www\.w3\.org\/2000\/svg/, /^http:\/\/www\.w3\.org\/1999\/xlink/, /^http:\/\/asset\.localhost(?:$|[/:?#])/, /^http:\/\/ipc\.localhost(?:$|[/:?#])/];
+const INLINE_STYLE = /\bstyle=(["'`]|\$\{)/i;
 const TEXT = /\.(html|ts|js|mjs|css|json|txt|md|svg|map)$/i;
 
 const tokens = (s) => s.trim().split(/\s+/).join(" ");
-const directives = (s) => new Map(s.split(";").map((d) => tokens(d)).filter(Boolean).map((d) => [d.split(" ")[0], d]));
+/** Directive name to its normalised text, plus the names that occur twice (a browser enforces the
+ * first one and ignores the rest, so a duplicate can hide a looser policy; AGY #2). */
+function directives(s) {
+  const map = new Map();
+  const dup = [];
+  for (const d of s.split(";").map(tokens).filter(Boolean)) {
+    const name = d.split(" ")[0];
+    if (map.has(name)) dup.push(name);
+    else map.set(name, d);
+  }
+  return Object.assign(map, { dup });
+}
 
 export function checkCsp(conf, rc) {
   const out = [];
@@ -45,6 +57,7 @@ export function checkCsp(conf, rc) {
   if (csp.includes("'unsafe-eval'")) out.push("CSP: 'unsafe-eval' is not allowed");
   if (csp.includes("'unsafe-inline'")) out.push("CSP: 'unsafe-inline' is not allowed (convert style attributes to data-css)");
   const got = directives(csp);
+  for (const name of got.dup) out.push(`CSP: duplicate directive "${name}"`);
   if (/\basset:/.test(got.get("connect-src") ?? "")) out.push("CSP: connect-src must not hold asset: (textures load through img elements, R1)");
   for (const [name, want] of directives(CSP)) {
     if (got.get(name) !== want) out.push(`CSP: expected "${want}", found "${got.get(name) ?? "(missing)"}"`);
@@ -172,13 +185,18 @@ export function checkGates(markdown, final) {
 }
 
 /** The SigLIP entry with its Apache-2.0 licence, and its NOTICE: an upstream NOTICE section,
- * or a dated "NOTICE: none" line with its evidence (gate G8, R5). */
+ * or a dated "NOTICE: none" line with its evidence (gate G8, R5). Only SigLIP's own `## ` section
+ * counts, so another package's licence or NOTICE in the merged file can't stand in (AGY #2). */
 export function checkNotices(noticesMd) {
+  const at = noticesMd.indexOf("google/siglip-base-patch16-224");
+  if (at < 0) return ["notices: no entry for google/siglip-base-patch16-224"];
+  const start = noticesMd.lastIndexOf("\n## ", at) + 1; // 0 when there is no heading before it
+  const end = noticesMd.indexOf("\n## ", at);
+  const section = noticesMd.slice(start, end < 0 ? undefined : end);
   const out = [];
-  if (!noticesMd.includes("google/siglip-base-patch16-224")) out.push("notices: no entry for google/siglip-base-patch16-224");
-  if (!noticesMd.includes("Apache License, Version 2.0")) out.push('notices: no "Apache License, Version 2.0" for SigLIP');
-  const none = /NOTICE: none\b.*\b\d{4}-\d{2}-\d{2}\b/.test(noticesMd);
-  const upstream = /^#+\s*NOTICE\b.*$/m.test(noticesMd);
+  if (!section.includes("Apache License, Version 2.0")) out.push('notices: no "Apache License, Version 2.0" in the SigLIP entry');
+  const none = /NOTICE: none\b.*\b\d{4}-\d{2}-\d{2}\b/.test(section);
+  const upstream = /^#+[ \t]*NOTICE\b[^\n]*\n+[ \t]*[^\s#]/m.test(section); // a heading with its text
   if (!none && !upstream) out.push('notices: SigLIP needs its upstream NOTICE text or a dated "NOTICE: none" line');
   return out;
 }
@@ -209,19 +227,22 @@ export function appSources(appDir) {
   return [...src, { path: "index.html", text: readFileSync(join(app, "index.html"), "utf8") }].filter((f) => isSource(f.path));
 }
 
-/** The bundle's resource sources (simple globs: `*` in the last segment) and targets. */
-function resourceFiles(tauriDir, resources) {
+/** The bundle's resource sources (simple globs: `*` in the last segment) and targets. `tauriDir`:
+ * a path or file URL. */
+export function resourceFiles(tauriDir, resources) {
+  if (tauriDir instanceof URL) tauriDir = fileURLToPath(tauriDir);
   const entries = Array.isArray(resources) ? resources.map((s) => [s, s]) : Object.entries(resources ?? {});
   const files = [];
   for (const [from, to] of entries) {
-    const slash = from.lastIndexOf("/");
-    const dir = join(tauriDir, from.slice(0, slash));
+    const slash = from.lastIndexOf("/"); // -1 for a file in src-tauri/ itself (AGY #2)
+    const folder = slash < 0 ? "" : from.slice(0, slash + 1);
+    const dir = join(tauriDir, folder);
     const pattern = new RegExp(`^${from.slice(slash + 1).replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`);
     if (!existsSync(dir)) continue;
     for (const name of readdirSync(dir)) {
       if (!pattern.test(name) || statSync(join(dir, name)).isDirectory()) continue;
       const path = `${to}${to.endsWith("/") ? name : ""}`;
-      files.push({ path, source: `${from.slice(0, slash)}/${name}`, text: TEXT.test(name) ? readFileSync(join(dir, name), "utf8") : "" });
+      files.push({ path, source: `${folder}${name}`, text: TEXT.test(name) ? readFileSync(join(dir, name), "utf8") : "" });
     }
   }
   return files;

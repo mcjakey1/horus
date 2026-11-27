@@ -16,6 +16,7 @@ import {
   checkNotices,
   checkVersions,
   appSources,
+  resourceFiles,
   walk,
 } from "./release-check.mjs";
 
@@ -41,6 +42,9 @@ describe("checkCsp", () => {
     expect(checkCsp(withCsp(CSP.replace("style-src 'self'", "style-src 'self' 'unsafe-inline'")), IMG).join()).toMatch(/unsafe-inline/);
     expect(checkCsp(withCsp(CSP.replace("; form-action 'none'", "")), IMG)).not.toEqual([]);
     expect(checkCsp(withCsp(CSP.replace("worker-src 'self'", "worker-src 'self' blob:")), IMG)).not.toEqual([]);
+  });
+  it("fails a duplicated directive (browsers enforce the first one; AGY #2)", () => {
+    expect(checkCsp(withCsp(`script-src 'self' https://evil.example; ${CSP}`), IMG).join()).toMatch(/duplicate/);
   });
   it("fails asset: in connect-src while textures load through img elements (R1)", () => {
     const loose = CSP.replace("connect-src ipc:", "connect-src ipc: asset:");
@@ -107,6 +111,17 @@ describe("checkNoThirdParty", () => {
     expect(checkNoThirdParty(["dist/reference/frame-036s.jpg"]).join()).toMatch(/reference\//);
     expect(checkNoThirdParty([".impeccable/mocks/a.png", "REFERENCE-ANALYSIS.md"])).toHaveLength(2);
   });
+  it("resolves bundle resources, including a file with no folder (AGY #2)", () => {
+    const files = resourceFiles(fx(""), {
+      "Cargo.fixture.toml": "Cargo.toml",
+      "dist/assets/pixi-*.js": "assets/",
+    });
+    expect(files.map((f) => [f.source, f.path])).toEqual([
+      ["Cargo.fixture.toml", "Cargo.toml"],
+      ["dist/assets/pixi-abc123.js", "assets/pixi-abc123.js"],
+    ]);
+    expect(files[1].text).toContain("pixijs.com");
+  });
   it("walks the fixture dist/ tree", () => {
     const paths = walk(fx("dist")).map((f) => f.path);
     expect(paths.sort()).toEqual(["assets/pixi-abc123.js", "index.html"]);
@@ -141,6 +156,14 @@ describe("checkNoRemoteUrls", () => {
 });
 
 describe("checkNoInlineStyle", () => {
+  it("fails a look-alike of the Tauri local hosts (AGY #2)", () => {
+    expect(checkNoRemoteUrls([{ path: "src/a.ts", text: 'fetch("http://asset.localhost.evil.example/x")' }])).not.toEqual([]);
+    expect(checkNoRemoteUrls([{ path: "src/a.ts", text: 'fetch("http://ipc.localhostx/")' }])).not.toEqual([]);
+    expect(checkNoRemoteUrls([{ path: "src/a.ts", text: "`http://asset.localhost/${p}`" }])).toEqual([]);
+  });
+  it("fails an upper-case STYLE attribute (AGY #2)", () => {
+    expect(checkNoInlineStyle([{ path: "index.html", text: '<div STYLE="color:red"></div>' }])).not.toEqual([]);
+  });
   it("fails style attributes in templates, passes data-css, skips tests and CSS (R13)", () => {
     expect(checkNoInlineStyle([{ path: "src/a.ts", text: "`<span style=\"left:${x}px\">`" }])).not.toEqual([]);
     expect(checkNoInlineStyle([{ path: "src/a.ts", text: "`<span style=${s}>`" }])).not.toEqual([]);
@@ -189,6 +212,11 @@ describe("checkNotices", () => {
     expect(checkNotices(`${entry}- NOTICE: none. Re-checked 2026-11-27: no NOTICE file upstream.\n`)).toEqual([]);
     expect(checkNotices(`${entry}\n### NOTICE (upstream)\n\nThis product includes software developed at Google.\n`)).toEqual([]);
     expect(checkNotices(`${entry}- NOTICE: none.\n`)).not.toEqual([]); // undated
+    // AGY #2: only SigLIP's own section counts, and a NOTICE heading needs its text.
+    expect(checkNotices(`${entry}\n### NOTICE\n\n## Next\n`)).not.toEqual([]);
+    const merged = (siglip) => `# Notices\n\n## left-pad\n\nApache License, Version 2.0\n\n### NOTICE\n\nleft-pad notice.\n\n## SigLIP\n\n${siglip}\n## Red Hat Mono\n\nOFL.\n`;
+    expect(checkNotices(merged("SigLIP base (google/siglip-base-patch16-224), Copyright Google LLC.\n"))).not.toEqual([]);
+    expect(checkNotices(merged(`${entry}- NOTICE: none. Re-checked 2026-11-27.\n`))).toEqual([]);
   });
   it("passes Plan 5's hand-written notices", () => {
     expect(checkNotices(readFileSync(new URL("../notices/manual.md", import.meta.url), "utf8"))).toEqual([]);
