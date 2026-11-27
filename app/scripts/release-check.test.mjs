@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   CSP,
   checkCapabilities,
+  checkCapabilitySources,
   checkCargoMeta,
   checkCsp,
   checkFonts,
@@ -77,6 +78,19 @@ describe("checkCapabilities", () => {
     expect(checkCapabilities(caps(["opener:allow-open-path"]))).not.toEqual([]);
     expect(checkCapabilities(caps([{ ...scoped, allow: [{ path: "$HOME/**" }] }]))).not.toEqual([]);
   });
+  it("fails a capability for remote pages (T1 review)", () => {
+    expect(checkCapabilities([{ identifier: "web", remote: { urls: ["https://*.example"] }, permissions: ["core:default"] }]).join()).toMatch(/remote/);
+  });
+});
+
+describe("checkCapabilitySources", () => {
+  it("allows JSON capability files only, and none inline in tauri.conf.json (T1 review)", () => {
+    expect(checkCapabilitySources(conf(), ["default.json"])).toEqual([]);
+    expect(checkCapabilitySources(conf(), ["default.json", "extra.toml"]).join()).toMatch(/extra\.toml/);
+    const inline = conf();
+    inline.app.security.capabilities = [{ identifier: "x", permissions: ["fs:default"] }];
+    expect(checkCapabilitySources(inline, ["default.json"]).join()).toMatch(/app\.security\.capabilities/);
+  });
 });
 
 describe("checkCargoMeta", () => {
@@ -121,6 +135,12 @@ describe("checkNoThirdParty", () => {
       ["dist/assets/pixi-abc123.js", "assets/pixi-abc123.js"],
     ]);
     expect(files[1].text).toContain("pixijs.com");
+    expect(files.empty).toEqual([]);
+  });
+  it("lists an entry that matches no file, so the scans can't pass on an empty set (T1 review)", () => {
+    const files = resourceFiles(fx(""), { dist: "dist/", "dist/": "dist/", "dist/**/*.js": "js/", "dist/index.html": "index.html" });
+    expect(files.empty).toEqual(["dist", "dist/", "dist/**/*.js"]);
+    expect(files.map((f) => f.path)).toEqual(["index.html"]);
   });
   it("walks the fixture dist/ tree", () => {
     const paths = walk(fx("dist")).map((f) => f.path);
@@ -158,11 +178,20 @@ describe("checkNoRemoteUrls", () => {
     expect(checkNoRemoteUrls([{ path: "src/a.ts", text: 'fetch("http://ipc.localhostx/")' }])).not.toEqual([]);
     expect(checkNoRemoteUrls([{ path: "src/a.ts", text: "`http://asset.localhost/${p}`" }])).toEqual([]);
   });
+  it("fails userinfo after the local host, and an upper-case scheme (T1 review)", () => {
+    expect(checkNoRemoteUrls([{ path: "src/a.ts", text: 'fetch("http://asset.localhost:@evil.example/x")' }])).not.toEqual([]);
+    expect(checkNoRemoteUrls([{ path: "src/a.ts", text: 'fetch("HTTPS://evil.example/x")' }])).not.toEqual([]);
+    expect(checkNoRemoteUrls([{ path: "src/a.ts", text: "// http://asset.localhost:8080/x and http://ipc.localhost" }])).toEqual([]);
+  });
 });
 
 describe("checkNoInlineStyle", () => {
   it("fails an upper-case STYLE attribute (AGY #2)", () => {
     expect(checkNoInlineStyle([{ path: "index.html", text: '<div STYLE="color:red"></div>' }])).not.toEqual([]);
+  });
+  it("fails spaces around the = (T1 review)", () => {
+    expect(checkNoInlineStyle([{ path: "src/a.ts", text: '`<i style ="x">`' }])).not.toEqual([]);
+    expect(checkNoInlineStyle([{ path: "src/a.ts", text: "`<i style= ${s}>`" }])).not.toEqual([]);
   });
   it("fails style attributes in templates, passes data-css, skips tests and CSS (R13)", () => {
     expect(checkNoInlineStyle([{ path: "src/a.ts", text: "`<span style=\"left:${x}px\">`" }])).not.toEqual([]);

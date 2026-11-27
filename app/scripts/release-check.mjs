@@ -29,10 +29,11 @@ const EXCLUDED = [
   /(^|\/)\.impeccable\/(mocks|review|questions)\//,
 ];
 const FOREIGN = /\bIris\b|Taxonomy of Visuals|Modern Art Direction/i;
-const URL_RE = /https?:\/\/[^\s"'`)<>\\]+/g;
-// The hosts end at a delimiter, so a look-alike such as asset.localhost.example fails (AGY #2).
-const LOCAL_URLS = [/^http:\/\/www\.w3\.org\/2000\/svg/, /^http:\/\/www\.w3\.org\/1999\/xlink/, /^http:\/\/asset\.localhost(?:$|[/:?#])/, /^http:\/\/ipc\.localhost(?:$|[/:?#])/];
-const INLINE_STYLE = /\bstyle=(["'`]|\$\{)/i;
+const URL_RE = /https?:\/\/[^\s"'`)<>\\]+/gi;
+// The hosts end at a path, query, fragment or port, so a look-alike (asset.localhost.example) or
+// userinfo (asset.localhost:@evil.example) fails (AGY #2, T1 review).
+const LOCAL_URLS = [/^http:\/\/www\.w3\.org\/2000\/svg/, /^http:\/\/www\.w3\.org\/1999\/xlink/, /^http:\/\/asset\.localhost(?:$|[/?#]|:\d)/, /^http:\/\/ipc\.localhost(?:$|[/?#]|:\d)/];
+const INLINE_STYLE = /\bstyle\s*=\s*(["'`]|\$\{)/i;
 const TEXT = /\.(html|ts|js|mjs|css|json|txt|md|svg|map)$/i;
 
 const tokens = (s) => s.trim().split(/\s+/).join(" ");
@@ -77,6 +78,8 @@ export function checkGlobals(conf) {
 export function checkCapabilities(caps) {
   const out = [];
   for (const cap of caps) {
+    // Remote pages never get the app's commands (T1 review).
+    if (cap.remote) out.push(`capability ${cap.identifier}: "remote" grants IPC to remote pages`);
     for (const p of cap.permissions ?? []) {
       const id = typeof p === "string" ? p : p.identifier;
       if (id === "opener:allow-open-path") {
@@ -87,6 +90,14 @@ export function checkCapabilities(caps) {
       }
     }
   }
+  return out;
+}
+
+/** Capabilities live only in JSON files that `checkCapabilities` reads: no TOML file (Tauri reads
+ * those too) and none inline in tauri.conf.json (T1 review). `names`: the capabilities folder. */
+export function checkCapabilitySources(conf, names) {
+  const out = names.filter((n) => !n.endsWith(".json")).map((n) => `capabilities/${n}: only JSON capability files are checked`);
+  if (conf?.app?.security?.capabilities !== undefined) out.push("tauri.conf.json: app.security.capabilities must be absent (capabilities live in capabilities/*.json)");
   return out;
 }
 
@@ -233,19 +244,23 @@ export function resourceFiles(tauriDir, resources) {
   if (tauriDir instanceof URL) tauriDir = fileURLToPath(tauriDir);
   const entries = Array.isArray(resources) ? resources.map((s) => [s, s]) : Object.entries(resources ?? {});
   const files = [];
+  /** Entries that matched no file: a directory, a trailing `/`, a `**` glob or a missing path. The
+   * scans below would pass on an empty set, so `run` reports them (T1 review). */
+  const empty = [];
   for (const [from, to] of entries) {
     const slash = from.lastIndexOf("/"); // -1 for a file in src-tauri/ itself (AGY #2)
     const folder = slash < 0 ? "" : from.slice(0, slash + 1);
     const dir = join(tauriDir, folder);
     const pattern = new RegExp(`^${from.slice(slash + 1).replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`);
-    if (!existsSync(dir)) continue;
-    for (const name of readdirSync(dir)) {
+    const before = files.length;
+    for (const name of existsSync(dir) ? readdirSync(dir) : []) {
       if (!pattern.test(name) || statSync(join(dir, name)).isDirectory()) continue;
       const path = `${to}${to.endsWith("/") ? name : ""}`;
       files.push({ path, source: `${folder}${name}`, text: TEXT.test(name) ? readFileSync(join(dir, name), "utf8") : "" });
     }
+    if (files.length === before) empty.push(from);
   }
-  return files;
+  return Object.assign(files, { empty });
 }
 
 export function run(appDir, final) {
@@ -254,7 +269,8 @@ export function run(appDir, final) {
   const json = (p) => JSON.parse(readFileSync(at(p), "utf8"));
   const conf = json("src-tauri/tauri.conf.json");
   const cargoToml = readFileSync(at("src-tauri/Cargo.toml"), "utf8");
-  const caps = readdirSync(at("src-tauri/capabilities")).filter((n) => n.endsWith(".json")).map((n) => json(`src-tauri/capabilities/${n}`));
+  const capNames = readdirSync(at("src-tauri/capabilities"));
+  const caps = capNames.filter((n) => n.endsWith(".json")).map((n) => json(`src-tauri/capabilities/${n}`));
   const dist = walk(at("dist"), true);
   const resources = resourceFiles(at("src-tauri"), conf.bundle?.resources);
   const problems = [];
@@ -264,6 +280,8 @@ export function run(appDir, final) {
     ...checkCsp(conf, json("release-check.json")),
     ...checkGlobals(conf),
     ...checkCapabilities(caps),
+    ...checkCapabilitySources(conf, capNames),
+    ...resources.empty.map((from) => `bundle.resources: "${from}" matches no file (name files or use a "dir/*" glob)`),
     ...checkCargoMeta(cargoToml),
     ...checkVersions(json("package.json"), cargoToml, conf),
     ...checkFonts(at("src/fonts")),
