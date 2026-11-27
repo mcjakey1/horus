@@ -250,16 +250,17 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
 - Modify (C2):
   - `app/src-tauri/Cargo.toml`, adding `ort` and `tokenizers` (R5), with the features from Task 0;
   - `app/package.json`, adding the npm script `"fetch:ort": "node scripts/fetch-ort.mjs"`;
-  - `app/src-tauri/.gitignore`, adding `/ort/`;
-  - `app/src-tauri/tauri.conf.json`: `bundle.resources` points at `ort/` (B1);
+  - `app/src-tauri/.gitignore`, adding `/ort/*` and `!/ort/.gitkeep`;
+  - `app/src-tauri/ort/.gitkeep`, committed (created), so a fresh clone still compiles: `generate_context!` checks the resource globs;
+  - `app/src-tauri/tauri.conf.json`: `bundle.resources` is `"ort/*": "ort/"` (B1). The notices and `LICENSE` are bundled next to the binary;
   - `app/src-tauri/src/lib.rs`, resolving the bundled ORT library's path for `ort::init_from`;
   - `app/README.md`: a dev step ("run `npm run fetch:ort` once"), the ORT pins, the library sizes and the installer growth from Task 0.
 
 **Getting ONNX Runtime (controller ruling, 27 Nov 2026).** The ORT binaries are never committed.
 - `app/scripts/fetch-ort.mjs` is plain Node, with no new npm dependency. It:
   - downloads `https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime/1.31.1` and checks the pinned nupkg SHA-256;
-  - extracts only this OS's binary, plus `ThirdPartyNotices.txt` and `LICENSE`. It uses `tar -xf` on Windows and macOS (bsdtar reads zip) and `unzip` on Linux;
-  - checks the binary's pinned size and SHA-256, then writes into `app/src-tauri/ort/` (gitignored);
+  - extracts only this OS's binary, plus `ThirdPartyNotices.txt` and `LICENSE`. It uses bsdtar `tar -xf` (it reads zip) by absolute path: `%SystemRoot%\System32\tar.exe` on Windows, because a bare `tar` there can resolve to Git's GNU tar, which can't read zip; `/usr/bin/tar` on macOS. On Linux it uses `unzip`;
+  - checks the binary's pinned size and SHA-256, then writes into `app/src-tauri/ort/` (gitignored, apart from its `.gitkeep`);
   - does nothing if the files are already present and verified;
   - on a hash mismatch, deletes the file and exits non-zero.
 - **The pins live in one place: the script.** The Rust test `ort_pins_match_plan` checks that every size and SHA-256 in Task 0's pin table (the nupkg and the three binaries) appears in `fetch-ort.mjs`. This is smaller than a shared JSON file, because the Rust code itself never needs the pins.
@@ -301,7 +302,7 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   - **Ignored tests, which need ORT and the model.** They run when `HORUS_ORT_LIB` points at the fetched ORT library and `HORUS_SIGLIP_DIR` at a hand-downloaded model. CI never runs `--ignored`.
     - `real_model_semantics`: using two public-domain fixture images, a cat and a dog, with their sources and rights recorded in `tests/fixtures/similar/README.md`, `text("a photo of a cat")` scores higher against the cat embedding than against the dog's.
     - `load_rejects_garbage_model`: needs only `HORUS_ORT_LIB`. `load` on a directory whose `.onnx` files are random bytes returns `Err(LoadError::Model(_))`, and doesn't panic (Review Focus 3).
-  - `load_rejects_missing_lib`: `load` with a bad `ort_lib` path returns `Err(LoadError::Lib(_))`, and doesn't panic (Review Focus 3).
+  - `load_rejects_missing_lib`: `load` with a bad `ort_lib` path returns `Err(LoadError::Lib(_))`, and doesn't panic (Review Focus 3). It relies on the process-global `ENV` still being empty. Under `--include-ignored`, an ignored test may already have set `ENV`, and then it sees `Model` instead of `Lib`. So CI never runs `--include-ignored`, and the ignored tests run on their own with `-- --ignored`.
   - `ort_pins_match_plan`: every nupkg and binary size and SHA-256 in Task 0's pin table appears in `app/scripts/fetch-ort.mjs`.
   - `telemetry_off_source_check`: a source check on `encoder.rs` finds `.with_telemetry(false)` and the `OnceLock<Environment>` (R2), and finds no `ort::Error::new` in the load path (Task 0).
 
@@ -481,6 +482,7 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   - `index_on_any_change`: applying a `Change` whose `references` hold 2 new hashes (from a fake `import_bytes` and a fake redo) queues exactly those 2, and a `Change` with known hashes queues nothing.
   - `mode_cutoffs`: the fake cosines are derived from `SIGLIP_B16_Q8.sim_min_*`, not literals (C3). A fake text cosine of `sim_min_text + 0.01` is kept by `by_text`, and a fake image cosine of `sim_min_image − 0.01` is dropped by `by_ref`.
   - `switch_library_stops_indexer`: opening library B while A is indexing leaves A's `embeddings.bin` with no write after the switch, and B is indexed.
+  - `failed_open_keeps_old_indexer`: while library A's indexer runs, `open_library` on a path that isn't a library returns `Err`, and afterwards an indexer is still running for A. That open fails before the stop point, so this test guards against an early `?` skipping the start-hook rule (B4).
   - `start_hook_restarts_after_switch`: the start hook, run with Find similar ready and no indexer, starts one for whichever library is open; with an indexer already running, it starts none. This covers the failed-switch path (B4) without forcing `install()` to fail.
   - `demo_seed_is_indexed`: `create_library` with `seed_demo` indexes the demo references through the start pass (B4).
   - `errors_are_copy_not_raw_text`: for every `DlError`, a load error and an unknown error, `SimilarStatus.error` is the copy table's text and contains none of the raw error text (R11).
