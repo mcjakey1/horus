@@ -6,7 +6,7 @@ import type { Api } from "../api";
 import { isTextEntry } from "../keys";
 import { tileBox } from "../reference/tile";
 import { fit, pan, reveal, zoomAt, type Camera, type Rect } from "./camera";
-import { LABEL_FONT, TEX_CAP } from "./constants";
+import { LABEL_FONT, LABEL_ROW_PX, TEX_CAP } from "./constants";
 import {
   buildGrids,
   classifyDrag,
@@ -252,7 +252,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         body.addChild(g);
         const t = new PIXI.Text({ text: n.label, style: { fontFamily: "Source Serif 4, Georgia, serif", fontSize: LABEL_FONT, fill: resolveColor("var(--ink)") } });
         t.anchor.set(0.5, 0);
-        t.position.set(0, half + 4 + (n.labelDy ?? 0));
+        // Placed per frame in update(): the offset is screen px (design review F5).
         body.addChild(t);
         o.label = t;
       }
@@ -330,10 +330,13 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       if (o.label && thumb && n.kind !== "ref" && n.kind !== "label") {
         // A taxonomy name, LABEL_PX tall on screen at every zoom; which ones show is decided by
         // overlap once every name on screen is known (design review F5).
+        // The gap and the Tree's row stagger are screen px too, so rows never collapse at fit.
+        const dy = 4 + (n.labelRow ?? 0) * LABEL_ROW_PX;
         o.label.scale.set(LABEL_PX / (LABEL_FONT * cam.scale));
-        const top = n.y + n.size / 2 + 4 + (n.labelDy ?? 0);
-        const rank = n.kind === "op" ? 0 : n.kind === "branch" ? 1 : 2;
-        names.push({ id, x: (n.x - cam.x) * cam.scale, y: (top - cam.y) * cam.scale, w: o.label.width * cam.scale, h: LABEL_PX * 1.25, rank });
+        o.label.position.set(0, n.size / 2 + dy / cam.scale);
+        // The selected and hovered names always show (rank -1).
+        const rank = id === selected || id === hovered ? -1 : n.kind === "op" ? 0 : n.kind === "branch" ? 1 : 2;
+        names.push({ id, x: (n.x - cam.x) * cam.scale, y: (n.y + n.size / 2 - cam.y) * cam.scale + dy, w: o.label.width * cam.scale, h: LABEL_PX * 1.25, rank });
         named.set(id, o.label);
       }
       if (n.kind === "ref" && o.sprite) {
@@ -389,7 +392,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     dirty = true;
   }
 
-  function fitAll(marginX = 0) {
+  function fitAll(padPx = 0) {
     if (!nodes.size) return; // empty bounds are Infinity: keep the camera
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const n of nodes.values()) {
@@ -397,10 +400,8 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y);
       x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h);
     }
-    x0 -= marginX;
-    x1 += marginX;
     const b: Rect = { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
-    setCamera(fit(b, view()), true);
+    setCamera(fit(b, view(), 40 + padPx), true); // 40: fit's own padding
   }
 
   /** Topmost pickable node under a world point, skipping `except` (the node being dragged). */

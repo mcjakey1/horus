@@ -82,6 +82,7 @@ export function mountCompare(
     const side = (key: "a" | "b", r: Reference, only: string[], partial: string[]) => `
       <section class="cmp-side" data-side="${key}">
         <h2 class="cmp-title" title="${esc(r.title)}">${esc(r.title)}</h2>
+        <button type="button" class="text-btn cmp-lb" data-lb="${key}" aria-label="Lightbox: ${esc(r.title)}">Lightbox</button>
         <div class="cmp-tile${value ? " is-value" : ""}"><span class="cmp-plate"><img alt="${esc(r.title)}" src="${esc(api.assetUrl(r.thumb1024))}" draggable="false"></span><span class="cmp-out" hidden></span></div>
         ${only.length ? `<h3 class="cmp-h">Only here</h3><ul class="cmp-only">${only.map(techItem).join("")}</ul>` : ""}
         ${partial.length ? `<h3 class="cmp-h">Operation only</h3><ul class="cmp-partial">${partial.map(opItem).join("")}</ul>` : ""}
@@ -95,7 +96,6 @@ export function mountCompare(
         <p class="cmp-score">${score}</p>
         <button type="button" class="text-btn cmp-value" aria-pressed="${value}" aria-keyshortcuts="v">Value view</button>
         <button type="button" class="text-btn cmp-swap" aria-keyshortcuts="x">Swap</button>
-        <button type="button" class="text-btn cmp-lb" aria-keyshortcuts="l">Lightbox</button>
         <button type="button" class="text-btn cmp-link-btn">${link ? "Edit link" : "Link these two"}</button>
         <button type="button" class="text-btn cmp-close">Close</button>
       </header>
@@ -150,12 +150,15 @@ export function mountCompare(
   /** The score is symmetric, so a swap asks nothing. The Reference view's focus does not follow a
    * swap: Compare is a modal over it, and closing leaves the view as it was (review I2). */
   function swap() {
+    const had = !!document.activeElement?.closest(".cmp-swap");
     [A, B] = [B, A];
     render();
+    if (had) body.querySelector<HTMLElement>(".cmp-swap")?.focus(); // the re-render dropped it (design review)
   }
-  function openLb() {
+  /** `side`: a side's own Lightbox button; the L key uses the side under the pointer. */
+  function openLb(side: "a" | "b" = pointerSide) {
     if (lightbox || document.querySelector(".lightbox")) return;
-    lightbox = openLightboxWithPicker(api, store, pointerSide === "a" ? A : B, {
+    lightbox = openLightboxWithPicker(api, store, side === "a" ? A : B, {
       onClose: () => {
         lightbox = null;
         if (!closed) el.focus();
@@ -218,7 +221,7 @@ export function mountCompare(
     // Design review F3: the v, x and L keys as buttons too.
     else if (t.closest(".cmp-value")) toggleValue();
     else if (t.closest(".cmp-swap")) swap();
-    else if (t.closest(".cmp-lb")) openLb();
+    else if (t.closest(".cmp-lb")) openLb(t.closest<HTMLElement>(".cmp-lb")!.dataset.lb === "b" ? "b" : "a");
   }, { signal });
   el.addEventListener("mouseover", (e) => {
     const side = (e.target as Element).closest<HTMLElement>(".cmp-side")?.dataset.side;

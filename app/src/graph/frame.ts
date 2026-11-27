@@ -15,7 +15,7 @@ export type SceneNode =
   | { id: string; kind: "label"; x: number; y: number; text: string; font: "serif" | "mono"; color: string }
   | {
       id: string; kind: "op" | "branch" | "tech"; x: number; y: number; size: number; color: string; label: string;
-      labelDy?: number; // world units added to the label's y (the Tree's 3-row stagger)
+      labelRow?: number; // the Tree's 3-row stagger: 0, 1 or 2 rows of LABEL_ROW_PX under the node
     };
 export type SceneEdge = { from: string; to: string; width: number; color: string; curve?: boolean };
 /** `visible` is in draw order (the order of `setNodes`), never `SpatialGrid.query` order. */
@@ -27,8 +27,8 @@ export interface Scene {
   setEdges(edges: SceneEdge[]): void; // the caller decides which edges are visible
   camera(): Camera;
   setCamera(c: Camera, animate?: boolean): void;
-  /** `marginX`: world units added on each side, for labels wider than their nodes (the Tree, F8). */
-  fitAll(marginX?: number): void;
+  /** `padPx`: screen px added around the bounds, for names wider than their nodes (the Tree, F8). */
+  fitAll(padPx?: number): void;
   on(ev: "hover" | "select" | "activate", fn: (id: string | null, mods: Mods) => void): void; // activate = double-click or Enter
   setDraggable(pred: (id: string) => boolean): void; // default: nothing is draggable
   onDrop(fn: (dragged: string, target: string | null) => void): void; // target = node under the pointer on release
@@ -58,7 +58,10 @@ function fallbackParagraph(): HTMLParagraphElement {
 
 /** Taxonomy names are drawn this tall on screen at every zoom (design review F5). */
 export const LABEL_PX = 12;
-/** A label on screen: `x` is its centre, `y` its top (px); `rank` 0 operation, 1 branch, 2 technique. */
+/** The least space between two names on one line (design review). */
+const LABEL_GAP_PX = 8;
+/** A label on screen: `x` is its centre, `y` its top (px); `rank` -1 selected or hovered (never
+ * hidden), 0 operation, 1 branch, 2 technique. */
 export type LabelBox = { id: string; x: number; y: number; w: number; h: number; rank: number };
 
 /** Design review F5: labels hide by overlap, not by size. Lower ranks claim their space first, then
@@ -68,7 +71,7 @@ export function labelsShown(boxes: LabelBox[]): Set<string> {
   const kept: LabelBox[] = [];
   const order = boxes.map((b, i) => [b, i] as const).sort((p, q) => p[0].rank - q[0].rank || p[1] - q[1]);
   for (const [b] of order) {
-    const hit = kept.some((k) => Math.abs(k.x - b.x) * 2 < k.w + b.w && b.y < k.y + k.h && k.y < b.y + b.h);
+    const hit = kept.some((k) => Math.abs(k.x - b.x) < (k.w + b.w) / 2 + LABEL_GAP_PX && b.y < k.y + k.h && k.y < b.y + b.h);
     if (!hit) kept.push(b);
   }
   return new Set(kept.map((b) => b.id));

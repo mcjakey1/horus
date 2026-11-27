@@ -78,7 +78,18 @@ describe("Compare", () => {
     btn(".cmp-swap").click();
     expect($('.cmp-side[data-side="a"] .cmp-title').textContent).toBe("Plate b");
     expect(btn(".cmp-value").getAttribute("aria-pressed")).toBe("true"); // a swap keeps the value view
-    expect(btn(".cmp-lb").textContent).toBe("Lightbox");
+    // One Lightbox button under each title, for that side (design review ruling).
+    expect(document.querySelector(".cmp-top .cmp-lb")).toBeNull();
+    const lb = [...document.querySelectorAll<HTMLButtonElement>(".cmp-side .cmp-lb")];
+    expect(lb.map((b) => [b.dataset.lb, b.getAttribute("aria-label")])).toEqual([["a", "Lightbox: Plate b"], ["b", "Lightbox: Plate a"]]);
+  });
+
+  it("Swap keeps keyboard focus on Swap after the re-render (design review)", async () => {
+    open("a", "b");
+    await tick();
+    $<HTMLButtonElement>(".cmp-swap").focus();
+    $<HTMLButtonElement>(".cmp-swap").click();
+    expect(document.activeElement).toBe($(".cmp-swap"));
   });
 
   it("headings over empty lists stay out (design review F7)", async () => {
@@ -147,16 +158,16 @@ describe("Compare", () => {
     await tick();
     const dlg = $(".compare");
     expect([dlg.getAttribute("role"), dlg.getAttribute("aria-modal")]).toEqual(["dialog", "true"]);
-    const close = $<HTMLButtonElement>(".cmp-close");
-    const first = dlg.querySelector<HTMLElement>("button")!;
-    expect(first).not.toBe(close);
+    const buttons = [...dlg.querySelectorAll<HTMLElement>("button")];
+    const [first, last] = [buttons[0], buttons[buttons.length - 1]]; // the last: side b's Lightbox
+    expect(first).not.toBe(last);
     first.focus();
     const back = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true });
     first.dispatchEvent(back);
     expect(back.defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(close); // wrapped to the last control
+    expect(document.activeElement).toBe(last); // wrapped to the last control
     const on = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
-    close.dispatchEvent(on);
+    last.dispatchEvent(on);
     expect(on.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(first); // and round to the first
   });

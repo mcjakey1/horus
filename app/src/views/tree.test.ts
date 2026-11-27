@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { LABEL_W } from "../graph/constants";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { Api, Reference } from "../api";
 import type { DataSource, Snapshot, SourceEvent } from "../data";
@@ -84,7 +83,7 @@ describe("Tree view", () => {
     expect(ns.filter((n) => n.kind === "op")).toHaveLength(4);
     expect(refIds(ns)).toEqual([]);
     expect(fake.scene.fitAll).toHaveBeenCalledTimes(1);
-    expect(fake.scene.fitAll).toHaveBeenCalledWith(LABEL_W / 2); // the names fit too (design review F8)
+    expect(fake.scene.fitAll).toHaveBeenCalledWith(80); // the names fit too: half a name, in px (design review F8)
   });
 
   it("selecting_tech_expands_its_refs", () => {
@@ -168,10 +167,10 @@ describe("Tree view", () => {
     const ns = fake.last();
     const chi = ns.find((n) => n.id === "tech:chiaroscuro") as { label: string };
     expect(chi.label).toBe("Chiaroscuro with a very …");
-    const dy = (kind: string) => ns.filter((n) => n.kind === kind).map((n) => (n as { labelDy?: number }).labelDy);
-    expect(new Set(dy("tech"))).toEqual(new Set([0, 18, 36]));
-    expect(new Set(dy("branch"))).toEqual(new Set([0, 18, 36]));
-    expect(new Set(dy("op"))).toEqual(new Set([0, 18, 36]));
+    const row = (kind: string) => ns.filter((n) => n.kind === kind).map((n) => (n as { labelRow?: number }).labelRow);
+    expect(new Set(row("tech"))).toEqual(new Set([0, 1, 2]));
+    expect(new Set(row("branch"))).toEqual(new Set([0, 1, 2]));
+    expect(new Set(row("op"))).toEqual(new Set([0, 1, 2]));
   });
 
   it("an expanded technique hangs its references from one joint; only the selected one gets a connector (final review I5)", () => {

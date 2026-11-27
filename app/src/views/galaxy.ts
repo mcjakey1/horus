@@ -35,7 +35,7 @@ export function mountGalaxy(
 ): ViewHandle {
   host.innerHTML = `<div class="gx">
     <div class="gx-canvas" data-label="Galaxy of references"></div>
-    <aside class="gx-insp" aria-live="polite"></aside>
+    <aside class="gx-insp"></aside>
   </div>`;
   const canvasEl = host.querySelector<HTMLElement>(".gx-canvas")!;
   const insp = host.querySelector<HTMLElement>(".gx-insp")!;
@@ -102,12 +102,12 @@ export function mountGalaxy(
   function renderInsp() {
     const s = data.get();
     if (!s.refs.size) {
-      insp.innerHTML = `<p class="gx-note">No references yet.</p>`;
+      insp.innerHTML = `<div class="insp-body"><p class="gx-note">No references yet.</p></div>`;
       return;
     }
     const sel = selected ? s.refs.get(selected) : undefined;
     if (!sel) {
-      insp.innerHTML = edgesFetched && !byRef.size ? `<p class="gx-note">Tag references to see them cluster.</p>` : "";
+      insp.innerHTML = edgesFetched && !byRef.size ? `<div class="insp-body"><p class="gx-note">Tag references to see them cluster.</p></div>` : "";
       return;
     }
     const techName = (id: string) => s.tax.techniques.find((t) => t.id === id)?.name ?? id;
@@ -122,13 +122,13 @@ export function mountGalaxy(
       t?.techniqueId ? techName(t.techniqueId) : undefined,
       sel.title,
     ]);
-    insp.innerHTML = `${crumb}<h2 class="gx-title">${esc(sel.title)}</h2>
+    insp.innerHTML = `${crumb}<div class="insp-body"><h2 class="gx-title" aria-live="polite">${esc(sel.title)}</h2>
       <button class="gx-open" data-open-ref>Open in Reference view</button>
       ${rows.length ? `<ol class="gx-neighbours">${rows.map((r) => `<li><button data-ref="${esc(r.id)}">
         <span class="gx-name">${esc(s.refs.get(r.id)?.title ?? r.id)}</span>
         ${r.sharedTechniques.length ? `<span class="gx-shares">shares ${r.sharedTechniques.map((t) => `<i>${esc(techName(t))}</i>`).join(", ")}</span>` : ""}
         <span class="mono">${r.score.toFixed(2)}</span>
-      </button></li>`).join("")}</ol>` : ""}`;
+      </button></li>`).join("")}</ol>` : ""}</div>`;
   }
 
   async function select(id: string | null) {

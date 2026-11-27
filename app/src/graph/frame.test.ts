@@ -112,9 +112,11 @@ describe("planFrame", () => {
       box("tech:c", 230, 10, 2), // overlaps the operation
       box("tech:d", 400, 0, 2),
       box("tech:e", 459, 0, 2), // touches d's right edge minus 1 px: overlaps, the earlier one stays
-      box("tech:f", 470, 0, 2), // clear of d once e is hidden
+      box("tech:f", 470, 0, 2), // clear of d once e is hidden, by 10 px (the gap is 8)
+      box("tech:g", 535, 0, 2), // 5 px from f: too close
+      box("tech:sel", 10, 0, -1), // the selected name: always shown, and it pushes others out
     ]);
-    expect([...shown].sort()).toEqual(["br:b", "op:o", "tech:d", "tech:f"]);
+    expect([...shown].sort()).toEqual(["op:o", "tech:d", "tech:f", "tech:sel"]);
     expect(LABEL_PX).toBe(12);
   });
 
