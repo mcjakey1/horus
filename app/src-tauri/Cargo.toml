@@ -29,6 +29,7 @@ qcms = "0.3.0"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp", "tiff", "gif"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
 sysinfo = { version = "0.40.4", default-features = false, features = ["system"] }
 unicode-normalization = "0.1"
 # Find similar download (Plan 5 T1): rustls on ring, no gzip, no tokio; no aws-lc-sys or cmake (R3).

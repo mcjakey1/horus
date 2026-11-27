@@ -130,6 +130,8 @@ function fakeApi(): Api {
     similarByText: vi.fn(async () => []),
     similarByFile: vi.fn(async () => []),
     onSimilarStatus: vi.fn(async () => () => {}),
+    recoverOrphans: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
+    onThumbsRebuilt: vi.fn(async () => () => {}),
   };
 }
 
@@ -338,6 +340,71 @@ describe("Reference view", () => {
     store.reset({ ...library, root: "D:\\Third", references: [{ ...ref("z", "Plate Z", []), thumb1024: "D:\\Third\\z.jpg" }] }, taxonomy);
     await settle();
     expect($("#plate img").getAttribute("src")).toBe(`asset://${encodeURIComponent("D:\\Third\\z.jpg")}`);
+  });
+
+  // ---------- Plan 6 Task 2: the integrity notice ----------
+  const integrity = {
+    sweptTmp: ["C:/lib/images/.tmp1"],
+    missingOriginals: ["b"],
+    missingThumbs: [],
+    orphans: ["C:/lib/images/x.jpg", "C:/lib/images/y.png"],
+    taxonomyBackupInvalid: false,
+  };
+
+  it("integrity_notice_show_them_filters_ranked", async () => {
+    store.reset({ ...library, integrity }, taxonomy);
+    await settle();
+    const n = $("#import-notice");
+    expect(n.hidden).toBe(false);
+    expect(n.textContent).toContain("Recovered 2 images to the Inbox.");
+    expect(n.textContent).toContain("1 reference is missing its image file.");
+    expect(n.textContent).not.toContain(".tmp1"); // housekeeping says nothing
+    $<HTMLButtonElement>("[data-show-missing]").click();
+    expect($("#pane-ranked").textContent).toContain("Missing their image file");
+    expect($("#pane-ranked .pane-note").textContent).toContain("1 references");
+    expect([...document.querySelectorAll<HTMLElement>("#pane-ranked .row:not(.linked)")].map((r) => r.dataset.go)).toEqual(["b"]); // links always show (SPEC §4)
+    $<HTMLButtonElement>("[data-unrefs]").click();
+    expect($("#pane-ranked .pane-note").textContent).toContain("related");
+  });
+
+  it("show_them_with_nothing_left_says_so", async () => {
+    store.reset({ ...library, integrity: { ...integrity, missingOriginals: ["gone"] } }, taxonomy);
+    await settle();
+    $<HTMLButtonElement>("[data-show-missing]").click();
+    expect($("#pane-ranked .none").textContent).toBe("These references aren't in this view.");
+  });
+
+  it("integrity_notice_add_them_recovers", async () => {
+    const R = ref("r1", "Recovered image r1r1r1r1", []);
+    vi.mocked(api.recoverOrphans).mockResolvedValue({ references: [R], removed: [], canUndo: true, canRedo: false });
+    store.reset({ ...library, integrity }, taxonomy);
+    await settle();
+    $<HTMLButtonElement>("[data-recover]").click();
+    await settle();
+    expect(api.recoverOrphans).toHaveBeenCalledTimes(1);
+    expect(store.refs.has("r1")).toBe(true);
+    expect($("#import-notice").textContent).toContain("Added 1 to the Inbox.");
+  });
+
+  it("integrity_notice_add_them_failures", async () => {
+    vi.mocked(api.recoverOrphans).mockResolvedValueOnce({ references: [], removed: [], canUndo: false, canRedo: false });
+    store.reset({ ...library, integrity }, taxonomy);
+    await settle();
+    $<HTMLButtonElement>("[data-recover]").click();
+    await settle();
+    expect($("#import-notice").textContent).toContain("couldn't read those image files");
+    vi.mocked(api.recoverOrphans).mockRejectedValueOnce("Couldn't save the library.");
+    store.reset({ ...library, integrity }, taxonomy);
+    await settle();
+    $<HTMLButtonElement>("[data-recover]").click();
+    await settle();
+    expect($("#import-notice").textContent).toContain("Couldn't add them: Couldn't save the library.");
+  });
+
+  it("clean_open_shows_no_integrity_notice", async () => {
+    store.reset({ ...library, integrity: null }, taxonomy);
+    await settle();
+    expect($("#import-notice").hidden).toBe(true);
   });
 
   const plateSrc = () => $("#plate img")?.getAttribute("src");

@@ -8,6 +8,7 @@ use crate::export::{self, ExportReport};
 use crate::history::History;
 use crate::hooks;
 use crate::import::{self, ImportReport};
+use crate::integrity::{self, IntegrityReport};
 use crate::library::{Library, LibraryError, SUBFOLDER, thumb_path_in};
 use crate::model::{Board, LibraryData, Link, Reference, Region, Tag};
 use crate::saver::{self, Debounce, SAVE_DEBOUNCE_MS};
@@ -132,6 +133,8 @@ pub struct LibraryView {
     seed_warnings: Vec<String>,
     /// The taxonomy is the bundled seed, shown because the library's files are damaged.
     taxonomy_read_only: bool,
+    /// Plan 6 Task 2: what the open found on disk; `None` when nothing.
+    integrity: Option<IntegrityReport>,
 }
 
 /// What a mutating command changed, so the UI never re-reads the whole library.
@@ -424,6 +427,7 @@ fn install<R: Runtime>(
     open: &mut Option<Open>,
     lib: Library,
     seed_warnings: Vec<String>,
+    report: IntegrityReport,
 ) -> Result<LibraryView, String> {
     let st = app.state::<AppState>();
     let mut warnings = seed_warnings.clone();
@@ -472,6 +476,7 @@ fn install<R: Runtime>(
         warning: (!warnings.is_empty()).then(|| warnings.join(" ")),
         seed_warnings,
         taxonomy_read_only: tax_source == TaxSource::SeedReadOnly,
+        integrity: report.found_anything().then_some(report),
     };
     // Again here: an edit can land after the caller's first flush (edits skip the gate).
     flush_for_switch(open)?;
@@ -518,7 +523,11 @@ pub fn create_library<R: Runtime>(
 ) -> Result<LibraryView, String> {
     let r = create_inner(&app, &path, seed_demo);
     // B4: with no lock held, Ok or Err, for whichever library is open now.
+    trace_step("start_hook");
     similar::start_hook(&app);
+    if let Ok(view) = &r {
+        spawn_rebuild(&app, view);
+    }
     r
 }
 
@@ -532,7 +541,9 @@ fn create_inner<R: Runtime>(
     let st = app.state::<AppState>();
     let _gate = hold_gate(&app);
     // Before anything is created on disk, so a refused switch leaves no new library behind.
+    trace_step("flush");
     flush_for_switch(&mut lock(&st.open))?;
+    trace_step("create");
     let mut lib = Library::create(&root, &st.seed_taxonomy).map_err(library_error)?;
     let mut seed_warnings = vec![];
     if seed_demo {
@@ -556,17 +567,23 @@ fn create_inner<R: Runtime>(
             Err(e) => seed_warnings.push(format!("The demo set was not added: {e}")),
         }
     }
+    // Plan 6 Task 2: under the import gate only; the new library has no other writer yet.
+    let report = scan(&lib);
     // B4: under the state guard, right before the swap (state then `similar`); the join waits
     // for the state guard to drop (the import gate is still held; the worker never takes it).
     let (installed, old) = {
         let mut open = lock(&st.open);
+        trace_step("detach");
         let old = similar::detach_indexer(&st);
-        (install(&app, &mut open, lib, seed_warnings), old)
+        trace_step("install");
+        (install(&app, &mut open, lib, seed_warnings, report), old)
     };
+    trace_step("join");
     if let Some(i) = old {
         i.stop();
     }
     let mut view = installed?;
+    trace_step("remember");
     remember(&st, &mut view);
     Ok(view)
 }
@@ -582,7 +599,11 @@ pub fn open_library<R: Runtime>(app: AppHandle<R>, path: String) -> Result<Libra
         i.stop();
     }
     // B4: with no lock held, Ok or Err, for whichever library is open now.
+    trace_step("start_hook");
     similar::start_hook(&app);
+    if let Ok(view) = &r {
+        spawn_rebuild(&app, view);
+    }
     r
 }
 
@@ -598,23 +619,185 @@ fn open_inner<R: Runtime>(
         // The state lock is held from the flush to the swap: reopening the same library must
         // read what the flush wrote, and no edit may land in between.
         let mut open = lock(&st.open);
+        trace_step("flush");
         flush_for_switch(&mut open)?;
+        trace_step("open");
         let lib = match Library::open(&root) {
             Err(LibraryError::NotALibrary) => Library::open(&root.join(SUBFOLDER)),
             other => other,
         }
         .map_err(library_error)?;
+        // Plan 6 Task 2: under the gate and the state guard, so no library writer is live.
+        let report = scan(&lib);
         // B4: state then `similar` is the legal order; the join waits for the state guard.
+        trace_step("detach");
         *old = similar::detach_indexer(&st);
-        install(app, &mut open, lib, vec![])?
+        trace_step("install");
+        install(app, &mut open, lib, vec![], report)?
     };
     // Joined with the state guard dropped, before remember(). The import gate is still held:
     // safe, the worker never takes it.
+    trace_step("join");
     if let Some(i) = old.take() {
         i.stop();
     }
+    trace_step("remember");
     remember(&st, &mut view);
     Ok(view)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// The steps of a library switch on this thread, in order (`open_pipeline_order`).
+    static STEPS: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(vec![]) };
+}
+
+fn trace_step(_step: &'static str) {
+    #[cfg(test)]
+    STEPS.with(|v| v.borrow_mut().push(_step));
+}
+
+/// Plan 6 Task 2: the `.tmp` sweep, then the existence report. The caller holds the import
+/// gate (and, for an open, the state lock), so no live writer owns a swept file.
+fn scan(lib: &Library) -> IntegrityReport {
+    trace_step("sweep");
+    let swept = integrity::sweep_tmp(&lib.root);
+    trace_step("check");
+    IntegrityReport {
+        swept_tmp: swept,
+        ..integrity::check(lib)
+    }
+}
+
+/// After an `Ok` switch that found missing thumbnails: rebuilds them on a thread of its own.
+/// Per image it takes the import gate (so a reopen's sweep never meets its `.tmp`, and a close
+/// waits one image at most), checks under the state lock that the library is still open, and
+/// decodes under the gate only. Then, with no lock held: the event, Find similar's retry and
+/// the start hook (B3). Nothing joins it.
+fn spawn_rebuild<R: Runtime>(app: &AppHandle<R>, view: &LibraryView) {
+    let Some(report) = view.integrity.as_ref() else {
+        return;
+    };
+    if report.missing_thumbs.is_empty() {
+        return;
+    }
+    let want: HashSet<&String> = report.missing_thumbs.iter().collect();
+    let items: Vec<(String, String, String)> = view
+        .references
+        .iter()
+        .map(|v| &v.reference)
+        .filter(|r| want.contains(&r.id))
+        .map(|r| (r.id.clone(), r.hash.clone(), r.file.clone()))
+        .collect();
+    let (app, root) = (app.clone(), view.root.clone());
+    trace_step("rebuild");
+    let spawned = std::thread::Builder::new()
+        .name("horus-thumbs".into())
+        .spawn(move || rebuild(&app, &root, items));
+    if let Err(e) = spawned {
+        eprintln!("Couldn't start rebuilding the missing thumbnails: {e}");
+    }
+}
+
+fn rebuild<R: Runtime>(app: &AppHandle<R>, root: &Path, items: Vec<(String, String, String)>) {
+    let st = app.state::<AppState>();
+    let (mut ids, mut hashes) = (vec![], vec![]);
+    for item in items {
+        let _gate = hold_gate(app);
+        if !lock(&st.open).as_ref().is_some_and(|o| o.lib.root == root) {
+            // Switched meanwhile: that library's open checks its own thumbnails, and these
+            // ids and hashes are not its to hear about (AGY #2).
+            return;
+        }
+        if integrity::has_thumbs(root, &item.1) {
+            continue;
+        }
+        if !integrity::rebuild_thumbs(root, std::slice::from_ref(&item)).is_empty() {
+            ids.push(item.0);
+            hashes.push(item.1);
+        }
+    }
+    if ids.is_empty() {
+        return;
+    }
+    let _ = app.emit("library://thumbs-rebuilt", &ids);
+    similar::retry(app, &hashes);
+    similar::start_hook(app);
+}
+
+/// Plan 6 Task 2, "Add them": the open library's orphans (image files no reference points
+/// to) as new Inbox references, in one undo step. Saved at once, like an import.
+#[tauri::command(async)]
+pub fn recover_orphans<R: Runtime>(app: AppHandle<R>) -> Result<Change, String> {
+    let st = app.state::<AppState>();
+    let gate = hold_gate(&app); // no import adds or writes these files meanwhile
+    let snapshot = {
+        let open = lock(&st.open);
+        let lib = &open.as_ref().ok_or(NO_LIBRARY)?.lib;
+        Library {
+            root: lib.root.clone(),
+            data: lib.data.clone(),
+            recovered_from_backup: false,
+        }
+    };
+    // The file checks and decodes run with the state lock released.
+    let root = snapshot.root.clone();
+    let refs: Vec<Reference> = integrity::check(&snapshot)
+        .orphans
+        .iter()
+        .filter_map(|p| integrity::recovered_reference(&root, p))
+        .collect();
+    let change = {
+        let mut open = lock(&st.open);
+        let Some(o) = open.as_mut().filter(|o| o.lib.root == root) else {
+            return Err("Another library was opened meanwhile, so nothing was added to it.".into());
+        };
+        let refs = refs
+            .into_iter()
+            .filter(|r| {
+                !o.lib
+                    .data
+                    .references
+                    .iter()
+                    .any(|x| x.id == r.id || x.hash == r.hash)
+            })
+            .collect();
+        add_saved(&st, o, refs)?
+    };
+    drop(gate); // hooks run with no lock held, as in `commit`
+    hooks::after_change(&app, &change);
+    Ok(change)
+}
+
+/// `refs` as one undo step, saved at once; on a failed save memory is rolled back to match
+/// disk (B3). Adding nothing saves nothing and records no step. Under the state lock.
+fn add_saved(st: &AppState, o: &mut Open, refs: Vec<Reference>) -> Result<Change, String> {
+    let any = !refs.is_empty();
+    let add = Edit::AddReferences { refs };
+    let applied = edit::apply(&mut o.lib.data, &mut o.tax, add).map_err(|e| e.to_string())?;
+    if any {
+        // Through `flush`, not a bare `lib.save()`: a pending custom technique is written
+        // to taxonomy.json before library.json holds tags that use it. The save also
+        // writes any pending tag edits.
+        let pending = o.debounce.library_dirty();
+        o.debounce.touch(Instant::now(), true, false);
+        if let Err(e) = flush_open(o) {
+            // Memory must match disk: take back what was not saved. The index is rebuilt
+            // only after a good save, so it still describes the rolled-back references.
+            edit::apply_inverse(&mut o.lib.data, &mut o.tax, applied.inverse)
+                .expect("the inverse of an edit just applied applies");
+            if !pending {
+                o.debounce.clear_library(); // the rollback left nothing to save
+            }
+            // A close that waited for this would now flush nothing and close, losing it
+            // unseen: drop it, so the artist sees why (R1).
+            st.close_owed.store(false, Ordering::SeqCst);
+            return Err(e);
+        }
+        o.history.record(applied.inverse);
+    }
+    reindex(o, &applied.touched);
+    Ok(change(o, &applied.touched, None))
 }
 
 #[tauri::command]
@@ -1262,34 +1445,8 @@ fn run_import<R: Runtime>(
                 "Another library was opened during the import, so nothing was added to it.".into(),
             );
         };
-        let add = Edit::AddReferences {
-            refs: refs.collect(),
-        };
-        let applied = edit::apply(&mut o.lib.data, &mut o.tax, add).map_err(|e| e.to_string())?;
         // Nothing added (duplicates or skips only): nothing to save and no undo step.
-        if !out.report.added.is_empty() {
-            // Through `flush`, not a bare `lib.save()`: a pending custom technique is written
-            // to taxonomy.json before library.json holds tags that use it. The save also
-            // writes any pending tag edits.
-            let pending = o.debounce.library_dirty();
-            o.debounce.touch(Instant::now(), true, false);
-            if let Err(e) = flush_open(o) {
-                // Memory must match disk: take back what was not saved. The index is rebuilt
-                // only after a good save, so it still describes the rolled-back references.
-                edit::apply_inverse(&mut o.lib.data, &mut o.tax, applied.inverse)
-                    .expect("the inverse of an edit just applied applies");
-                if !pending {
-                    o.debounce.clear_library(); // the rollback left nothing to save
-                }
-                // A close that waited for this import would now flush nothing and close,
-                // losing the import unseen: drop it, so the artist sees why (R1).
-                st.close_owed.store(false, Ordering::SeqCst);
-                return Err(e);
-            }
-            o.history.record(applied.inverse);
-        }
-        reindex(o, &applied.touched);
-        change(o, &applied.touched, None)
+        add_saved(&st, o, refs.collect())?
     };
     drop(gate); // hooks run with no lock held, as in `commit`
     hooks::after_change(app, &change);
@@ -3171,6 +3328,282 @@ mod tests {
             open.as_ref().unwrap().lib.root,
             Path::new(&e.lib),
             "A stays open"
+        );
+    }
+
+    // ---------- Plan 6 Task 2: integrity, the sweep, the rebuild, orphan recovery ----------
+
+    fn root_of(e: &Env) -> PathBuf {
+        let st = e.app.state::<AppState>();
+        lock(&st.open).as_ref().unwrap().lib.root.clone()
+    }
+
+    fn take_steps() -> Vec<&'static str> {
+        STEPS.with(|v| std::mem::take(&mut *v.borrow_mut()))
+    }
+
+    /// Copies a fixture into `images/` under a made-up hash: an image no reference points to.
+    fn plant_orphan(root: &Path, fixture_name: &str, hex: &str) -> PathBuf {
+        let ext = Path::new(fixture_name)
+            .extension()
+            .unwrap()
+            .to_string_lossy();
+        let p = root
+            .join("images")
+            .join(format!("{}.{ext}", hex.repeat(32)));
+        fs::copy(fixture(fixture_name), &p).unwrap();
+        crate::integrity::tests::touch(&p); // newer than library.json, as a crash leaves it
+        p
+    }
+
+    fn drop_thumbs(root: &Path, hash: &str) {
+        for size in [256, 1024] {
+            fs::remove_file(thumb_path_in(root, hash, size).unwrap()).unwrap();
+        }
+    }
+
+    fn until(what: &str, ok: impl Fn() -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while !ok() {
+            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[test]
+    fn open_pipeline_order() {
+        let e = created();
+        take_steps();
+        let b = Path::new(&e.lib)
+            .with_file_name("libB")
+            .to_string_lossy()
+            .into_owned();
+        create_library(e.handle(), b, false).unwrap();
+        let want = |first: &'static str| {
+            vec![
+                "flush",
+                first,
+                "sweep",
+                "check",
+                "detach",
+                "install",
+                "join",
+                "remember",
+                "start_hook",
+            ]
+        };
+        assert_eq!(take_steps(), want("create"));
+        open_library(e.handle(), e.lib.clone()).unwrap();
+        assert_eq!(take_steps(), want("open"));
+    }
+
+    #[test]
+    fn open_reports_integrity() {
+        let e = created();
+        assert!(
+            open_library(e.handle(), e.lib.clone())
+                .unwrap()
+                .integrity
+                .is_none(),
+            "clean"
+        );
+        e.import("small.jpg").unwrap();
+        let gone = e.import("p3_red.png").unwrap().added[0].clone();
+        wait_saved(&e);
+        let root = root_of(&e);
+        let file = {
+            let st = e.app.state::<AppState>();
+            let open = lock(&st.open);
+            let o = open.as_ref().unwrap();
+            o.lib
+                .data
+                .references
+                .iter()
+                .find(|r| r.id == gone)
+                .unwrap()
+                .file
+                .clone()
+        };
+        fs::remove_file(root.join("images").join(&file)).unwrap();
+        let orphan = plant_orphan(&root, "rotated.jpg", "ab");
+        let stale = root.join("images").join(".tmpCrash");
+        fs::write(&stale, b"x").unwrap();
+        let view = open_library(e.handle(), e.lib.clone()).unwrap();
+        let r = view.integrity.expect("a report");
+        assert_eq!(r.swept_tmp, vec![stale.clone()]);
+        assert!(!stale.exists());
+        assert_eq!(r.missing_originals, vec![gone.clone()]);
+        assert_eq!(r.orphans, vec![orphan]);
+        assert!(
+            view.references.iter().any(|v| v.reference.id == gone),
+            "never dropped"
+        );
+        let json = serde_json::to_value(&r).unwrap();
+        assert!(json.get("missingOriginals").is_some(), "camelCase: {json}");
+    }
+
+    #[test]
+    fn tmp_planted_after_install_survives() {
+        let e = created();
+        let root = root_of(&e);
+        let late = root.join("images").join("late.tmp");
+        fs::write(&late, b"x").unwrap();
+        let id = e.import("small.jpg").unwrap().added[0].clone();
+        let patch = FieldPatch {
+            note: Some(Some("n".into())),
+            source_url: None,
+        };
+        set_field(e.handle(), vec![id], patch).unwrap();
+        wait_saved(&e);
+        assert!(late.exists(), "only an open sweeps");
+    }
+
+    #[test]
+    fn recover_orphans_is_one_undo_step() {
+        let e = created();
+        let root = root_of(&e);
+        let a = plant_orphan(&root, "small.jpg", "a1");
+        let b = plant_orphan(&root, "p3_red.png", "b2");
+        let view = open_library(e.handle(), e.lib.clone()).unwrap();
+        assert_eq!(view.integrity.unwrap().orphans.len(), 2);
+        let c = recover_orphans(e.handle()).unwrap();
+        let mut titles: Vec<&str> = c
+            .references
+            .iter()
+            .map(|v| v.reference.title.as_str())
+            .collect();
+        titles.sort();
+        assert_eq!(
+            titles,
+            ["Recovered image a1a1a1a1", "Recovered image b2b2b2b2"]
+        );
+        assert!(
+            c.references.iter().all(|v| v.reference.tags.is_empty()),
+            "Inbox items"
+        );
+        assert!(c.can_undo);
+        let u = undo(e.handle()).unwrap();
+        assert_eq!(u.removed.len(), 2);
+        assert!(!u.can_undo, "one step");
+        assert!(a.exists() && b.exists(), "the files stay");
+        wait_saved(&e);
+        // The undo's save is newer than both files: an undone recovery, like an undone
+        // import, is not offered again (controller ruling).
+        assert!(recover_orphans(e.handle()).unwrap().references.is_empty());
+    }
+
+    #[test]
+    fn undone_import_is_not_offered_after_reopen() {
+        let e = created();
+        e.import("small.jpg").unwrap();
+        wait_saved(&e);
+        undo(e.handle()).unwrap();
+        wait_saved(&e);
+        let view = open_library(e.handle(), e.lib.clone()).unwrap();
+        assert!(view.integrity.is_none(), "{:?}", view.integrity);
+    }
+
+    #[test]
+    fn unreadable_orphans_add_nothing() {
+        let e = created();
+        let root = root_of(&e);
+        let junk = root.join("images").join(format!("{}.png", "c3".repeat(32)));
+        fs::write(junk, b"not an image").unwrap();
+        let c = recover_orphans(e.handle()).unwrap();
+        assert!(c.references.is_empty());
+        assert!(!c.can_undo, "no undo step");
+    }
+
+    #[test]
+    fn edited_taxonomy_opens() {
+        let e = created();
+        let h = e.handle();
+        add_operation(h.clone(), "Pulse".into(), "Beat".into(), "".into(), None).unwrap();
+        let rename = TechniquePatch {
+            name: Some("Light and shadow".into()),
+            ..Default::default()
+        };
+        update_technique(h.clone(), "chiaroscuro".into(), rename).unwrap();
+        taxonomy_edit::add_domain(h.clone(), "Tempo".into(), "".into(), None, None).unwrap();
+        wait_saved(&e);
+        let view = open_library(e.handle(), e.lib.clone()).unwrap();
+        assert_eq!(view.warning, None);
+        assert!(view.integrity.is_none(), "{:?}", view.integrity);
+    }
+
+    #[test]
+    fn rebuild_is_off_lock() {
+        let e = created();
+        let id = e.import("small.jpg").unwrap().added[0].clone();
+        wait_saved(&e);
+        let root = root_of(&e);
+        let thumb = thumb_path_in(&root, &id, 256).unwrap();
+        drop_thumbs(&root, &id);
+        crate::integrity::tests::SLOW
+            .lock()
+            .unwrap()
+            .push((root.clone(), Duration::from_millis(1500)));
+        let heard = Arc::new(Mutex::new(vec![]));
+        let h2 = heard.clone();
+        e.app.listen("library://thumbs-rebuilt", move |ev| {
+            h2.lock().unwrap().push(ev.payload().to_string());
+        });
+        let view = open_library(e.handle(), e.lib.clone()).unwrap();
+        assert_eq!(view.integrity.unwrap().missing_thumbs, vec![id.clone()]);
+        let t0 = Instant::now();
+        let patch = FieldPatch {
+            note: Some(Some("while rebuilding".into())),
+            source_url: None,
+        };
+        set_field(e.handle(), vec![id.clone()], patch).unwrap();
+        assert!(
+            t0.elapsed() < Duration::from_millis(1000),
+            "an edit never waits for the rebuild"
+        );
+        assert!(!thumb.exists(), "the rebuild is still running");
+        until("the rebuild", || {
+            thumb.exists() && !heard.lock().unwrap().is_empty()
+        });
+        assert_eq!(heard.lock().unwrap()[0], format!("[\"{id}\"]"));
+    }
+
+    #[test]
+    fn rebuild_tmp_survives_reopen() {
+        // The slow hook sleeps between writing a thumbnail's .tmp and renaming it: a reopen in
+        // that window must wait for the gate, and its sweep must leave the live .tmp alone.
+        let e = created();
+        let id = e.import("small.jpg").unwrap().added[0].clone();
+        wait_saved(&e);
+        let root = root_of(&e);
+        drop_thumbs(&root, &id);
+        crate::integrity::tests::SLOW
+            .lock()
+            .unwrap()
+            .push((root.clone(), Duration::from_millis(800)));
+        open_library(e.handle(), e.lib.clone()).unwrap();
+        std::thread::sleep(Duration::from_millis(200)); // the rebuild holds the gate, mid-image
+        let live = PathBuf::from(format!(
+            "{}.tmp",
+            thumb_path_in(&root, &id, 256).unwrap().display()
+        ));
+        assert!(
+            live.exists(),
+            "the rebuild's .tmp is on disk while it holds the gate"
+        );
+        let t0 = Instant::now();
+        let again = open_library(e.handle(), e.lib.clone()).unwrap();
+        assert!(
+            t0.elapsed() >= Duration::from_millis(400),
+            "the reopen waited for the gate"
+        );
+        assert!(
+            crate::integrity::has_thumbs(&root, &id),
+            "the rebuild's thumbnails landed"
+        );
+        assert!(
+            again.integrity.is_none(),
+            "nothing swept, nothing left to rebuild: {:?}",
+            again.integrity
         );
     }
 }

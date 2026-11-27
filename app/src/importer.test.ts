@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import html from "../index.html?raw";
 import type { Api, Change, ImportResult } from "./api";
-import { mountImport, summaryHTML } from "./importer";
+import { integrityHTML, mountImport, summaryHTML } from "./importer";
 
 const text = (h: string) => {
   const d = document.createElement("div");
@@ -49,3 +49,23 @@ describe("importer", () => {
     expect(document.querySelector("#import-notice")!.textContent).toContain("Added 1 to the Inbox");
   });
 });
+
+describe("integrityHTML (Plan 6 Task 2)", () => {
+  const base = { sweptTmp: [], missingOriginals: [], missingThumbs: [], orphans: [], taxonomyBackupInvalid: false };
+  it("says nothing for housekeeping only", () => {
+    expect(integrityHTML(null)).toBe("");
+    expect(integrityHTML({ ...base, sweptTmp: ["x.tmp"], missingThumbs: ["a"] })).toBe("");
+  });
+  it("counts in singular and plural, with one action each", () => {
+    const one = integrityHTML({ ...base, orphans: ["o"], missingOriginals: ["m"] });
+    expect(one).toContain("Recovered 1 image to the Inbox.");
+    expect(one).toContain("1 reference is missing its image file.");
+    expect(one).toContain("data-recover");
+    expect(one).toContain("data-show-missing");
+    const many = integrityHTML({ ...base, orphans: ["o", "p"], missingOriginals: ["m", "n"], taxonomyBackupInvalid: true });
+    expect(many).toContain("Recovered 2 images to the Inbox.");
+    expect(many).toContain("2 references are missing their image files.");
+    expect(many).toContain("taxonomy.bak.json");
+  });
+});
+

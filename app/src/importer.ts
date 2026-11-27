@@ -2,7 +2,7 @@
 // to the store (B4: no reopen, so the import stays undoable), then show what happened. The other
 // intake routes (drop, paste, the Inbox's buttons) live in intake.ts; every route ends in the same
 // notice, with the note field and the duplicate rows (Task 9).
-import type { Api, Change, ImportReport, ImportResult, Skip } from "./api";
+import type { Api, Change, ImportReport, ImportResult, IntegrityReport, Skip } from "./api";
 import { esc } from "./esc";
 import type { DupRow } from "./intake";
 
@@ -73,6 +73,21 @@ export function intakeHTML(r: ImportReport, dups: DupRow[], savedNote?: string):
 
 /** `LibraryView.warning` (backup recovery, seed or taxonomy problems) for the notice. */
 export const warningHTML = (w?: string | null) => (w ? `<p>${esc(w)}</p>` : "");
+
+const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+
+/** Plan 6 Task 2: the open's integrity report for the same notice. Swept leftovers and
+ * rebuilt thumbnails are housekeeping and say nothing. */
+export function integrityHTML(r?: IntegrityReport | null): string {
+  if (!r) return "";
+  let html = "";
+  if (r.orphans.length)
+    html += `<p>Recovered ${n(r.orphans.length, "image", "images")} to the Inbox. <button type="button" class="text-btn" data-recover>Add them</button></p>`;
+  if (r.missingOriginals.length)
+    html += `<p>${n(r.missingOriginals.length, "reference is", "references are")} missing ${r.missingOriginals.length === 1 ? "its image file" : "their image files"}. <button type="button" class="text-btn" data-show-missing>Show them</button></p>`;
+  if (r.taxonomyBackupInvalid) html += `<p>The taxonomy backup (taxonomy.bak.json) is damaged. Horus left it as it is.</p>`;
+  return html;
+}
 
 /** Shows HTML in the `#import-notice` box. No listeners: safe to make more than one. */
 export function noticeIn(root: ParentNode): (html: string) => void {

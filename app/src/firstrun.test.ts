@@ -4,7 +4,8 @@ import html from "../index.html?raw";
 import type { DragDropEvent } from "@tauri-apps/api/webview";
 import seedJson from "../src-tauri/resources/taxonomy.json";
 import type { Api, LibraryView, Reference, Tag, Taxonomy } from "./api";
-import { boot, FIND_SIMILAR_COPY } from "./firstrun";
+import { boot, FIND_SIMILAR_COPY, reloadThumbs } from "./firstrun";
+import { createStore } from "./store";
 
 // Plan 4 Task 7 wiring: capture what boot() hands the Galaxy and what reaches the one openCompare.
 const wiring = vi.hoisted(() => ({
@@ -95,6 +96,8 @@ function fakeApi(lastLibrary: string | null): Api {
     similarByText: vi.fn(async () => []),
     similarByFile: vi.fn(async () => []),
     onSimilarStatus: vi.fn(async () => () => {}),
+    recoverOrphans: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
+    onThumbsRebuilt: vi.fn(async () => () => {}),
   };
 }
 
@@ -380,5 +383,49 @@ describe("boot wiring (Task 9)", () => {
     expect(document.querySelector(".inbox-tile")).toBeNull();
     expect(document.querySelector(".inbox-dock .picker")).toBeNull();
     view.destroy();
+  });
+});
+
+describe("rebuilt thumbnails (Plan 6 Task 2)", () => {
+  it("boot subscribes before the open and unsubscribes on destroy", async () => {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+    const order: string[] = [];
+    const off = vi.fn();
+    let heard: ((ids: string[]) => void) | null = null;
+    const early: Reference = {
+      id: "early", title: "Early", file: "early.jpg", hash: "early", width: 3, height: 4,
+      addedAt: "2026-11-28T00:00:00Z", tags: [], thumb256: "C:/lib/thumbs/256/early.jpg", thumb1024: "C:/lib/thumbs/1024/early.jpg",
+    };
+    const setSrc = vi.spyOn(HTMLImageElement.prototype, "src", "set");
+    const api: Api = {
+      ...fakeApi("C:/lib"),
+      openLibrary: vi.fn(async () => (order.push("open"), heard!(["early"]), { root: "C:/lib", references: [early], links: [], boards: [], warning: null, taxonomyReadOnly: false })),
+      getTaxonomy: vi.fn(async () => seedJson as unknown as Taxonomy),
+      onThumbsRebuilt: vi.fn(async (cb) => ((heard = cb), order.push("subscribe"), off)),
+    };
+    const view = await boot(document.body, api);
+    expect(order).toEqual(["subscribe", "open"]);
+    // The id heard during the open is replayed once the views exist: its <img> is re-requested.
+    const urls = [api.assetUrl(early.thumb256), api.assetUrl(early.thumb1024)];
+    expect(document.querySelector(`img[src="${urls[0]}"], img[src="${urls[1]}"]`)).not.toBeNull();
+    // The Inbox sets its tile's src once as it renders; the replay sets it once more.
+    expect(setSrc.mock.calls.filter(([v]) => v === urls[0])).toHaveLength(2);
+    setSrc.mockRestore();
+    view.destroy();
+    expect(off).toHaveBeenCalledTimes(1);
+  });
+
+
+  it("reloadThumbs re-requests only the rebuilt references' images", () => {
+    const r = (id: string) => ({ id, title: id, file: `${id}.jpg`, hash: id, width: 1, height: 1, addedAt: "", tags: [], thumb256: `C:/t/256/${id}.jpg`, thumb1024: `C:/t/1024/${id}.jpg` });
+    const api = { assetUrl: (p: string) => `asset://${p}` } as unknown as Api;
+    const store = createStore({ root: "C:/t", references: [r("a"), r("b")], links: [], boards: [], taxonomyReadOnly: false }, seedJson as unknown as Taxonomy);
+    document.body.innerHTML = `<img src="asset://C:/t/256/a.jpg"><img src="asset://C:/t/1024/a.jpg"><img src="asset://C:/t/256/b.jpg">`;
+    const set: string[] = [];
+    document.querySelectorAll("img").forEach((img) => {
+      Object.defineProperty(img, "src", { set: (v: string) => set.push(v), get: () => img.getAttribute("src") });
+    });
+    reloadThumbs(document, api, store, ["a"]);
+    expect(set.sort()).toEqual(["asset://C:/t/1024/a.jpg", "asset://C:/t/256/a.jpg"]);
   });
 });

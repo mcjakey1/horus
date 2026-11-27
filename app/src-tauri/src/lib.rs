@@ -6,6 +6,7 @@ pub mod export;
 pub mod history;
 pub mod hooks;
 pub mod import;
+pub mod integrity;
 pub mod library;
 pub mod model;
 pub mod saver;
@@ -39,6 +40,15 @@ pub fn ort_library(app: &tauri::AppHandle) -> tauri::Result<std::path::PathBuf> 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Plan 6 Task 2: first, so a second launch only focuses this window and exits; the
+        // startup sweep relies on one copy per library.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         // Plan 4 Task 5: "Open folder" after an export; the capability grants reveal-item-in-dir only.
         .plugin(tauri_plugin_opener::init())
@@ -99,6 +109,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::create_library,
             commands::open_library,
+            commands::recover_orphans,
             commands::get_taxonomy,
             commands::related,
             commands::graph_edges,
