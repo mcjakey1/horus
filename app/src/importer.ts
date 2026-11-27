@@ -1,4 +1,4 @@
-// "Import images…" / "Import folder…" in the status bar: pick, import, apply the returned Change
+// "Add images…" / "Add folder…" in the status bar: pick, import, apply the returned Change
 // to the store (B4: no reopen, so the import stays undoable), then show what happened. The other
 // intake routes (drop, paste, the Inbox's buttons) live in intake.ts; every route ends in the same
 // notice, with the note field and the duplicate rows (Task 9).
@@ -113,7 +113,7 @@ export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, sig
     if (b?.dataset.import === "files") void run(() => api.pickImages());
     else if (b?.dataset.import === "folder")
       void run(async () => {
-        const p = await api.pickFolder("Import a folder of images");
+        const p = await api.pickFolder("Add a folder of images");
         return p ? [p] : [];
       });
     else if ((e.target as Element).closest("#import-dismiss")) notice.hidden = true;

@@ -40,6 +40,8 @@ describe("importer", () => {
     } as unknown as Api;
     const onChange = vi.fn();
     mountImport(document.body, api, { libraryRoot: () => "C:\\lib", onChange });
+    // Design review F9: "Add", as in the Inbox.
+    expect([...document.querySelectorAll("[data-import]")].map((b) => b.textContent)).toEqual(["Add images…", "Add folder…"]);
     document.querySelector<HTMLButtonElement>('[data-import="files"]')!.click();
     await vi.waitFor(() => expect(onChange).toHaveBeenCalledWith(change));
     expect(api.importPaths).toHaveBeenCalledWith(["C:/in/x.jpg"]);

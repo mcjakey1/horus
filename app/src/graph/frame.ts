@@ -27,7 +27,8 @@ export interface Scene {
   setEdges(edges: SceneEdge[]): void; // the caller decides which edges are visible
   camera(): Camera;
   setCamera(c: Camera, animate?: boolean): void;
-  fitAll(): void;
+  /** `marginX`: world units added on each side, for labels wider than their nodes (the Tree, F8). */
+  fitAll(marginX?: number): void;
   on(ev: "hover" | "select" | "activate", fn: (id: string | null, mods: Mods) => void): void; // activate = double-click or Enter
   setDraggable(pred: (id: string) => boolean): void; // default: nothing is draggable
   onDrop(fn: (dragged: string, target: string | null) => void): void; // target = node under the pointer on release

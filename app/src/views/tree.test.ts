@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { LABEL_W } from "../graph/constants";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { Api, Reference } from "../api";
 import type { DataSource, Snapshot, SourceEvent } from "../data";
@@ -83,6 +84,7 @@ describe("Tree view", () => {
     expect(ns.filter((n) => n.kind === "op")).toHaveLength(4);
     expect(refIds(ns)).toEqual([]);
     expect(fake.scene.fitAll).toHaveBeenCalledTimes(1);
+    expect(fake.scene.fitAll).toHaveBeenCalledWith(LABEL_W / 2); // the names fit too (design review F8)
   });
 
   it("selecting_tech_expands_its_refs", () => {

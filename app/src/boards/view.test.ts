@@ -138,6 +138,14 @@ describe("mountBoards", () => {
     expect(store.scope).toBeNull();
   });
 
+  it("the scope button keeps its label; Delete sits apart, after a separator (design review F11)", () => {
+    mount();
+    $<HTMLButtonElement>('[data-act="scope"]').click();
+    expect($('[data-act="scope"]').textContent).toBe("Show only this board"); // CSS adds " · on" while pressed
+    const acts = [...document.querySelectorAll(".bd-actions > *")].map((e) => (e as HTMLElement).dataset.act ?? e.className);
+    expect(acts).toEqual(["scope", "rename", "export", "sep", "delete"]);
+  });
+
   it("Open goes to the Reference view; Remove from board drops the member", async () => {
     mount();
     $<HTMLButtonElement>('.bd-tile[data-id="r2"] [data-act="open"]').click();

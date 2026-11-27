@@ -389,7 +389,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     dirty = true;
   }
 
-  function fitAll() {
+  function fitAll(marginX = 0) {
     if (!nodes.size) return; // empty bounds are Infinity: keep the camera
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const n of nodes.values()) {
@@ -397,6 +397,8 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y);
       x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h);
     }
+    x0 -= marginX;
+    x1 += marginX;
     const b: Rect = { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
     setCamera(fit(b, view()), true);
   }

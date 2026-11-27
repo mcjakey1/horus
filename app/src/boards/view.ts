@@ -86,9 +86,10 @@ export function mountBoards(root: HTMLElement, api: Api, store: Store, deps: { o
     const scoped = store.scope === b.id;
     head.innerHTML = `${S.renaming ? `<input class="bd-rename" type="text" aria-label="Board name" value="${esc(b.name)}">` : `<h2 class="bd-name">${esc(b.name)}</h2>`}
       <div class="bd-actions">
-        <button type="button" class="text-btn" data-act="scope" aria-pressed="${scoped}">${scoped ? "Showing only this board" : "Show only this board"}</button>
+        <button type="button" class="text-btn bd-scope" data-act="scope" aria-pressed="${scoped}">Show only this board</button>
         <button type="button" class="text-btn" data-act="rename">Rename</button>
         <button type="button" class="text-btn" data-act="export">Export board to folder…</button>
+        <span class="sep" aria-hidden="true"></span>
         <button type="button" class="text-btn" data-act="delete">Delete</button>
       </div>`;
     if (S.renaming) {
