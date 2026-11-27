@@ -55,10 +55,10 @@ describe("Compare", () => {
     await tick();
     const li = $('.cmp-shared li[data-tech="t2"]');
     expect(li.style.getPropertyValue("--t")).toBe("var(--x-rose-text)");
-    expect(li.textContent).toBe("Beat › Tech t2");
+    expect(li.textContent).toBe("Beat › Feature › Tech t2"); // the full path (design judgement #5)
     expect([...document.querySelectorAll('.cmp-side[data-side="a"] .cmp-only li')].map((l) => l.textContent)).toEqual(["Beat › Tech t1"]);
     expect(document.querySelector(".cmp-branches")).toBeNull(); // its branch has a shared technique: no empty list (F7)
-    expect($(".cmp-score").textContent).toBe("0.42 · related by technique");
+    expect($(".cmp-score").textContent).toBe("0.42 related by technique");
     // hovering a technique outlines its region on the image that carries it, in its ink
     li.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
     const out = $('.cmp-side[data-side="a"] .cmp-out');
@@ -147,10 +147,10 @@ describe("Compare", () => {
     await tick();
     expect(api.scorePair).toHaveBeenCalledTimes(3);
     expect(shared()).toEqual(["t2", "t3"]);
-    expect($(".cmp-score").textContent).toBe("0.90 · related by technique");
+    expect($(".cmp-score").textContent).toBe("0.90 related by technique");
     late(scored(0.1)); // the superseded reply lands last: ignored
     await tick();
-    expect($(".cmp-score").textContent).toBe("0.90 · related by technique");
+    expect($(".cmp-score").textContent).toBe("0.90 related by technique");
   });
 
   it("is a modal dialog that keeps Tab inside", async () => {
