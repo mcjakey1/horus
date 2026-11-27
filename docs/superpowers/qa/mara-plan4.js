@@ -46,7 +46,7 @@ async function launch(tag) {
   page.on("request", (r) => { const u = new URL(r.url()); if (u.hostname === "ipc.localhost") ipcLog.push(decodeURIComponent(u.pathname.slice(1))); });
   page.on("console", (m) => { if (m.type() === "error") consoleErr.push(`${tag}: ${m.text().slice(0, 200)}`); });
   page.on("pageerror", (e) => ok(`page error (${tag})`, false, e.message));
-  page.setDefaultTimeout(8000); P = page;
+  page.setDefaultTimeout(8000); P = page; if (await page.waitForSelector(".intro", { timeout: 4000 }).catch(() => null)) { await page.keyboard.press("Shift"); await page.waitForSelector(".intro", { state: "detached", timeout: 5000 }).catch(() => {}); } // Plan 6: the intro plays on every fresh config
   await page.emulateMedia({ colorScheme: "light" });
   return { b, page };
 }
@@ -441,7 +441,7 @@ async function main() {
         await page.mouse.move(x1, y1); await page.mouse.down(); await page.mouse.move(x2, y2, { steps: 10 });
         Object.assign(pl, await rectOf(page, ".lb-plate")); zDraw2 = await text(page, ".lb-zoom");
         await page.mouse.up(); await page.waitForSelector(".lightbox .lb-side .picker"); await sleep(300);
-      } else await page.keyboard.press("Escape"); // clears the query
+      } else { await page.keyboard.press("Escape"); await page.evaluate(() => document.activeElement?.blur()); } // clears the query; Plan 6: focus stays in the search (F1 fixed), so leave it before "1"
       await sleep(300);
       const zPick = await text(page, ".lb-zoom");
       const nBox = await page.evaluate(() => document.querySelectorAll(".lb-box").length);
