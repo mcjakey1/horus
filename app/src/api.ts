@@ -147,6 +147,22 @@ export type Settings = {
   findSimilar: "unset" | "on" | "off";
 };
 
+/** Plan 5 Find similar. `error` is artist copy from Rust's one copy table, never raw error text. */
+export type SimilarPhase = "off" | "downloading" | "verifying" | "loading" | "indexing" | "paused" | "ready" | "error";
+export type SimilarStatus = {
+  phase: SimilarPhase;
+  downloadDone: number;
+  /** Always the model's full size, in every phase. */
+  downloadTotal: number;
+  indexed: number;
+  total: number;
+  /** The model folder plus the open library's embeddings.bin. */
+  diskBytes: number;
+  error: string | null;
+};
+/** Highest first; the UI shows rank order only, never the score (it differs by mode). */
+export type SimHit = { id: string; score: number };
+
 export interface Api {
   /** `seedDemo` imports the bundled demo set into the new library. */
   createLibrary(path: string, seedDemo: boolean): Promise<LibraryView>;
@@ -234,6 +250,22 @@ export interface Api {
   onSaveFailed(cb: (message: string) => void): Promise<() => void>;
   /** The window's close waits for a running import; Rust closes it when that ends. */
   onCloseWaiting(cb: () => void): Promise<() => void>;
+  // Plan 5 Find similar. Search errors are wire codes: "FindSimilarOff", "NotIndexedYet",
+  // "TooLarge", "Unreadable"; anything else is artist copy.
+  similarStatus(): Promise<SimilarStatus>;
+  /** Sets findSimilar "on", then downloads if needed, loads and indexes in the background. */
+  similarEnable(): Promise<SimilarStatus>;
+  /** Sets findSimilar "off", stops indexing, frees the model; keeps the files. */
+  similarDisable(): Promise<SimilarStatus>;
+  /** Disable, then delete the model folder and the open library's embeddings.bin. */
+  similarRemoveModel(): Promise<SimilarStatus>;
+  similarPause(paused: boolean): Promise<SimilarStatus>;
+  similarByRef(id: string): Promise<SimHit[]>;
+  similarByText(q: string): Promise<SimHit[]>;
+  /** An image file outside the library: decoded in memory, never imported. */
+  similarByFile(path: string): Promise<SimHit[]>;
+  /** Every phase change and progress tick (at most 4 a second). */
+  onSimilarStatus(cb: (s: SimilarStatus) => void): Promise<() => void>;
 }
 
 const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "tif", "tiff", "gif"];
@@ -300,4 +332,13 @@ export const tauriApi: Api = {
   onSaveStatus: (cb) => listen<SaveStatus>("save-status", (e) => cb(e.payload)),
   onSaveFailed: (cb) => listen<{ message: string }>("save-failed", (e) => cb(e.payload.message)),
   onCloseWaiting: (cb) => listen("close-waiting", () => cb()),
+  similarStatus: () => invoke("similar_status"),
+  similarEnable: () => invoke("similar_enable"),
+  similarDisable: () => invoke("similar_disable"),
+  similarRemoveModel: () => invoke("similar_remove_model"),
+  similarPause: (paused) => invoke("similar_pause", { paused }),
+  similarByRef: (id) => invoke("similar_by_ref", { id }),
+  similarByText: (q) => invoke("similar_by_text", { q }),
+  similarByFile: (path) => invoke("similar_by_file", { path }),
+  onSimilarStatus: (cb) => listen<SimilarStatus>("similar://status", (e) => cb(e.payload)),
 };

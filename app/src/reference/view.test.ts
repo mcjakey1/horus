@@ -120,6 +120,16 @@ function fakeApi(): Api {
     onSaveStatus: vi.fn(async () => () => {}),
     onSaveFailed: vi.fn(async () => () => {}),
     onCloseWaiting: vi.fn(async () => () => {}),
+    // Plan 5: Find similar stays off in these tests.
+    similarStatus: vi.fn(async () => ({ phase: "off" as const, downloadDone: 0, downloadTotal: 213373093, indexed: 0, total: 0, diskBytes: 0, error: null })),
+    similarEnable: vi.fn(async () => ({ phase: "off" as const, downloadDone: 0, downloadTotal: 213373093, indexed: 0, total: 0, diskBytes: 0, error: null })),
+    similarDisable: vi.fn(async () => ({ phase: "off" as const, downloadDone: 0, downloadTotal: 213373093, indexed: 0, total: 0, diskBytes: 0, error: null })),
+    similarRemoveModel: vi.fn(async () => ({ phase: "off" as const, downloadDone: 0, downloadTotal: 213373093, indexed: 0, total: 0, diskBytes: 0, error: null })),
+    similarPause: vi.fn(async () => ({ phase: "off" as const, downloadDone: 0, downloadTotal: 213373093, indexed: 0, total: 0, diskBytes: 0, error: null })),
+    similarByRef: vi.fn(async () => []),
+    similarByText: vi.fn(async () => []),
+    similarByFile: vi.fn(async () => []),
+    onSimilarStatus: vi.fn(async () => () => {}),
   };
 }
 
