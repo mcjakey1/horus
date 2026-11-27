@@ -1,5 +1,6 @@
 // Leaders: curves from each region number on the plate to its callout number.
 // Drawn always, shown only on hover or pin (CSS `.has-hover`). Port of prototype drawLeaders/hot.
+import { applyCss } from "../css";
 
 /** Redraws every leader. `colors[i]` is the operation colour for tag i. */
 export function drawLeaders(root: HTMLElement, colors: string[], hotIndex: number | null): void {
@@ -20,9 +21,10 @@ export function drawLeaders(root: HTMLElement, colors: string[], hotIndex: numbe
     const x1 = a.right - w.left, y1 = a.top + a.height / 2 - w.top;
     const x2 = b.left - w.left - 4, y2 = b.top + b.height / 2 - w.top;
     const dx = (x2 - x1) * 0.5;
-    out += `<path data-i="${i}" style="--hot:${color}" d="M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}"/>`;
+    out += `<path data-i="${i}" data-css="--hot:${color}" d="M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}"/>`;
   });
   svg.innerHTML = out;
+  applyCss(svg);
   if (hotIndex != null) highlight(root, hotIndex, colors[hotIndex]);
 }
 

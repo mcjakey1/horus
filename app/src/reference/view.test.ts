@@ -400,8 +400,10 @@ describe("Reference view", () => {
     view.show("q");
     await settle();
     for (const el of [$("#pane-callouts .call"), $("#boxes .box")]) {
-      expect(el.getAttribute("style")).toContain("--c:var(--ink-2)");
+      // Set through the CSSOM (applyCss, Plan 6 CSP), so read the property, not the attribute text.
+      expect(el.style.getPropertyValue("--c").trim()).toBe("var(--ink-2)");
       expect(el.getAttribute("style")).not.toContain("--diff");
+      expect(el.hasAttribute("data-css")).toBe(false);
     }
   });
 

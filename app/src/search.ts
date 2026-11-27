@@ -3,6 +3,7 @@
 // Plan 5 adds option B ("Looks similar") as its own group below, from the `similar` hook or a
 // dropped image.
 import type { Api, Hit } from "./api";
+import { applyCss } from "./css";
 import { esc } from "./esc";
 
 export type SearchHooks = {
@@ -60,9 +61,9 @@ export function mountSearch(root: HTMLElement, api: Api, hooks: SearchHooks, sig
   function row(h: Hit, k: number): string {
     if (h.kind === "technique") {
       const op = hooks.operationLabel(h.operationId);
-      return `<li role="option" id="opt-${k}" data-t="${esc(h.id)}" aria-selected="false"><span class="sw" style="background:${op.color}"></span><span><b class="serif">${esc(hooks.techniqueName(h.id))}</b><small>${esc(op.name)} · ${esc(op.plain)}</small></span><span class="n">${h.count}</span></li>`;
+      return `<li role="option" id="opt-${k}" data-t="${esc(h.id)}" aria-selected="false"><span class="sw" data-css="background:${op.color}"></span><span><b class="serif">${esc(hooks.techniqueName(h.id))}</b><small>${esc(op.name)} · ${esc(op.plain)}</small></span><span class="n">${h.count}</span></li>`;
     }
-    return `<li role="option" id="opt-${k}" data-r="${esc(h.id)}" aria-selected="false"><span class="sw" style="background:var(--ink-3)"></span><span><b class="serif">${esc(hooks.referenceTitle(h.id) ?? h.id)}</b><small>reference · matches your words</small></span><span></span></li>`;
+    return `<li role="option" id="opt-${k}" data-r="${esc(h.id)}" aria-selected="false"><span class="sw sw-ref"></span><span><b class="serif">${esc(hooks.referenceTitle(h.id) ?? h.id)}</b><small>reference · matches your words</small></span><span></span></li>`;
   }
 
   /** The "Looks similar" group: its own `role="group"`, after option A, no score (Global
@@ -106,6 +107,7 @@ export function mountSearch(root: HTMLElement, api: Api, hooks: SearchHooks, sig
         ? `<li class="empty" role="option" aria-disabled="true">No technique matches “${esc(q)}”. Try a plain word like “shadow” or “empty space”.</li>`
         : "";
     ul.innerHTML = a + group();
+    applyCss(ul);
     // Option B can land after an arrow key: keep that option selected, else the first.
     const opts = [...ul.querySelectorAll<HTMLElement>("li[id]")];
     const on = opts.find((li) => li.id === activeId) ?? opts[0];

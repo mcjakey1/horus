@@ -2,6 +2,7 @@
 // the Rust `related` command. The references, links and taxonomy come from the Store (tags
 // carry ids only); the view keeps only its own state: focus, trail, pin, filter.
 import type { Api, Reference, Scored, Settings, Tag } from "../api";
+import { applyCss } from "../css";
 import { esc } from "../esc";
 import { mountImport, warningHTML } from "../importer";
 import { digitOf, letterOf } from "../keys";
@@ -223,10 +224,11 @@ export function mountReference(
         const r = t.region, whole = !r;
         const pos = whole ? "" : `left:${r.x * 100}%;top:${r.y * 100}%;width:${r.w * 100}%;height:${r.h * 100}%`;
         const wholeIdx = ref.tags.slice(0, i).filter((x) => !x.region).length;
-        return `<div class="box${whole ? " is-whole" : ""}" data-i="${i}" data-state="${stateOf(t)}" style="${pos};--c:${opColor(t.operationId)};--on:${opOn(t.operationId)}">
-        <span class="num" style="${whole ? `top:${wholeIdx * 34}px` : ""}">${i + 1}</span></div>`;
+        return `<div class="box${whole ? " is-whole" : ""}" data-i="${i}" data-state="${stateOf(t)}" data-css="${pos};--c:${opColor(t.operationId)};--on:${opOn(t.operationId)}">
+        <span class="num" data-css="${whole ? `top:${wholeIdx * 34}px` : ""}">${i + 1}</span></div>`;
       })
       .join("");
+    applyCss($("#boxes")!);
   }
 
   function thumbsFor(technique?: string) {
@@ -260,7 +262,7 @@ export function mountReference(
         const name = t.techniqueId ? techName(t.techniqueId) : `${opPlain(op) || opName(op)}, technique not chosen yet`;
         const domain = domainOf(t.branchId);
         const def = techDef(t.techniqueId);
-        return `<article class="call" data-i="${i}" style="--op-text:${opText(op)};--hot:${opColor(op)};--c:${opColor(op)};--on:${opOn(op)}">
+        return `<article class="call" data-i="${i}" data-css="--op-text:${opText(op)};--hot:${opColor(op)};--c:${opColor(op)};--on:${opOn(op)}">
         <span class="num" aria-hidden="true">${i + 1}</span>
         <div><h3><button class="pin" aria-pressed="false" aria-label="Pin callout ${i + 1}: ${esc(name)}">${esc(name)}</button><span class="state">${stateLabel[stateOf(t)]}</span></h3>
           <div class="path"><span class="op">${esc(opName(op))}</span>${domain ? ` · ${esc(domain)}` : ""} · ${esc(opPlain(op))}</div>
@@ -282,6 +284,7 @@ export function mountReference(
         </div></article>`;
       })
       .join("");
+    applyCss(pane);
   }
 
   function renderRanked(ref: Reference) {
