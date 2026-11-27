@@ -146,7 +146,7 @@ export function mountPicker(
     const picked = S.branch.get(t.id);
     const focused = domainRow.contains(document.activeElement) ? (document.activeElement as HTMLInputElement).value : null;
     domainRow.hidden = false;
-    domainRow.innerHTML = `<fieldset class="pk-domains" data-tech="${esc(t.id)}"><legend>Domain for ${esc(t.name)}</legend>${d.ask
+    domainRow.innerHTML = `<fieldset class="pk-domains" data-tech="${esc(t.id)}"><legend title="Domain for ${esc(t.name)}">Domain for ${esc(t.name)}</legend>${d.ask
       .map(
         (b) =>
           `<label><input type="radio" name="${name}-domain" value="${esc(b.id)}"${b.id === picked ? " checked" : ""}> ${esc(domainName(b.id))}</label>`,
