@@ -319,7 +319,7 @@ export function mountReference(
           .map((id) => `<li class="chip" data-t="${esc(id)}"><span>${esc(techName(id))}</span><button class="chip-x" data-untoggle="${esc(id)}" aria-label="Remove ${esc(techName(id))} from the filter">×</button></li>`)
           .join("")}</ul>
         <p class="pane-note">${list.length} references · <button class="settings" id="clear-filter">Clear</button></p></div>`
-      : `<p class="pane-note">${list.length} related · strongest first</p>`;
+      : `<p class="pane-note">${list.length} related · strongest first</p>${list.length ? `<p class="pane-tip">Shift-click one to compare it with this reference.</p>` : ""}`; // design judgement, heuristic 6
     // SPEC §4: links the artist drew are always shown (a filter or a board scope never hides
     // them), listed first, never mixed into the score; a linked reference appears once.
     const { linked } = linkedFirst(S.related, linksOf(ref), ref.id);
@@ -332,7 +332,7 @@ export function mountReference(
           .map(({ link, other, score }) => {
             const r = store.refs.get(other)!;
             const sc = score === undefined ? `<small>not related by technique</small>` : fmt(score);
-            return `<button class="row linked" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>“${esc(link.why)}”</small>${store.inScope(r.id) ? "" : `<small class="off-board-note">Not on this board</small>`}</span><span class="sc">${sc}</span></button>`;
+            return `<button class="row linked" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b title="${esc(r.title)}">${esc(r.title)}</b><small>“${esc(link.why)}”</small>${store.inScope(r.id) ? "" : `<small class="off-board-note">Not on this board</small>`}</span><span class="sc">${sc}</span></button>`;
           })
           .join("")
       : "";
@@ -345,7 +345,7 @@ export function mountReference(
           : x.sharedBranches.length
             ? `same ${branchLabel(x.sharedBranches[0])}`
             : "";
-        return `<button class="row${prev.size && !prev.has(r.id) ? " is-new" : ""}" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>${esc(why)}</small></span><span class="sc">${r.id === ref.id ? "this" : fmt(x.score)}</span></button>`;
+        return `<button class="row${prev.size && !prev.has(r.id) ? " is-new" : ""}" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b title="${esc(r.title)}">${esc(r.title)}</b><small>${esc(why)}</small></span><span class="sc">${r.id === ref.id ? "this" : fmt(x.score)}</span></button>`;
       })
       .join("");
     const empty = f.refs
@@ -369,7 +369,7 @@ export function mountReference(
       .map((l) => {
         const other = store.refs.get(l.fromRef === ref.id ? l.toRef : l.fromRef)!;
         const t = esc(other.title);
-        return `<div class="link" data-link="${esc(l.id)}"><button class="row" data-go="${esc(other.id)}" data-ref-id="${esc(other.id)}"><span class="t">${img(other)}</span><span><b>${t}</b><small>your link</small></span><span></span></button><p class="why">“${esc(l.why)}”</p>
+        return `<div class="link" data-link="${esc(l.id)}"><button class="row" data-go="${esc(other.id)}" data-ref-id="${esc(other.id)}"><span class="t">${img(other)}</span><span><b title="${t}">${t}</b><small>your link</small></span><span></span></button><p class="why">“${esc(l.why)}”</p>
           <div class="link-actions"><button type="button" class="text-btn" data-link-edit="${esc(l.id)}" aria-label="Edit the note on the link to ${t}">Edit</button><button type="button" class="text-btn" data-link-del="${esc(l.id)}" aria-label="Delete the link to ${t}">Delete</button></div></div>`;
       })
       .join("");
@@ -377,7 +377,7 @@ export function mountReference(
     const hadFocus = pane.contains(document.activeElement); // innerHTML drops it (a Delete, a save)
     pane.innerHTML =
       `<button type="button" class="text-btn link-new" data-link-new aria-keyshortcuts="k">+ Link to…</button><p class="links-msg" role="status"></p>` +
-      (ls.length ? rows : `<p class="none">No links drawn from this reference yet.</p>`);
+      (ls.length ? rows : `<p class="none">No links drawn from this reference yet. Press <kbd>k</kbd> to draw one.</p>`);
     if (hadFocus) pane.querySelector<HTMLElement>("[data-link-new]")!.focus();
   }
 
@@ -670,11 +670,12 @@ export function mountReference(
     picker = mine;
   }
   // Design review F1: Tag…, Link…, Boards… and Open lightbox share one row, clear of the readout.
-  $("#lab")!.insertAdjacentHTML("beforeend", `<div class="lab-actions"></div>`);
-  const actions = $<HTMLElement>("#lab .lab-actions")!;
+  // Design judgement #7: that row is a hairline toolbar above the card, never on it (Constant Card Rule).
+  $("#lab")!.insertAdjacentHTML("beforebegin", `<div class="lab-actions" role="toolbar" aria-label="This reference"></div>`);
+  const actions = $<HTMLElement>(".work > .lab-actions")!;
   signal.addEventListener("abort", () => actions.remove());
   actions.insertAdjacentHTML("beforeend", `<button type="button" class="tag-open" aria-keyshortcuts="t">Tag…</button>`);
-  const tagOpen = $<HTMLButtonElement>("#lab .tag-open")!;
+  const tagOpen = $<HTMLButtonElement>(".lab-actions .tag-open")!;
   tagOpen.addEventListener("click", openPicker, { signal });
   signal.addEventListener("abort", () => {
     closePicker();
@@ -697,7 +698,7 @@ export function mountReference(
     "beforeend",
     `<button type="button" class="link-handle" aria-keyshortcuts="k" title="Drag onto a reference to link it, or click to choose one">Link…</button>`,
   );
-  const handle = $<HTMLButtonElement>("#lab .link-handle")!;
+  const handle = $<HTMLButtonElement>(".lab-actions .link-handle")!;
   let drag: { x: number; y: number; moved: boolean; cancelled: boolean; leader: HTMLElement } | null = null;
   let justDragged = false; // the click that follows a drag's pointerup must not open a second editor
   function endDrag() {
@@ -773,7 +774,7 @@ export function mountReference(
     boardsLine.querySelector("[data-v]")!.textContent = names.length ? names.join(" · ") : "On no board";
     boardsLine.hidden = false;
   }
-  const boardsOpen = $<HTMLButtonElement>("#lab .boards-open")!;
+  const boardsOpen = $<HTMLButtonElement>(".lab-actions .boards-open")!;
   const offBoard = $<HTMLElement>("#lab .off-board")!;
   boardsOpen.addEventListener("click", openBoardMenu, { signal });
   signal.addEventListener("abort", () => {
@@ -796,7 +797,7 @@ export function mountReference(
     });
   }
   actions.insertAdjacentHTML("beforeend", `<button type="button" class="lb-open" aria-keyshortcuts="l">Open lightbox</button>`);
-  const lbOpen = $<HTMLButtonElement>("#lab .lb-open")!;
+  const lbOpen = $<HTMLButtonElement>(".lab-actions .lb-open")!;
   lbOpen.addEventListener("click", openLb, { signal });
   signal.addEventListener("abort", () => {
     lightbox?.close();
@@ -806,7 +807,7 @@ export function mountReference(
   // ---------- Details (Plan 6 Task 3c, R27): title, creator, year and credit ----------
   let details: { close(): void } | null = null;
   actions.insertAdjacentHTML("beforeend", `<button type="button" class="details-open">Details…</button>`);
-  const detailsOpen = $<HTMLButtonElement>("#lab .details-open")!;
+  const detailsOpen = $<HTMLButtonElement>(".lab-actions .details-open")!;
   detailsOpen.addEventListener("click", () => {
     const ref = focusRef();
     if (!ref) return;

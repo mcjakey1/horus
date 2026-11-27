@@ -57,7 +57,7 @@ export function mountPicker(
     <div class="pk-chips" role="group" aria-label="Tags on this reference"></div>`;
   const $ = <T extends HTMLElement = HTMLElement>(s: string) => el.querySelector<T>(s)!;
   const opsEl = $(".pk-ops"), search = $<HTMLInputElement>(".pk-search"), grid = $(".pk-grid");
-  const slot = $(".pk-form-slot"), msg = $(".pk-msg"), chips = $(".pk-chips");
+  const slot = $(".pk-form-slot"), msg = $(".pk-msg"), chips = $(".pk-chips"), applyBtn = $<HTMLButtonElement>(".pk-apply");
 
   const tax = () => store.tax;
   const hasOp = (id: string) => tax().operations.some((o) => o.id === id);
@@ -108,7 +108,7 @@ export function mountPicker(
       opsEl.innerHTML = list
         .map((o, i) => {
           const l = opLabel(tax(), o.id);
-          return `<button type="button" class="pk-op" data-op="${esc(o.id)}" aria-pressed="${o.id === S.op}" aria-keyshortcuts="${i + 1}" tabindex="${o.id === stop ? 0 : -1}"><span class="pk-sw" aria-hidden="true"></span><span class="serif">${esc(l.plain)}</span><span class="mono">${esc(l.name)}</span></button>`;
+          return `<button type="button" class="pk-op" data-op="${esc(o.id)}" aria-pressed="${o.id === S.op}" aria-keyshortcuts="${i + 1}" tabindex="${o.id === stop ? 0 : -1}"><span class="pk-sw" aria-hidden="true"></span><span class="serif">${esc(l.plain)}</span><span class="pk-opname">${esc(l.name)}</span></button>`;
         })
         .join("");
       opsEl.querySelectorAll<HTMLElement>(".pk-op").forEach((b) => b.style.setProperty("--c", opInk(tax(), b.dataset.op!).base));
@@ -151,6 +151,7 @@ export function mountPicker(
   }
 
   function renderCards() {
+    syncApply();
     keep(grid, () => {
       if (!S.op) {
         listbox(false);
@@ -297,10 +298,16 @@ export function mountPicker(
     renderCards();
   }
 
+  /** Apply is live only when apply() would send something (design judgement #11). */
+  function syncApply() {
+    applyBtn.disabled = S.form || (!S.op && !S.ticks.length);
+  }
+
   function openForm() {
     if (store.taxonomyReadOnly || !S.op) return;
     const domains = [...new Set(tax().branches.filter((b) => b.operationId === S.op).map((b) => b.domainId))];
     S.form = true;
+    syncApply();
     slot.innerHTML = `<form class="pk-form">
       <label>Name <input name="name" type="text" required maxlength="80" autocomplete="off" value="${esc(S.q.trim())}"></label>
       <label>One-line description <input name="description" type="text" maxlength="200" autocomplete="off"></label>
@@ -315,6 +322,7 @@ export function mountPicker(
   function closeForm() {
     S.form = false;
     slot.innerHTML = "";
+    syncApply();
   }
 
   function submitForm(f: HTMLFormElement) {

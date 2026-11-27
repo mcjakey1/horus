@@ -229,6 +229,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       const body = new PIXI.Container();
       const half = n.size / 2;
       if (n.kind === "ref") {
+        if (n.faint) root.alpha = 0.5;
         body.addChild(new PIXI.Graphics().rect(-half, -half, n.size, n.size).fill(resolveColor("var(--card)")));
         const { plate, outline } = tileBox(n.aspect || 3 / 4, n.size, n.outline?.region);
         const sprite = new PIXI.Sprite(PIXI.Texture.EMPTY);
@@ -246,11 +247,14 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         }
       } else {
         const ink = resolveColor(n.color);
-        const g = new PIXI.Graphics().rect(-half, -half, n.size, n.size);
+        // Taxonomy nodes are markers, so circles; squares stay for data, the references (DESIGN.md Shapes; design judgement #13).
+        const g = new PIXI.Graphics().circle(0, 0, half);
         if (n.kind === "op") g.fill(ink);
         else g.fill(resolveColor("var(--panel)")).stroke({ width: 1, color: ink });
         body.addChild(g);
-        const t = new PIXI.Text({ text: n.label, style: { fontFamily: "Source Serif 4, Georgia, serif", fontSize: LABEL_FONT, fill: resolveColor("var(--ink)") } });
+        const t = new PIXI.Text({ text: n.label, style: { fontFamily: "Source Serif 4, Georgia, serif", fontSize: LABEL_FONT, fill: resolveColor("var(--ink)"),
+          // A shell-coloured halo: hierarchy lines pass behind a name, never through it (F3).
+          stroke: { color: resolveColor("var(--shell)"), width: 4, join: "round" }, padding: 4 } }); // padding: the halo never crops a last glyph
         t.anchor.set(0.5, 0);
         // Placed per frame in update(): the offset is screen px (design review F5).
         body.addChild(t);
@@ -285,14 +289,20 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       if (!n || n.kind === "label") return;
       const r = nodeRect(n);
       const pad = 3 / cam.scale;
-      marks.rect(r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad).stroke({ width: w / cam.scale, color: resolveColor(color) });
+      if (n.kind === "ref") marks.rect(r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad);
+      else marks.circle(n.x, n.y, r.w / 2 + pad); // a ring round a marker
+      marks.stroke({ width: w / cam.scale, color: resolveColor(color) });
     };
     if (hovered !== selected) ring(hovered, "var(--line-2)", 1);
     ring(selected, "var(--ink)", 2);
     if (hint && hint !== "blocked") ring(hint.id, hint.color, 2);
     if (ghost) {
       const n = nodes.get(ghost.id);
-      if (n && n.kind !== "label") marks.rect(ghost.x - n.size / 2, ghost.y - n.size / 2, n.size, n.size).fill({ color: resolveColor("var(--ink-2)"), alpha: 0.35 });
+      if (n && n.kind !== "label") {
+        if (n.kind === "ref") marks.rect(ghost.x - n.size / 2, ghost.y - n.size / 2, n.size, n.size);
+        else marks.circle(ghost.x, ghost.y, n.size / 2);
+        marks.fill({ color: resolveColor("var(--ink-2)"), alpha: 0.35 });
+      }
     }
   }
 
@@ -336,7 +346,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         o.label.position.set(0, n.size / 2 + dy / cam.scale);
         // The selected and hovered names always show (rank -1).
         const rank = id === selected || id === hovered ? -1 : n.kind === "op" ? 0 : n.kind === "branch" ? 1 : 2;
-        names.push({ id, x: (n.x - cam.x) * cam.scale, y: (n.y + n.size / 2 - cam.y) * cam.scale + dy, w: o.label.width * cam.scale, h: LABEL_PX * 1.25, rank });
+        names.push({ id, x: (n.x - cam.x) * cam.scale, y: (n.y + n.size / 2 - cam.y) * cam.scale + dy - 2, w: o.label.width * cam.scale + 4, h: LABEL_PX * 1.25 + 4, rank }); // 2 px margin all round: names that only touch hide by rank too (F3)
         named.set(id, o.label);
       }
       if (n.kind === "ref" && o.sprite) {
@@ -383,7 +393,12 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   app.ticker.add(tick);
   const perf = import.meta.env.DEV || import.meta.env.VITE_PERF ? perfOverlay(app, host, () => tex.size()) : null;
 
+  // The pad of the last fitAll while the camera still sits at it; any other move clears it. A resize
+  // (a narrower window, a hidden view shown) then fits again (design judgement P1-1: fit at 760).
+  let fitPad: number | null = null;
+  let lastPad = 0; // the view's own fit pad, for the 0 key
   function setCamera(c: Camera, animate = false) {
+    fitPad = null;
     if (animate && !reducedMotion()) tween = { from: cam, to: c, t0: performance.now() };
     else {
       tween = null;
@@ -392,7 +407,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     dirty = true;
   }
 
-  function fitAll(padPx = 0) {
+  function fitAll(padPx = 0, animate = true) {
     if (!nodes.size) return; // empty bounds are Infinity: keep the camera
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const n of nodes.values()) {
@@ -401,7 +416,8 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h);
     }
     const b: Rect = { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
-    setCamera(fit(b, view(), 40 + padPx), true); // 40: fit's own padding
+    setCamera(fit(b, view(), 40 + padPx), animate); // 40: fit's own padding
+    fitPad = lastPad = padPx;
   }
 
   /** Topmost pickable node under a world point, skipping `except` (the node being dragged). */
@@ -499,7 +515,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     const zero = e.key === "0" || (!e.shiftKey && e.code === "Digit0"); // AZERTY's unshifted "à"
     if (e.key === "+" || e.key === "=") setCamera(zoomAt(base, w / 2, h / 2, 1.25), true);
     else if (e.key === "-") setCamera(zoomAt(base, w / 2, h / 2, 0.8), true);
-    else if (zero) fitAll();
+    else if (zero) fitAll(lastPad);
     else if (e.key === "Enter" && selected) emit("activate", selected, { shift: e.shiftKey });
     else if (e.key.startsWith("Arrow") && selected === null) {
       // With a selection, the view moves it (navigate.ts); without one, the arrows pan.
@@ -535,6 +551,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   const resize = typeof ResizeObserver === "function"
     ? new ResizeObserver(() => {
       app.resize();
+      if (fitPad !== null && host.clientWidth && host.clientHeight) fitAll(fitPad, false); // hidden (0 × 0) keeps the pad for its show
       dirty = true;
     })
     : null;

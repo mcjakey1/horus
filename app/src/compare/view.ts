@@ -55,8 +55,14 @@ export function mountCompare(
   const techName = (id: string) => store.tax.techniques.find((t) => t.id === id)?.name ?? id;
   /** The operation a technique sits under on these two references (A's tags first). */
   const opOf = (tech: string) => [ref(A), ref(B)].flatMap((r) => r?.tags ?? []).find((t) => t.techniqueId === tech)?.operationId ?? "";
+  /** The domain a technique sits under on these two references (A's tags first), for the full path (Principle 4). */
+  const domainOf = (tech: string) => {
+    const br = [ref(A), ref(B)].flatMap((r) => r?.tags ?? []).find((t) => t.techniqueId === tech && t.branchId)?.branchId;
+    const id = store.tax.branches.find((b) => b.id === br)?.domainId;
+    return id ? (store.tax.domains.find((d) => d.id === id)?.name ?? id) : "";
+  };
   const techItem = (tech: string) =>
-    `<li data-tech="${esc(tech)}" data-op="${esc(opOf(tech))}"><span class="text">${esc(opLabel(store.tax, opOf(tech)).plain)}</span> › ${esc(techName(tech))}</li>`;
+    `<li data-tech="${esc(tech)}" data-op="${esc(opOf(tech))}"><span class="text">${esc(opLabel(store.tax, opOf(tech)).plain)}</span>${domainOf(tech) ? ` › ${esc(domainOf(tech))}` : ""} › ${esc(techName(tech))}</li>`;
   const opItem = (op: string) => `<li data-op="${esc(op)}"><span class="text">${esc(opLabel(store.tax, op).plain)}</span></li>`;
   const branchItem = (id: string) => {
     const br = store.tax.branches.find((x) => x.id === id);
@@ -78,7 +84,8 @@ export function mountCompare(
     const onShared = (br: string) => [ra, rb].some((r) => r.tags.some((t) => t.branchId === br && t.techniqueId && sharedSet.has(t.techniqueId)));
     const branches = (scored?.sharedBranches ?? []).filter((br) => !onShared(br));
     const link = store.links.find((l) => (l.fromRef === A && l.toRef === B) || (l.fromRef === B && l.toRef === A));
-    const score = scored === null ? "" : scored.score > 0 ? `${scored.score.toFixed(2)} · related by technique` : "not related by technique";
+    // The answer leads the Shared column as a Readout, with a caption (design judgement #5).
+    const score = scored === null ? "" : scored.score > 0 ? `<b class="cmp-num">${scored.score.toFixed(2)}</b> <span class="cmp-cap">related by technique</span>` : `<span class="cmp-cap">not related by technique</span>`;
     const side = (key: "a" | "b", r: Reference, only: string[], partial: string[]) => `
       <section class="cmp-side" data-side="${key}">
         <h2 class="cmp-title" title="${esc(r.title)}">${esc(r.title)}</h2>
@@ -93,7 +100,6 @@ export function mountCompare(
     body.innerHTML = `
       <header class="cmp-top">
         <p class="cmp-link"${link ? "" : " hidden"}>${link ? `Linked by you: “${esc(link.why)}”` : ""}</p>
-        <p class="cmp-score">${score}</p>
         <button type="button" class="text-btn cmp-value" aria-pressed="${value}" aria-keyshortcuts="v">Value view</button>
         <button type="button" class="text-btn cmp-swap" aria-keyshortcuts="x">Swap</button>
         <button type="button" class="text-btn cmp-link-btn">${link ? "Edit link" : "Link these two"}</button>
@@ -102,6 +108,7 @@ export function mountCompare(
       <div class="cmp-grid">
         ${side("a", ra, s.onlyA, s.partialA)}
         <section class="cmp-mid">
+          <p class="cmp-score">${score}</p>
           <h3 class="cmp-h">Shared</h3><ul class="cmp-shared">${s.shared.map(techItem).join("")}</ul>
           ${branches.length ? `<h3 class="cmp-h">Same operation × domain</h3><ul class="cmp-branches">${branches.map(branchItem).join("")}</ul>` : ""}
         </section>

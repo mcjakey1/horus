@@ -66,6 +66,7 @@ button:disabled { cursor: default; }
 .q-results li[aria-selected="true"], .q-results li:hover { background: var(--shell); }
 .q-results .sw { width: 10px; height: 10px; border-radius: 50%; align-self: center; }
 .q-results b { font: 500 15px var(--serif); }
+.q-results [data-r] b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; } /* reference titles, as .row b */
 .q-results small { display: block; color: var(--ink-2); font-size: 12px; }
 .q-results .n { font: 12px var(--mono); color: var(--ink-2); }
 .q-results .empty { cursor: default; color: var(--ink-2); grid-template-columns: 1fr; }
@@ -117,10 +118,14 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .lab-meta { max-width: calc(100% - 32px); display: flex; white-space: nowrap; overflow: hidden; }
 .lab-meta .lab-credit { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .lab-meta span + span::before { content: " · "; white-space: pre; }
-/* Design review F1: the plate's actions in one row at the top left, clear of the readout. */
-/* The plate sits 48 px down and a number badge reaches 13 px above it, so the row ends by 31 px
-   (6 + 25): it never covers a badge. Buttons stay at least 24 px tall (F12). */
-.lab-actions { position: absolute; top: 6px; left: 16px; display: flex; gap: 6px; }
+/* Design review F1: the plate's actions in one row, clear of the readout. Design judgement #7:
+   the row is a hairline toolbar between the record header and the card, so nothing of the chrome
+   sits on the judging ground. Buttons stay at least 24 px tall (F12). */
+.work { grid-template-rows: auto minmax(0, 1fr); }
+.work > .lab-actions { grid-column: 1; grid-row: 1; display: flex; flex-wrap: wrap; gap: 6px; margin-left: 20px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.work > .lab { grid-column: 1; grid-row: 2; }
+.work > .margin { grid-column: 2; grid-row: 1 / 3; }
+.work > .lab-actions > button { box-shadow: inset 0 0 0 1px var(--line-2); } /* off the card, the panel chips need an edge on the shell (AGY) */
 .lab-actions > button { padding-top: 4px; padding-bottom: 4px; }
 .leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .leaders path { fill: none; stroke: var(--card-ink); stroke-width: 1; opacity: 0; transition: opacity .2s; } /* at rest: no lines over the art */
@@ -158,7 +163,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .row { display: grid; grid-template-columns: 52px 1fr auto; gap: 12px; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--line); text-align: left; width: 100%; transition: background .6s var(--ease); }
 .row .t { width: 52px; height: 52px; background: var(--card); overflow: hidden; }
 .row .t img, .row .t svg { width: 100%; height: 100%; object-fit: cover; display: block; }
-.row b { display: block; font: 500 15px/1.25 var(--serif); }
+.row b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font: 500 15px/1.25 var(--serif); } /* long collection titles: 2 lines, full one in title= (design judgement #8) */
 .row small { display: block; font-size: 12px; color: var(--ink-2); }
 .row .sc { font: 500 14px var(--mono); }
 .row:hover b { text-decoration: underline; text-underline-offset: 3px; }
@@ -204,11 +209,12 @@ button.settings { color: var(--ink); text-underline-offset: 3px; margin-left: 4p
   .record .back { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); min-height: 40px; max-width: none; }
   .cell:nth-child(3) { border-left: 0; }
   .cell:nth-child(n+3) { border-top: 1px solid var(--line); }
-  .work { grid-template-columns: 1fr; }
+  .work { grid-template-columns: 1fr; grid-template-rows: auto auto auto; }
   .lab { margin: 16px; height: auto; display: flex; flex-direction: column; align-items: center; padding: 16px; gap: 16px; }
   .specimen { width: min(100%, calc(58vh * var(--ar, .75))); max-width: calc(100% - 40px); height: auto; max-height: none; }
   .lab-meta { position: static; align-self: stretch; display: flex; flex-wrap: wrap; max-width: none; }
-  .lab-actions { position: static; order: -1; align-self: stretch; flex-wrap: wrap; }
+  .work > .lab-actions { margin: 0 16px; }
+  .work > .margin { grid-column: 1; grid-row: 3; }
   .lab-actions > button { padding-top: 5px; padding-bottom: 5px; }
   .off-board { position: static; order: -1; align-self: flex-start; }
   .lab-meta span + span::before { content: none; }
@@ -244,7 +250,7 @@ button.settings { color: var(--ink); text-underline-offset: 3px; margin-left: 4p
 .fr-brand { font: 600 22px/1 var(--serif); letter-spacing: -.01em; margin: 0 0 32px; }
 .fr-title { font: 500 30px/1.15 var(--serif); margin: 0; }
 .fr-lede { color: var(--ink-2); margin: 8px 0 24px; }
-.fr-error { margin: 0 0 20px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line-2); border-left: 3px solid var(--ink); overflow-wrap: anywhere; }
+.fr-error { margin: 0 0 20px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line-2); overflow-wrap: anywhere; } /* hairlines all round, no side stripe (design judgement #14) */
 .fr-steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
 .fr-step { display: grid; gap: 10px; padding: 20px 0; border-bottom: 1px solid var(--line); }
 .fr-step.is-off { opacity: .5; }
@@ -273,7 +279,7 @@ button.settings { color: var(--ink); text-underline-offset: 3px; margin-left: 4p
 .pk-op { display: grid; grid-template-columns: 10px auto; column-gap: 8px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); background: var(--panel); text-align: left; transition: border-color .2s var(--ease), background .2s var(--ease); }
 .pk-op .pk-sw { width: 10px; height: 10px; border-radius: 50%; background: var(--c); grid-row: span 2; }
 .pk-op .serif { font: 500 15px/1.25 var(--serif); }
-.pk-op .mono { grid-column: 2; font: 500 11px var(--mono); letter-spacing: .03em; color: var(--ink-2); }
+.pk-op .pk-opname { grid-column: 2; font: 12px var(--sans); color: var(--ink-2); } /* a name, so caption, not mono (Hand and Instrument Rule; design judgement #11) */
 .pk-op[aria-pressed="true"] { border-color: var(--c); background: var(--shell); }
 .pk-search { width: 100%; height: 32px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--shell); color: var(--ink); font: 14px var(--sans); }
 .pk-search::placeholder { color: var(--ink-3); }
@@ -375,6 +381,12 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .lb-draft[hidden], .lb-pending[hidden] { display: none; }
 .lb-side { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
 .lb-bar { position: relative; grid-column: 1; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 20px; border-top: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+/* No dock open: the side column folds away, so the image gets the width (design judgement #6). */
+.lightbox:not(:has(.lb-side > *)) .lb-side { display: none; }
+@media (min-width: 761px) {
+  .lightbox:not(:has(.lb-side > *)) { grid-template-columns: minmax(0, 1fr) 0; }
+  .lightbox:not(:has(.lb-side > *)) .lb-stage { margin-right: 20px; }
+}
 .lb-hint { margin: 0; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 760px) {
   .lightbox { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto; }
@@ -479,6 +491,17 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
 .gx-shares i { font-family: var(--serif); }
 .gx-neighbours .mono { grid-column: 2; grid-row: 1; color: var(--ink-2); font-size: 12px; }
 .gx-note { margin: 0; color: var(--ink-2); font: 15px/1.5 var(--serif); }
+.gx-counts { margin: 12px 0 0; font-size: 12px; color: var(--ink-2); }
+.gx-keys { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+
+/* Narrow windows (design judgement P1-1): the wrapped top bar gets its own rows (this selector
+   outranks the 760 body rule), and the graph views stack, canvas above the inspector, as the
+   Inbox and Lightbox do. height: 100% keeps the canvas row a real height; Reference keeps its own. */
+@media (max-width: 760px) {
+  body[data-view]:not([data-view="reference"]) { grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+  .graph-host.tree, .graph-host.radial, .gx { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .graph-host .insp, .gx-insp { max-height: 40vh; border-left: 0; border-top: 1px solid var(--line); }
+}
 
 /* Task 11's speed check: dev or VITE_PERF builds only (scene.ts perfOverlay). */
 .perf-overlay { position: absolute; left: 8px; bottom: 8px; z-index: 5; padding: 2px 6px; font: 11px/1.4 var(--mono, monospace); background: var(--ink); color: var(--panel); cursor: pointer; white-space: pre; }
@@ -553,6 +576,16 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .bd-scope[aria-pressed="true"]::after { content: " · on"; font: 500 11px var(--mono); color: var(--ink-2); }
 .bd-actions .sep { align-self: center; width: 1px; height: 16px; background: var(--line-2); }
 .bd-msg { margin: 8px 0; min-height: 1.2em; font-size: 13px; color: var(--ink); }
+/* No boards yet (design judgement #4): centred in the main area; the list column stays the list. */
+.bd-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding-bottom: 15vh; text-align: center; }
+.bd-empty[hidden] { display: none; }
+.bd-main:has(.bd-empty:not([hidden])) .bd-grid { display: none; }
+.bd-empty-line { margin: 0; font: 400 22px/1.3 var(--serif); }
+.bd-empty-row { display: flex; gap: 8px; }
+.bd-new-name { width: 22ch; height: 34px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--shell); color: var(--ink); font: 14px var(--sans); }
+.bd-empty-hint { margin: 0; font-size: 13px; color: var(--ink-2); }
+.pane-tip { margin: 2px 0 8px; font-size: 12px; color: var(--ink-2); }
+kbd { font: 500 12px var(--mono); padding: 0 4px; border: 1px solid var(--line-2); border-radius: 2px; }
 .bd-grid { flex: 1; min-height: 0; overflow: auto; padding-bottom: 24px; }
 .bd-tile { position: relative; width: 160px; height: 160px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2); touch-action: none; cursor: grab; }
 .bd-plate, .bd-plate img { display: block; width: 100%; height: 100%; }
@@ -575,7 +608,7 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .bm-actions { display: flex; justify-content: space-between; }
 .boards-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; }
 .details-open { padding: 5px 10px; background: var(--panel); color: var(--ink); font-weight: 500; font-size: 13px; } /* Task 3c: a chip like its row */
-.off-board { position: absolute; top: 50px; left: 16px; padding: 3px 8px; background: var(--ink); color: var(--panel); font: 500 12px var(--mono); }
+.off-board { position: absolute; top: 14px; left: 16px; padding: 3px 8px; background: var(--ink); color: var(--panel); font: 500 12px var(--mono); }
 .off-board[hidden] { display: none; }
 .off-board-note { color: var(--ink-2); font-style: italic; }
 .board-scope b { font-weight: 600; }
@@ -592,7 +625,11 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .cmp-top { display: flex; align-items: baseline; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .cmp-link { margin: 0; font: italic 15px/1.4 var(--serif); }
 .cmp-link[hidden] { display: none; }
-.cmp-score { margin: 0 auto 0 0; color: var(--ink-2); font: 500 12px var(--mono); font-variant-numeric: tabular-nums; }
+.cmp-top > .cmp-value { margin-left: auto; } /* the score moved to the Shared column: the actions stay right */
+.cmp-score { margin: 0; }
+.cmp-num { display: block; font: 500 16px var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); } /* Readout */
+.cmp-cap { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-2); }
+.cmp-lb { padding-left: 0; padding-right: 0; } /* flush with the card's left edge */
 .cmp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 260px) minmax(0, 1fr); gap: 24px; padding-top: 16px; }
 .cmp-title { margin: 0 0 10px; font: 500 18px/1.3 var(--serif); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } /* F7: two lines at most */
 .cmp-tile { position: relative; width: min(420px, 100%); height: auto; aspect-ratio: 1; background: var(--card); } /* the plate is placed in % of it (final review I5) */
@@ -651,8 +688,9 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .q-results .sw-ref { background: var(--ink-3); }
 /* The drop target sits beside the listbox (C7), to the left of it, while the dropdown is open
    or a file is dragged over the window. Square, a solid strong hairline (dashed means a partial
-   tag), Menu lift like the dropdown; the border goes to secondary ink while a file is over it. */
-.sim-drop { display: none; position: absolute; top: 38px; right: calc(100% + 8px); width: 180px; min-height: 72px; padding: 12px; place-items: center; text-align: center; background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); color: var(--ink-2); font-size: 12px; z-index: 20; }
+   tag, so -0c's dashed drop-target border is not used: design judgement #9), no shadow (it is not a
+   menu); the border goes to secondary ink while a file is over it. */
+.sim-drop { display: none; position: absolute; top: 38px; right: calc(100% + 8px); width: 180px; min-height: 72px; padding: 12px; place-items: center; text-align: center; background: var(--panel); border: 1px solid var(--line-2); color: var(--ink-2); font-size: 12px; z-index: 20; }
 .search:has(#q-results:not([hidden])) .sim-drop, .search.is-drag .sim-drop { display: grid; }
 .search.is-drag .sim-drop { border-color: var(--ink-2); color: var(--ink); }
 /* Narrow windows: the field spans the bar, so the target takes the dropdown's place under it,

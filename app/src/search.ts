@@ -63,7 +63,7 @@ export function mountSearch(root: HTMLElement, api: Api, hooks: SearchHooks, sig
       const op = hooks.operationLabel(h.operationId);
       return `<li role="option" id="opt-${k}" data-t="${esc(h.id)}" aria-selected="false"><span class="sw" data-css="background:${op.color}"></span><span><b class="serif">${esc(hooks.techniqueName(h.id))}</b><small>${esc(op.name)} · ${esc(op.plain)}</small></span><span class="n">${h.count}</span></li>`;
     }
-    return `<li role="option" id="opt-${k}" data-r="${esc(h.id)}" aria-selected="false"><span class="sw sw-ref"></span><span><b class="serif">${esc(hooks.referenceTitle(h.id) ?? h.id)}</b><small>reference · matches your words</small></span><span></span></li>`;
+    return `<li role="option" id="opt-${k}" data-r="${esc(h.id)}" aria-selected="false"><span class="sw sw-ref"></span><span><b class="serif" title="${esc(hooks.referenceTitle(h.id) ?? h.id)}">${esc(hooks.referenceTitle(h.id) ?? h.id)}</b><small>reference · matches your words</small></span><span></span></li>`;
   }
 
   /** The "Looks similar" group: its own `role="group"`, after option A, no score (Global
@@ -77,7 +77,7 @@ export function mountSearch(root: HTMLElement, api: Api, hooks: SearchHooks, sig
     else {
       const ids = similar.ids.filter((id) => hooks.referenceTitle(id) !== undefined).slice(0, SIMILAR_ROWS);
       count = ids.length;
-      const rows = ids.map((id, k) => `<li role="option" id="opt-s${k}" class="sim-opt" data-r="${esc(id)}" aria-selected="false"><span class="sw sw-ref"></span><span><b class="serif">${esc(hooks.referenceTitle(id)!)}</b><small>reference · looks alike</small></span><span></span></li>`);
+      const rows = ids.map((id, k) => `<li role="option" id="opt-s${k}" class="sim-opt" data-r="${esc(id)}" aria-selected="false"><span class="sw sw-ref"></span><span><b class="serif" title="${esc(hooks.referenceTitle(id)!)}">${esc(hooks.referenceTitle(id)!)}</b><small>reference · looks alike</small></span><span></span></li>`);
       body = rows.join("") || `<li class="sim-note" role="presentation">Nothing in this library looks like that yet.</li>`;
     }
     announce(count === null ? "" : count === 1 ? "1 looks similar" : `${count} look similar`);

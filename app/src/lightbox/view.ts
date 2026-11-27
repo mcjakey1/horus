@@ -15,6 +15,9 @@ import type { PickerOpts } from "../tagging/picker";
 import { MIN_REGION, normRect, type Pt } from "./regions";
 import { fitView, hitRegion, panBy, plateOf, type View, zoomAt } from "./zoom";
 
+// Focus the stage without the ring framing the painting before the artist does anything; the
+// ring still shows on the next Tab or focus-moving key (design judgement #6). WebKit ignores it.
+const QUIET = { preventScroll: true, focusVisible: false } as FocusOptions;
 const STEP = 0.02; // a keyboard move or resize, in 0..1 of the image
 const CENTRED: Region = { x: 0.375, y: 0.375, w: 0.25, h: 0.25 };
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
@@ -162,7 +165,7 @@ export function openLightbox(
       e.preventDefault(); // no middle-click autoscroll
       panFrom = pt(e);
       stage.setPointerCapture?.(e.pointerId);
-      stage.focus();
+      stage.focus(QUIET);
       return;
     }
     if (e.button !== 0) return;
@@ -170,7 +173,7 @@ export function openLightbox(
     from = pt(e);
     showDraft(null);
     stage.setPointerCapture?.(e.pointerId);
-    stage.focus();
+    stage.focus(QUIET);
   }, { signal });
   stage.addEventListener("pointermove", (e) => {
     if (panFrom) {
@@ -361,6 +364,6 @@ export function openLightbox(
   document.body.append(el);
   renderBoxes();
   layout();
-  stage.focus();
+  stage.focus(QUIET);
   return { close };
 }
