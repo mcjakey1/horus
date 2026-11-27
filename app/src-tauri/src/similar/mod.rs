@@ -1,6 +1,7 @@
 //! Find similar (search option B): an optional, offline image–text model (SigLIP base).
 //! Off by default; nothing else in the app depends on it.
 
+pub mod copy;
 pub mod download;
 pub mod encoder;
 pub mod indexer;

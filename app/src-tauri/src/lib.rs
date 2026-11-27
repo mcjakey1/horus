@@ -62,6 +62,17 @@ pub fn run() {
             app.manage(commands::AppState::new(config_dir, cache_dir, seed, demo));
             commands::allow_lightbox_cache(app.handle())?;
             commands::start_saver(app.handle());
+            // Plan 5 Find similar (B4): the model's home, the bundled ORT, the index trigger,
+            // and the start-up resume (on its own thread, only when the settings say "on").
+            app.manage(commands::similar::SimilarEnv::new(
+                &app.path().app_local_data_dir()?,
+                ort_library(app.handle())?,
+            ));
+            let handle = app.handle().clone();
+            hooks::register(app.handle(), move |c| {
+                commands::similar::on_change(&handle, c)
+            });
+            commands::similar::resume_on_start(app.handle());
             Ok(())
         })
         // B5: flush before the main window closes; if that fails, keep it open and ask.
@@ -97,6 +108,14 @@ pub fn run() {
             commands::get_settings,
             commands::set_settings,
             commands::system_ram_gb,
+            commands::similar::similar_status,
+            commands::similar::similar_enable,
+            commands::similar::similar_disable,
+            commands::similar::similar_remove_model,
+            commands::similar::similar_pause,
+            commands::similar::similar_by_ref,
+            commands::similar::similar_by_text,
+            commands::similar::similar_by_file,
             commands::add_tags,
             commands::update_tag,
             commands::remove_tag,
