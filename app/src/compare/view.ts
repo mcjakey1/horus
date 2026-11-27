@@ -62,7 +62,7 @@ export function mountCompare(
     return id ? (store.tax.domains.find((d) => d.id === id)?.name ?? id) : "";
   };
   const techItem = (tech: string) =>
-    `<li data-tech="${esc(tech)}" data-op="${esc(opOf(tech))}"><span class="text">${esc(opLabel(store.tax, opOf(tech)).plain)}</span>${domainOf(tech) ? ` › ${esc(domainOf(tech))}` : ""} › ${esc(techName(tech))}</li>`;
+    `<li data-tech="${esc(tech)}" data-op="${esc(opOf(tech))}"><span class="text seg">${esc(opLabel(store.tax, opOf(tech)).plain)}</span>${domainOf(tech) ? ` › <span class="seg">${esc(domainOf(tech))}</span>` : ""} › <span class="seg">${esc(techName(tech))}</span></li>`;
   const opItem = (op: string) => `<li data-op="${esc(op)}"><span class="text">${esc(opLabel(store.tax, op).plain)}</span></li>`;
   const branchItem = (id: string) => {
     const br = store.tax.branches.find((x) => x.id === id);

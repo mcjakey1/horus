@@ -505,8 +505,9 @@ body[data-view="radial"] > [data-view-host="radial"] { display: grid; }
    Inbox and Lightbox do. height: 100% keeps the canvas row a real height; Reference keeps its own. */
 @media (max-width: 760px) {
   body[data-view]:not([data-view="reference"]) { grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
-  .graph-host.tree, .graph-host.radial, .gx { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
-  .graph-host .insp, .gx-insp { max-height: 40vh; border-left: 0; border-top: 1px solid var(--line); }
+  /* 3:2, canvas over inspector, at any height: the fit keeps more names (§7); the inspector scrolls. */
+  .graph-host.tree, .graph-host.radial, .gx { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); }
+  .graph-host .insp, .gx-insp { border-left: 0; border-top: 1px solid var(--line); }
 }
 
 /* Task 11's speed check: dev or VITE_PERF builds only (scene.ts perfOverlay). */
@@ -566,6 +567,12 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .bd { display: grid; grid-template-columns: 220px 1fr; min-height: 0; height: 100%; }
 .bd-list { border-right: 1px solid var(--line); background: var(--panel); padding: 16px 12px; overflow: auto; }
 .bd-list ul { list-style: none; margin: 0; padding: 0; }
+/* Boards stack like the other views at 760 (§7): the list above, capped, the board below. After
+   the .bd rules, so it wins. */
+@media (max-width: 760px) {
+  .bd { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .bd-list { max-height: 30vh; border-right: 0; border-bottom: 1px solid var(--line); }
+}
 .bd-pick { display: flex; justify-content: space-between; gap: 8px; width: 100%; padding: 8px 6px; text-align: left; font: 500 15px/1.3 var(--serif); color: var(--ink); }
 .bd-pick:hover, .bd-pick[aria-current="true"] { background: var(--shell); }
 .bd-pick .count, .board-menu .count { font: 12px var(--mono); color: var(--ink-2); }
@@ -634,6 +641,7 @@ kbd { font: 500 12px var(--mono); padding: 0 4px; border: 1px solid var(--line-2
 .cmp-top > .cmp-value { margin-left: auto; } /* the score moved to the Shared column: the actions stay right */
 .cmp-score { margin: 0; }
 .cmp-num { display: block; font: 500 16px var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); } /* Readout */
+.cmp-mid li .seg, .cmp-side li .seg { display: inline-block; max-width: 100%; overflow-wrap: anywhere; } /* a path breaks at › (§7); only a name wider than the column wraps inside */
 .cmp-cap { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-2); }
 .cmp-lb { padding-left: 0; padding-right: 0; } /* flush with the card's left edge */
 .cmp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 260px) minmax(0, 1fr); gap: 24px; padding-top: 16px; }
@@ -692,12 +700,13 @@ kbd { font: 500 12px var(--mono); padding: 0 4px; border: 1px solid var(--line-2
 .q-results .sim-head { font-size: 12px; font-weight: 600; color: var(--ink); }
 .q-results .sim-note { font-size: 12px; color: var(--ink-2); }
 .q-results .sw-ref { background: var(--ink-3); }
-/* The drop target sits beside the listbox (C7), to the left of it, while the dropdown is open
-   or a file is dragged over the window. Square, a solid strong hairline (dashed means a partial
+/* The drop target sits beside the listbox (C7), directly under it (design judgement §7: to its
+   left it covered the record header), while the dropdown is open or a file is dragged over the window. Square, a solid strong hairline (dashed means a partial
    tag, so -0c's dashed drop-target border is not used: design judgement #9), no shadow (it is not a
    menu); the border goes to secondary ink while a file is over it. */
-.sim-drop { display: none; position: absolute; top: 38px; right: calc(100% + 8px); width: 180px; min-height: 72px; padding: 12px; place-items: center; text-align: center; background: var(--panel); border: 1px solid var(--line-2); color: var(--ink-2); font-size: 12px; z-index: 20; }
+.sim-drop { display: none; position: absolute; top: calc(46px + var(--list-h, 0px)); left: 0; right: 0; min-height: 56px; padding: 12px; place-items: center; text-align: center; background: var(--panel); border: 1px solid var(--line-2); color: var(--ink-2); font-size: 12px; z-index: 20; }
 .search:has(#q-results:not([hidden])) .sim-drop, .search.is-drag .sim-drop { display: grid; }
+.search:has(#q-results[hidden]) .sim-drop { top: 38px; } /* a drag with the list closed: under the field */
 .search.is-drag .sim-drop { border-color: var(--ink-2); color: var(--ink); }
 /* Narrow windows: the field spans the bar, so the target takes the dropdown's place under it,
    during a drag only; the listbox steps aside for the drag. */

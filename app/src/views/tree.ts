@@ -176,7 +176,9 @@ export function mountTree(
           seg(parent, child, inked); // Show all: a reference column shares its technique's x
           continue;
         }
-        const mid = (a.y + b.y) / 2;
+        // The bar sits just above the child band, clear of the parent's 3 staggered label rows
+        // (design judgement §7: the mid-band bar ran through the lower domain labels).
+        const mid = b.y - (b.y - a.y) * 0.1; // about 6 px above the child at fit
         joint(`j:dn:${parent}`, a.x, mid);
         joint(`j:up:${child}`, b.x, mid);
         seg(parent, `j:dn:${parent}`, inked);

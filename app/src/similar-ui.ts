@@ -54,6 +54,7 @@ export function wireSimilar(
   let current: string | null = null; // the reference the Reference view shows
   let pane: PaneState = null;
   let seq = 0; // drops a stale similarByRef answer
+  let listObs: ResizeObserver | null = null; // places the drop zone under the open list
 
   // ---------- the status bar ----------
   const bar = $("#find-similar");
@@ -95,6 +96,14 @@ export function wireSimilar(
     zone.dataset.similarDrop = "";
     zone.textContent = "Drop an image to find similar";
     $("#q-results")?.after(zone);
+    // Under the open list, never beside it over the record header (design judgement §7): the
+    // list's height, read as it changes, places the zone (0 while the list is hidden).
+    const list = $("#q-results");
+    if (list && typeof ResizeObserver === "function") {
+      zone.style.setProperty("--list-h", `${list.offsetHeight}px`); // before the first observation
+      listObs = new ResizeObserver(() => zone.style.setProperty("--list-h", `${list.offsetHeight}px`));
+      listObs.observe(list);
+    }
     tab.addEventListener("click", () => void load(), { signal });
     tab.addEventListener("focus", () => void load(), { signal });
     if (current) pending();
@@ -111,6 +120,8 @@ export function wireSimilar(
     tab?.remove();
     $("#pane-similar")?.remove();
     $("[data-similar-drop]")?.remove();
+    listObs?.disconnect();
+    listObs = null;
     $(".search")?.classList.remove("is-drag");
     hooks.search.refresh(); // the search's own group goes with the next keystroke
   }
