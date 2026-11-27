@@ -82,7 +82,11 @@ export function mountPicker(
   };
   const withRegion = <T extends object>(t: T): T => (opts.region ? { ...t, region: opts.region } : t);
   const visible = (): Technique[] => (S.op ? rankByQuery(techniquesFor(tax(), S.op), S.q) : []); // best match first (QA F1)
-  const showNew = () => !!S.op && S.q.trim() !== "";
+  // The backend's name key (taxonomy.rs name_key): case and spacing only. An exact name in this
+  // operation is its card, not a new technique; one only under another operation keeps New, whose
+  // NameTaken answer offers "use it" (tags it under its own operation).
+  const nameKey = (s: string) => s.trim().split(/\s+/).join(" ").toLowerCase();
+  const showNew = () => !!S.op && S.q.trim() !== "" && !visible().some((t) => nameKey(t.name) === nameKey(S.q));
   const count = () => visible().length + (showNew() ? 1 : 0);
   const hiIndex = () => (S.nav ? Math.min(S.hi, count() - 1) : S.q.trim() ? 0 : -1);
   const tickOf = (techId: string) => S.ticks.findIndex((t) => t.operationId === S.op && t.techniqueId === techId);
