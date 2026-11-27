@@ -9,6 +9,8 @@ lerna-debug.log*
 
 node_modules
 dist
+# The release-check test walks this fake dist/ tree (Plan 6 Task 1).
+!/scripts/fixtures/dist/
 dist-ssr
 *.local
 

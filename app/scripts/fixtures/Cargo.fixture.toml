@@ -1,0 +1,9 @@
+[package]
+name = "horus"
+version = "0.1.0"
+description = "A local reference workbench for artists"
+authors = ["Jake Manahan"]
+edition = "2024"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

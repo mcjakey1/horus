@@ -1,0 +1,17 @@
+{
+  "productName": "Horus",
+  "version": "0.1.0",
+  "identifier": "art.horus.app",
+  "app": {
+    "withGlobalTauri": false,
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' asset: http://asset.localhost data: blob:; connect-src ipc: http://ipc.localhost; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    }
+  },
+  "bundle": {
+    "resources": {
+      "resources/taxonomy.json": "resources/taxonomy.json",
+      "../src/fonts/OFL-*.txt": "licenses/"
+    }
+  }
+}

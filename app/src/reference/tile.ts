@@ -28,9 +28,10 @@ export function tileBox(aspect: number, tile: number, region?: Region): { plate:
 
 const px = (b: Box) => `left:${b.left}px;top:${b.top}px;width:${b.width}px;height:${b.height}px`;
 
-/** `imgHTML` is already-escaped `<img>` markup; `color` is a CSS value for the outline. */
+/** `imgHTML` is already-escaped `<img>` markup; `color` is a CSS value for the outline. The
+ * geometry rides in `data-css`: run `applyCss` on whatever this markup lands in (Plan 6 CSP). */
 export function tileHTML(imgHTML: string, aspect: number, color: string, region?: Region, size = 64): string {
   const { plate, outline } = tileBox(aspect, size, region);
-  const out = outline ? `<span class="treg" style="${px(outline)};--c:${color}"></span>` : "";
-  return `<span class="tplate" style="${px(plate)}">${imgHTML}</span>${out}`;
+  const out = outline ? `<span class="treg" data-css="${px(outline)};--c:${color}"></span>` : "";
+  return `<span class="tplate" data-css="${px(plate)}">${imgHTML}</span>${out}`;
 }
