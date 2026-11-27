@@ -32,7 +32,7 @@
     - `tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }`: pure Rust, no Oniguruma C build.
   - **No `ndarray` (R4):** tensors are built with `Tensor::from_array((shape, Vec))`.
   - **No new RAM crate:** `sysinfo` is already a dependency (`0.40.4`), behind the existing `system_ram_gb` command.
-- **ONNX Runtime itself** is not a crate build. It is Microsoft ONNX Runtime 1.31.1, from the NuGet package `Microsoft.ML.OnnxRuntime`, one CPU binary per OS (size and SHA-256 pinned, Task 0), shipped in `bundle.resources` and loaded at run time (B1). macOS ships arm64 only (B2).
+- **ONNX Runtime itself** is not a crate build. It is Microsoft ONNX Runtime 1.31.1, from the NuGet package `Microsoft.ML.OnnxRuntime`, one CPU binary per OS (size and SHA-256 pinned, Task 0), fetched by `npm run fetch:ort` (never committed, Task 2), shipped in `bundle.resources` and loaded at run time (B1). macOS ships arm64 only (B2).
 - No new npm packages.
 
 **Spec:** `SPEC.md` (draft 5, approved 24 Nov 2026), §5a (decided in round 3) and §11 (auto-tagging is a v2 non-goal).
@@ -56,6 +56,7 @@
     - Plan 6's macOS target changes from universal (arm64 and x86_64) to `aarch64-apple-darwin` only (B2, user ruling 27 Nov 2026: "Do the silicon version only").
     - The "About the model" link, with its scoped `opener` `open-path` grant, moves to Plan 6 Task 4 (R13).
     - Shipping the VC++ runtime (`MSVCP140_1`, `VCRUNTIME140_1`, which `onnxruntime.dll` imports) with the installer moves to Plan 6 (Task 0). Until then, a missing runtime is a caught load error.
+    - Plan 6's CI runs `npm run fetch:ort` (Task 2's `app/scripts/fetch-ort.mjs`) before building.
 - **Plan 3:** none. Plan 3 Task 11's synthetic-library script is reused if present, for the speed check in Task 8; otherwise Task 8 makes its own.
 
 ## The model artifact (research, checked on 25 Nov 2026)
@@ -244,12 +245,25 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
 **Files:**
 - Create:
   - `app/src-tauri/src/similar/encoder.rs`;
-  - `app/src-tauri/tests/fixtures/similar/`, holding a 2-colour 300×200 PNG for the resize test, and the cat and dog images with their `README.md`.
+  - `app/src-tauri/tests/fixtures/similar/`, holding a 2-colour 300×200 PNG for the resize test, and the cat and dog images with their `README.md`;
+  - `app/scripts/fetch-ort.mjs`, which fetches and verifies the ORT binaries (see "Getting ONNX Runtime" below).
 - Modify (C2):
   - `app/src-tauri/Cargo.toml`, adding `ort` and `tokenizers` (R5), with the features from Task 0;
-  - `app/src-tauri/tauri.conf.json`, adding the pinned ORT 1.31.1 library per OS to `bundle.resources` (B1);
+  - `app/package.json`, adding the npm script `"fetch:ort": "node scripts/fetch-ort.mjs"`;
+  - `app/src-tauri/.gitignore`, adding `/ort/`;
+  - `app/src-tauri/tauri.conf.json`: `bundle.resources` points at `ort/` (B1);
   - `app/src-tauri/src/lib.rs`, resolving the bundled ORT library's path for `ort::init_from`;
-  - `app/README.md`, recording the ORT pins, the library sizes and the installer growth from Task 0.
+  - `app/README.md`: a dev step ("run `npm run fetch:ort` once"), the ORT pins, the library sizes and the installer growth from Task 0.
+
+**Getting ONNX Runtime (controller ruling, 27 Nov 2026).** The ORT binaries are never committed.
+- `app/scripts/fetch-ort.mjs` is plain Node, with no new npm dependency. It:
+  - downloads `https://www.nuget.org/api/v2/package/Microsoft.ML.OnnxRuntime/1.31.1` and checks the pinned nupkg SHA-256;
+  - extracts only this OS's binary, plus `ThirdPartyNotices.txt` and `LICENSE`. It uses `tar -xf` on Windows and macOS (bsdtar reads zip) and `unzip` on Linux;
+  - checks the binary's pinned size and SHA-256, then writes into `app/src-tauri/ort/` (gitignored);
+  - does nothing if the files are already present and verified;
+  - on a hash mismatch, deletes the file and exits non-zero.
+- **The pins live in one place: the script.** The Rust test `ort_pins_match_plan` checks that every size and SHA-256 in Task 0's pin table (the nupkg and the three binaries) appears in `fetch-ort.mjs`. This is smaller than a shared JSON file, because the Rust code itself never needs the pins.
+- Plan 6's CI calls the same script (Plan 6 deferrals).
 
 **Interfaces:**
 - Consumes `ModelSpec` and `model_dir` (Task 1), and Task 0's pins.
@@ -258,7 +272,8 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   pub trait Embedder: Send { fn image(&mut self, rgb: &image::RgbImage) -> Result<Vec<f32>, String>;
                              fn text(&mut self, q: &str) -> Result<Vec<f32>, String>; fn dim(&self) -> usize; }
   pub struct SiglipEncoder { /* vision ort::Session, text Option<ort::Session> (lazy), Tokenizer, &'static ModelSpec */ }
-  impl SiglipEncoder { pub fn load(ort_lib: &Path, dir: &Path, spec: &'static ModelSpec, intra_threads: usize) -> Result<Self, String>; }
+  pub enum LoadError { Lib(String), Model(String) }   // Lib: the ORT library or its environment; Model: the .onnx files, the tokenizer or the layout
+  impl SiglipEncoder { pub fn load(ort_lib: &Path, dir: &Path, spec: &'static ModelSpec, intra_threads: usize) -> Result<Self, LoadError>; }
   // ort_lib: absolute path to the bundled ORT library; load() inits the environment first if ENV is empty
   impl Embedder for SiglipEncoder { … }
   pub fn preprocess(img: &image::RgbImage) -> Vec<f32>;            // 1×3×224×224, NCHW: squash-resize to 224×224 (bicubic), x/255, (x−0.5)/0.5 (C5)
@@ -266,14 +281,14 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   pub fn l2(v: &mut [f32]);
   ```
 - **Loading:**
-  - **The environment, once (R2):** before the first session, `ort::init_from(path)?.with_telemetry(false).build()?`, where `path` is `ort_lib`, the absolute path to the bundled ORT library (Task 0). The returned `Environment` is kept in a process-wide `OnceLock<Environment>` (`ENV`), so it is never dropped. `load` checks `ENV.get()` first and serializes the init, so `build()` runs at most once per process. A failure here is an `Err` mapped to a `String`, never an `ort::Error` and never a panic (Global Constraints, load rules).
+  - **The environment, once (R2):** before the first session, `ort::init_from(path)?.with_telemetry(false).build()?`, where `path` is `ort_lib`, the absolute path to the bundled ORT library (Task 0). The returned `Environment` is kept in a process-wide `OnceLock<Environment>` (`ENV`), so it is never dropped. `load` checks `ENV.get()` first and serializes the init, so `build()` runs at most once per process. A failure here is `Err(LoadError::Lib(_))`, with the `LoadDynamicError` text as a `String`, never an `ort::Error` and never a panic (Global Constraints, load rules). Every later failure (sessions, tokenizer, layout) is `Err(LoadError::Model(_))`.
   - `load` opens the vision session with `intra_threads`. The text session loads lazily, on the first `text()` call (R18), since only typed queries need it.
   - Tensors are built with `Tensor::from_array((shape, Vec))`, with no `ndarray` (R4).
   - It reads the input and output names from the sessions instead of hard-coding them. It expects:
     - an image input of shape `[batch, 3, 224, 224]`;
     - one text input, `input_ids` of shape `[batch, 64]`, with no attention mask;
     - outputs ending in `image_embeds` and `text_embeds`, or `pooler_output` when those are absent, each 768 wide.
-  - If it finds a different input or output shape, it returns `Err("Model layout not recognised: …")`.
+  - If it finds a different input or output shape, it returns `Err(LoadError::Model("Model layout not recognised: …"))`.
 - **Normalisation:** every output is L2-normalised before it is returned.
 
 - [ ] **Step 1: Write the failing tests**
@@ -283,12 +298,14 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
     - `ids.len() == 64`, and the tail is `1` (`</s>`, which is also the padding);
     - a 200-word query is truncated to 64 and still ends with `1`.
   - `l2_unit`: after `l2`, the norm is 1 within 1e-6, and an all-zero vector stays zero (no NaN).
-  - **Ignored tests, which need the model.** They run when `HORUS_SIGLIP_DIR` points at a hand-downloaded model. CI never runs `--ignored`.
+  - **Ignored tests, which need ORT and the model.** They run when `HORUS_ORT_LIB` points at the fetched ORT library and `HORUS_SIGLIP_DIR` at a hand-downloaded model. CI never runs `--ignored`.
     - `real_model_semantics`: using two public-domain fixture images, a cat and a dog, with their sources and rights recorded in `tests/fixtures/similar/README.md`, `text("a photo of a cat")` scores higher against the cat embedding than against the dog's.
-  - `load_rejects_garbage`: `load` on a directory whose `.onnx` files are random bytes returns `Err`, and doesn't panic (Review Focus 3).
+    - `load_rejects_garbage_model`: needs only `HORUS_ORT_LIB`. `load` on a directory whose `.onnx` files are random bytes returns `Err(LoadError::Model(_))`, and doesn't panic (Review Focus 3).
+  - `load_rejects_missing_lib`: `load` with a bad `ort_lib` path returns `Err(LoadError::Lib(_))`, and doesn't panic (Review Focus 3).
+  - `ort_pins_match_plan`: every nupkg and binary size and SHA-256 in Task 0's pin table appears in `app/scripts/fetch-ort.mjs`.
   - `telemetry_off_source_check`: a source check on `encoder.rs` finds `.with_telemetry(false)` and the `OnceLock<Environment>` (R2), and finds no `ort::Error::new` in the load path (Task 0).
 
-- [ ] **Step 2: Run, then implement, then run again.** Run `cargo test similar::encoder`. It should FAIL, then PASS. Then run the ignored tests with the hand-downloaded model (`cargo test similar::encoder -- --ignored`).
+- [ ] **Step 2: Run, then implement, then run again.** Run `npm run fetch:ort` once, then run it again to check it does nothing. Run `cargo test similar::encoder`. It should FAIL, then PASS. Then run the ignored tests with `HORUS_ORT_LIB` and the hand-downloaded model (`cargo test similar::encoder -- --ignored`).
 
 - [ ] **Step 3: Record the checks and costs.** With `CARGO_BUILD_JOBS=2`, and before Task 4 starts, record in `app/README.md`:
   - **Imports (Task 0):** `dumpbin /dependents horus.exe` on the real app shows no `onnxruntime`, `DirectML`, `D3D12` or `DXCORE` load-time import, and the app starts with ORT never called;
@@ -425,7 +442,7 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   | `DlError::Http` | "The download server didn't answer. Try again later." |
   | `DlError::Checksum` | "The download didn't finish correctly. Try again." |
   | `DlError::Io` | "Couldn't save the model. Check free disk space." |
-  | Load error (ORT, VC++ runtime or model) | "Find similar couldn't start on this computer." |
+  | `LoadError::Lib` or `LoadError::Model` (ORT, VC++ runtime or model) | "Find similar couldn't start on this computer." |
   | No AVX2 (R1) | "This computer's processor can't run Find similar." |
   | Any unmapped error | "Find similar ran into a problem. Try again." |
 - **The search commands:**
