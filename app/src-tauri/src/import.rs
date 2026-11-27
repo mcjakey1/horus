@@ -38,6 +38,8 @@ pub struct ImportReport {
     pub duplicates: Vec<(PathBuf, String)>,
     pub skipped: Vec<(PathBuf, Skip)>,
     pub warnings: Vec<(PathBuf, String)>,
+    /// Cancel stopped it between files (Plan 6 D15); what was imported before stays.
+    pub cancelled: bool,
 }
 
 #[derive(Debug)]
@@ -55,6 +57,18 @@ pub fn import_paths(
     known_hashes: &HashMap<String, String>,
     paths: &[PathBuf],
 ) -> ImportOutcome {
+    import_paths_with(root, known_hashes, paths, &mut |_, _| true)
+}
+
+/// `import_paths`, reporting `progress(done, total)` before each file and once at the end
+/// (Plan 6 D15). The files are listed first, so `total` is known; `progress` returning false
+/// cancels before the next file, and the report says so.
+pub fn import_paths_with(
+    root: &Path,
+    known_hashes: &HashMap<String, String>,
+    paths: &[PathBuf],
+    progress: &mut dyn FnMut(usize, usize) -> bool,
+) -> ImportOutcome {
     let mut out = ImportOutcome {
         references: vec![],
         report: ImportReport::default(),
@@ -70,6 +84,7 @@ pub fn import_paths(
             .as_ref()
             .is_some_and(|lib| fs::canonicalize(p).is_ok_and(|c| c.starts_with(lib)))
     };
+    let mut files = vec![];
     for path in paths {
         if inside(path) {
             out.report.skipped.push((path.clone(), Skip::InsideLibrary));
@@ -83,9 +98,7 @@ pub fn import_paths(
             .filter_entry(|e| !(e.file_type().is_dir() && inside(e.path())));
         for entry in walk {
             match entry {
-                Ok(e) if e.file_type().is_file() => {
-                    guarded_import_one(root, known_hashes, &mut batch, e.path(), &mut out)
-                }
+                Ok(e) if e.file_type().is_file() => files.push(e.into_path()),
                 Ok(_) => {}
                 Err(e) => {
                     let p = e.path().unwrap_or(path).to_path_buf();
@@ -96,6 +109,15 @@ pub fn import_paths(
             }
         }
     }
+    let total = files.len();
+    for (done, file) in files.iter().enumerate() {
+        if !progress(done, total) {
+            out.report.cancelled = true;
+            return out;
+        }
+        guarded_import_one(root, known_hashes, &mut batch, file, &mut out);
+    }
+    progress(total, total);
     out
 }
 
@@ -490,6 +512,33 @@ mod tests {
 
     fn import(root: &Path, paths: &[PathBuf]) -> ImportOutcome {
         import_paths(root, &HashMap::new(), paths)
+    }
+
+    #[test]
+    fn progress_counts_every_file_and_cancel_stops_before_the_next() {
+        // Plan 6 Task 3b D15: "Importing N of M", and Cancel stops between files.
+        let dir = tempfile::tempdir().unwrap();
+        let files = [
+            fixture("small.jpg"),
+            fixture("p3_red.png"),
+            fixture("rotated.jpg"),
+        ];
+        let mut seen = vec![];
+        let out = import_paths_with(dir.path(), &HashMap::new(), &files, &mut |done, total| {
+            seen.push((done, total));
+            true
+        });
+        assert_eq!(seen, vec![(0, 3), (1, 3), (2, 3), (3, 3)]);
+        assert_eq!((out.references.len(), out.report.cancelled), (3, false));
+
+        let dir = tempfile::tempdir().unwrap();
+        let out = import_paths_with(dir.path(), &HashMap::new(), &files, &mut |done, _| done < 1);
+        assert_eq!(
+            out.references.len(),
+            1,
+            "what was copied before the cancel is kept"
+        );
+        assert!(out.report.cancelled);
     }
 
     #[test]

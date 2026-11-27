@@ -2,16 +2,14 @@
 // of the window goes inert while it is open, and Tab wraps inside it; Esc or Close returns focus to
 // whatever opened it. Find similar is its one section; it follows `similar://status` while open.
 import type { Api } from "../api";
+import { holdModal } from "../modal";
 import { renderFindSimilar } from "./find-similar";
-
-const FOCUSABLE = "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea, [href], [tabindex]";
 
 export function mountSettings(root: HTMLElement, api: Api): { open(section?: "find-similar"): void; close(): void } {
   let el: HTMLElement | null = null;
-  let shell: HTMLElement[] = [];
   let opener: HTMLElement | null = null;
   let unlisten: (() => void) | null = null;
-  let unbind = () => {}; // the open dialog's document key listener
+  let release = () => {}; // the open dialog's hold on the window (modal.ts)
   let gen = 0; // bumped by every open and close, so a late reply from an earlier open is dropped
 
   function close() {
@@ -19,10 +17,9 @@ export function mountSettings(root: HTMLElement, api: Api): { open(section?: "fi
     gen++;
     unlisten?.();
     unlisten = null;
-    unbind();
+    release();
     el.remove();
     el = null;
-    shell.forEach((x) => (x.inert = false));
     if (opener?.isConnected) opener.focus();
   }
 
@@ -31,8 +28,6 @@ export function mountSettings(root: HTMLElement, api: Api): { open(section?: "fi
     const id = ++gen;
     const gone = () => id !== gen;
     opener = document.activeElement as HTMLElement | null;
-    shell = ([...root.children] as HTMLElement[]).filter((x) => !x.inert);
-    shell.forEach((x) => (x.inert = true));
     el = document.createElement("div");
     el.className = "settings";
     el.setAttribute("role", "dialog");
@@ -51,35 +46,15 @@ export function mountSettings(root: HTMLElement, api: Api): { open(section?: "fi
     root.append(el);
     const sheet = el;
     const fs = sheet.querySelector<HTMLElement>('[data-section="find-similar"]')!;
-    /** Tab and Shift+Tab wrap inside the dialog (QA F2); computed now, as the section re-renders. */
-    const trap = (e: KeyboardEvent) => {
-      const f = [...sheet.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((x) => x.tabIndex >= 0 && !x.closest("[hidden]"));
-      if (!f.length) return;
-      const a = document.activeElement, first = f[0], last = f[f.length - 1];
-      // Not `sheet.contains`: focus can sit on the dialog itself (tabIndex -1), and wraps from there too.
-      if (f.includes(a as HTMLElement) && a !== (e.shiftKey ? first : last)) return;
-      e.preventDefault();
-      (e.shiftKey ? last : first).focus();
-    };
+    // The rest of the window goes inert, Tab wraps, and a key aimed outside (focus fell to <body>)
+    // never reaches the view behind (QA F2; modal.ts, D8).
+    release = holdModal(sheet, close);
     sheet.addEventListener("keydown", (e) => {
       e.stopPropagation(); // no key reaches the views underneath (v, t, Backspace, their Esc)
-      if (e.key === "Tab") return trap(e);
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape") return; // the Remove confirmation stops its own Esc first
       e.preventDefault();
       close();
     });
-    // A key aimed outside the dialog (focus fell to <body>) stops here, before the app's own
-    // listeners: Tab comes back in, Esc closes, nothing else reaches the view behind (QA F2).
-    // Keys inside the dialog take the listener above, so the Remove confirmation keeps its Esc.
-    const life = new AbortController();
-    unbind = () => life.abort();
-    document.addEventListener("keydown", (e) => {
-      if (e.target instanceof Node && sheet.contains(e.target)) return;
-      e.stopPropagation();
-      e.preventDefault();
-      if (e.key === "Tab") trap(e);
-      else if (e.key === "Escape") close();
-    }, { capture: true, signal: life.signal });
     sheet.addEventListener("click", (e) => {
       if ((e.target as Element).closest("[data-close]") || e.target === sheet) close();
     });

@@ -37,6 +37,7 @@ describe("importer", () => {
       pickImages: vi.fn(async () => ["C:/in/x.jpg"]),
       importPaths: vi.fn(async () => result),
       openLibrary: vi.fn(),
+      onImportProgress: vi.fn(async () => () => {}),
     } as unknown as Api;
     const onChange = vi.fn();
     mountImport(document.body, api, { libraryRoot: () => "C:\\lib", onChange });
@@ -47,6 +48,34 @@ describe("importer", () => {
     expect(api.importPaths).toHaveBeenCalledWith(["C:/in/x.jpg"]);
     expect(api.openLibrary).not.toHaveBeenCalled();
     expect(document.querySelector("#import-notice")!.textContent).toContain("Added 1 to the Inbox");
+  });
+
+  it("shows Importing N of M with a Cancel button, and says what a cancel left out (D15)", async () => {
+    let progress!: (p: { done: number; total: number }) => void;
+    let finish!: (r: ImportResult) => void;
+    const unlisten = vi.fn();
+    const api = {
+      pickImages: vi.fn(async () => ["C:/in/folder"]),
+      importPaths: vi.fn(() => new Promise<ImportResult>((r) => (finish = r))),
+      onImportProgress: vi.fn(async (cb: typeof progress) => ((progress = cb), unlisten)),
+      cancelImport: vi.fn(async () => {}),
+    } as unknown as Api;
+    mountImport(document.body, api, { libraryRoot: () => "C:\\lib", onChange: vi.fn() });
+    document.querySelector<HTMLButtonElement>('[data-import="files"]')!.click();
+    const notice = document.querySelector<HTMLElement>("#import-notice")!;
+    await vi.waitFor(() => expect(api.importPaths).toHaveBeenCalled());
+    expect(notice.textContent).toContain("Importing…");
+    progress({ done: 2, total: 5 });
+    expect(notice.querySelector("[data-progress]")!.textContent).toBe("Importing 2 of 5");
+    const cancel = notice.querySelector<HTMLButtonElement>("[data-cancel]")!;
+    cancel.click();
+    expect(api.cancelImport).toHaveBeenCalledTimes(1);
+    expect(cancel.disabled).toBe(true);
+    finish({ report: { added: ["a", "b"], duplicates: [], skipped: [], cancelled: true }, change: { references: [], removed: [], canUndo: true, canRedo: false } });
+    await vi.waitFor(() => expect(notice.textContent).toContain("Added 2 to the Inbox"));
+    expect(notice.textContent).toContain("Cancelled: the rest was not imported");
+    expect(notice.querySelector("[data-cancel]")).toBeNull();
+    expect(unlisten).toHaveBeenCalled();
   });
 });
 

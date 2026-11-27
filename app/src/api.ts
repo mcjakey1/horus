@@ -144,7 +144,11 @@ export type ImportReport = {
   duplicates: [string, string][];
   skipped: [string, Skip][];
   warnings?: [string, string][];
+  /** Plan 6 D15: Cancel stopped it between files; what was imported before stays. */
+  cancelled?: boolean;
 };
+/** `import://progress`: files done of the import's total (Plan 6 D15). */
+export type ImportProgress = { done: number; total: number };
 /** An import saves at once and is one undo step; `change` holds the new references. */
 export type ImportResult = { report: ImportReport; change: Change };
 /** The background saver's result after each debounced flush. */
@@ -190,6 +194,10 @@ export interface Api {
   /** Plan 6 Task 2: the reference ids whose thumbnails were rebuilt after an open. */
   onThumbsRebuilt(cb: (ids: string[]) => void): Promise<() => void>;
   importPaths(paths: string[], meta?: IntakeMeta): Promise<ImportResult>;
+  /** Plan 6 D15: stops the running import before its next file. */
+  cancelImport(): Promise<void>;
+  /** Plan 6 D15: the running import's progress. */
+  onImportProgress(cb: (p: ImportProgress) => void): Promise<() => void>;
   /** A pasted image: `name` is a file name (only its last part is kept). */
   importBytes(name: string, bytes: ArrayBuffer | Uint8Array, meta?: IntakeMeta): Promise<ImportResult>;
   search(q: string): Promise<Hit[]>;
@@ -362,4 +370,6 @@ export const tauriApi: Api = {
   onSimilarStatus: (cb) => listen<SimilarStatus>("similar://status", (e) => cb(e.payload)),
   recoverOrphans: () => invoke("recover_orphans"),
   onThumbsRebuilt: (cb) => listen<string[]>("library://thumbs-rebuilt", (e) => cb(e.payload)),
+  cancelImport: () => invoke("cancel_import"),
+  onImportProgress: (cb) => listen<ImportProgress>("import://progress", (e) => cb(e.payload)),
 };

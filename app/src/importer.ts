@@ -39,6 +39,7 @@ export function summaryHTML(r: ImportReport): string {
     r.duplicates.length ? `${n(r.duplicates.length, "file was", "files were")} already in the library` : "",
     r.skipped.length ? `${n(r.skipped.length, "file")} skipped` : "",
   ].filter(Boolean);
+  if (r.cancelled) parts.push("Cancelled: the rest was not imported"); // Plan 6 D15
   const line = parts.length ? parts.join(" · ") : "Nothing to import.";
   const skipped = r.skipped
     .map(([p, why]) => `<li><span class="mono">${esc(fileName(p))}</span> ${esc(reason(why))}</li>`)
@@ -99,6 +100,40 @@ export function noticeIn(root: ParentNode): (html: string) => void {
   };
 }
 
+/** Plan 6 D15: "<verb> N of M" with a Cancel text button in `#import-notice`, until `stop()`.
+ * The import uses it, and so does Task 4's "Verify image files…". Cancel calls `onCancel` once. */
+export function showProgress(root: ParentNode, verb: string, onCancel: () => void): { update(done: number, total: number): void; stop(): void } {
+  const notice = root.querySelector<HTMLElement>("#import-notice")!;
+  noticeIn(root)(`<p data-progress>${esc(verb)}…</p><button type="button" class="text-btn" data-cancel>Cancel</button>`);
+  const life = new AbortController();
+  notice.addEventListener("click", (e) => {
+    const b = (e.target as Element).closest<HTMLButtonElement>("[data-cancel]");
+    if (!b || b.disabled) return;
+    b.disabled = true;
+    b.textContent = "Cancelling…";
+    onCancel();
+  }, { signal: life.signal });
+  return {
+    update(done, total) {
+      const p = notice.querySelector("[data-progress]");
+      if (p) p.innerHTML = `${esc(verb)} <span class="mono">${done}</span> of <span class="mono">${total}</span>`;
+    },
+    stop: () => life.abort(),
+  };
+}
+
+/** `showProgress` for one import: listens to `import://progress` until `done()`. */
+export function importProgress(root: ParentNode, api: Api): { done(): void } {
+  const prog = showProgress(root, "Importing", () => void api.cancelImport().catch(() => {}));
+  const unlisten = api.onImportProgress((p) => prog.update(p.done, p.total));
+  return {
+    done() {
+      prog.stop();
+      void unlisten.then((f) => f()).catch(() => {});
+    },
+  };
+}
+
 /** Wires the status-bar import buttons and Dismiss; returns `say`. */
 export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, signal?: AbortSignal): (html: string) => void {
   const notice = root.querySelector<HTMLElement>("#import-notice")!;
@@ -110,7 +145,7 @@ export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, sig
     const paths = await pick();
     if (!paths.length) return;
     buttons.forEach((b) => (b.disabled = true));
-    say(`<p>Importing…</p>`);
+    const progress = importProgress(root, api);
     try {
       const result: ImportResult = await api.importPaths(paths);
       hooks.onChange(result.change);
@@ -119,6 +154,7 @@ export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, sig
     } catch (err) {
       say(`<p>The import did not finish: ${esc(String(err))}</p>`);
     } finally {
+      progress.done();
       buttons.forEach((b) => (b.disabled = false));
     }
   }
