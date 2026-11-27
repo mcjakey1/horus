@@ -576,3 +576,29 @@ body[data-view="boards"] > [data-view-host="boards"] { display: grid; }
 .compare li[data-tech] { cursor: default; }
 .cmp-dock:empty { display: none; }
 @media (max-width: 900px) { .cmp-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Plan 5 Task 6: the Settings panel and its Find similar section. A lifted sheet (Menu lift)
+   over the dimmed window; hairlines inside; ink only, no chroma (the switch, the bar). */
+.settings { position: fixed; inset: 0; z-index: 45; display: grid; place-items: start center; padding: 72px 20px 20px; overflow: auto; background: rgb(0 0 0 / .28); }
+.st-sheet { width: min(520px, 100%); background: var(--panel); border: 1px solid var(--line-2); box-shadow: 0 12px 28px rgb(0 0 0 / .14); }
+.st-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 12px 20px; border-bottom: 1px solid var(--line); }
+.st-title { margin: 0; font: 500 19px/1.25 var(--serif); }
+.st-section { display: grid; gap: 12px; padding: 16px 20px 20px; }
+.st-h2 { margin: 0; font: 500 17px/1.25 var(--serif); }
+.fs-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.fs-switch { position: relative; flex: none; width: 34px; height: 20px; border: 1px solid var(--line-2); border-radius: 2px; background: var(--shell); transition: background .2s var(--ease), border-color .2s var(--ease); }
+.fs-knob { position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; background: var(--ink-2); transition: transform .2s var(--ease), background .2s var(--ease); }
+.fs-switch[aria-checked="true"] { background: var(--ink); border-color: var(--ink); }
+.fs-switch[aria-checked="true"] .fs-knob { transform: translateX(14px); background: var(--panel); }
+.fs-desc { margin: 0; color: var(--ink-2); max-width: 60ch; }
+.fs-progress { display: grid; gap: 8px; justify-items: start; padding: 12px; background: var(--shell); border: 1px solid var(--line); }
+.fs-line { margin: 0; overflow-wrap: anywhere; }
+.fs-bar { width: 100%; height: 4px; appearance: none; border: 0; background: var(--line); }
+.fs-bar::-webkit-progress-bar { background: var(--line); }
+.fs-bar::-webkit-progress-value { background: var(--ink); }
+.fs-bar::-moz-progress-bar { background: var(--ink); }
+.fs-disk { margin: 0; font-size: 13px; color: var(--ink-2); }
+.fs-confirm { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line-2); }
+.fs-confirm p { margin: 0; }
+.st-section > .text-btn { justify-self: start; }
+.fs-credit { margin: 4px 0 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-3); }
