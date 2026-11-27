@@ -299,3 +299,35 @@ I made one short pass on `qa-shots\plan6-final\`.
 - **Narrow fit:** at 760 the Tree and Radial fit to a canvas about 245 px tall, so they show only 4–8 names. That is expected at this size; zoom recovers it. Optional: a taller canvas row (`minmax(50vh, 1fr)`).
 - **Boards at 760:** the 220 px list column does not stack. It still fits, so this is cosmetic.
 - **Drop zone:** it still covers the "03 Technique" key of the record header while the list is open. It is transient (only while the list is open), so acceptable.
+
+## 8. Quick look 2 (4459883, before the build)
+
+One short pass.
+- **Shots:** `qa-shots\plan6-design3\` (taken at 442ef77): tree light 1280 and 760, compare, boards 760, radial 760, and search-dropdown. Also -4a's `picker-domainrow-light-1280.png`.
+- **Code checked at 4459883:** `styles.css:63` and `:284`, and `tagging/picker.ts:85` and `:199`.
+
+**Verdict: 3 small items to fix before the build** (you asked for everything). Everything else is BUILD OK.
+
+**§7's five items: resolved.**
+- **Tree bar:** at 1280, the technique bar now runs just above the technique nodes, and the domain labels sit clear of it.
+- **Compare:** the Shared path breaks only between segments ("Make them think › Cultural ›" / "Genre quotation").
+- **760 graphs:** the canvas is now about 3/5 of the height.
+- **Boards at 760:** the list stacks above the empty state.
+- **Drop zone:** it now hangs under the list, at the list's width, and no longer covers the record header.
+
+**-4a's picker domain row: good.** The legend "Domain for Complementary pairing" is a block caption, the radios sit on their own row, and the hairline above matches the chips. It reads as one step after choosing a card.
+
+**Fix before the build:**
+1. **The Tree at 760: domain labels sit on the technique bar.**
+   - **Where:** `tree-light-760.png`. At this scale the band step is about 48 px. The third-row domain labels ("Space", "Feature", "Feature", "Social", "Space", "Cultural", around y 369) land on the technique bar, and "Sequence" has connector lines running into it. The halo keeps the text legible, but it reads as clutter. At 1280 it is fine.
+   - **Fix (small, in `graph/scene.ts` where the overlap boxes are built, about `:339`):** treat each technique bar as an obstacle. Push a box `{ y: barY*cam.scale, h: 2, x/w: bar span }` with rank 0 into `names`, so a label that would cross it hides by rank. Alternatively, when the on-screen band step is under 3 × `LABEL_ROW_PX` + `LABEL_PX` (60 px), stagger domain labels over 2 rows instead of 3.
+2. **The picker search's clear "×" is native blue.**
+   - **Where:** `picker-domainrow-light-1280.png` (the × in the field). Only `.search input` restyles the cancel glyph (`styles.css:63`), but `.pk-search` and `.tx-search` are also `type="search"` (`picker.ts:53`, `move-tags.ts:93`). The default glyph is blue, which is chroma that names no operation (the Operation-Only Chroma Rule).
+   - **Fix:** extend the selector at `:63` to `.search input::-webkit-search-cancel-button, .pk-search::-webkit-search-cancel-button, .tx-search::-webkit-search-cancel-button`.
+3. **"+ New technique" is offered for a name that already exists.**
+   - **Where:** the same shot. Typing "complementary pairing" lists the existing Complementary pairing card and also offers to create it again. That is an error-prevention gap: it invites a duplicate technique.
+   - **Fix:** `picker.ts:85` becomes `const showNew = () => !!S.op && S.q.trim() !== "" && !visible().some((t) => t.name.trim().toLowerCase() === S.q.trim().toLowerCase());`, plus one test in `picker.test.ts`.
+
+**Noted, no change needed:**
+- **Radial at 760:** labels sit close to spokes and reference dots, but the halo keeps every name readable. That is expected at this size.
+- **Ranked sublines:** a subline wraps to 2 lines when a pair shares two techniques ("shares Crop at the edge, Occlusion"). Fine.
