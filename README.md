@@ -36,8 +36,8 @@ Horus is for illustrators, concept artists, photographers, and designers who kee
 <table>
   <tr>
     <td width="50%">
-      <img src="docs/images/first-run.png" alt="The first-run screen with the library, demo set, and Find similar steps">
-      <br><sub><strong>First run.</strong> Make a library folder, add the demo set, and decide about Find similar.</sub>
+      <img src="docs/images/first-run.png" alt="The first-run screen with the library, demo set, and Find similar steps. The Find similar step shows Download: 213 MB and the RAM of the computer">
+      <br><sub><strong>First run.</strong> Make a library folder, add the demo set, and decide about Find similar. This step shows the download size and the RAM of your computer.</sub>
     </td>
     <td width="50%">
       <img src="docs/images/value-view.png" alt="The Reference view with Value view on, which shows the poster in grayscale">
@@ -82,6 +82,22 @@ Horus is for illustrators, concept artists, photographers, and designers who kee
     <td width="50%">
       <img src="docs/images/compare-view.png" alt="Compare: Zodiaque (La Plume) and The Great Wave side by side, with a score of 0.49 and two shared techniques in the middle">
       <br><sub><strong>Compare.</strong> Zodiaque ("La Plume") and The Great Wave, with a score of 0.49. Two shared techniques are in the middle. The unique techniques are on each side.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/looks-similar.png" alt="The Reference view for Divan Japonais with the Looks similar tab open. The list shows Jane Avril, Zodiaque (La Plume), Moulin Rouge, La Goulue, and other posters, with no scores">
+      <br><sub><strong>Looks similar.</strong> For Divan Japonais, the tab shows posters that look alike, for example Jane Avril. The tab does not show a score or a technique.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/images/search-similar.png" alt="The search list for silhouette: the techniques Silhouette and Repoussoir, then a Looks similar group with three references and the line Works best in English">
+      <br><sub><strong>Search with Find similar.</strong> The technique results are first. Below them, the "Looks similar" group shows references that look like your words. English words give the best results.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center">
+      <img src="docs/images/settings-find-similar.png" alt="Settings with Find similar on: the switch, Ready · 50 references indexed, Disk space used: 214 MB, Remove model, and the model credit" width="640">
+      <br><sub><strong>Settings → Find similar.</strong> The switch turns Find similar on or off. The panel shows the index status, the disk space that the model uses, and Remove model.</sub>
     </td>
   </tr>
 </table>
