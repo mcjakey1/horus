@@ -286,12 +286,18 @@ button.settings { color: var(--ink); text-underline-offset: 3px; margin-left: 4p
 .pk-grid { display: flex; flex-direction: column; gap: 8px; }
 .pk-card { display: grid; grid-template-columns: 16px 1fr; gap: 10px; padding: 12px; border: 1px solid var(--line); background: var(--shell); cursor: pointer; transition: border-color .2s var(--ease); }
 .pk-card.is-hi { border-color: var(--c, var(--ink)); }
-.pk-tick { margin: 3px 0 0; accent-color: var(--ink); }
+/* QA F4: the tick is a picture of the option's state (aria-selected), never a control of its own. */
+.pk-tick { width: 14px; height: 14px; margin: 2px 0 0; border: 1px solid var(--ink-2); position: relative; }
+.pk-card.is-ticked .pk-tick { background: var(--ink); border-color: var(--ink); }
+.pk-card.is-ticked .pk-tick::after { content: ""; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px; border: solid var(--shell); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
 .pk-body { display: grid; gap: 3px; min-width: 0; }
 .pk-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; }
 .pk-name { font: 500 17px/1.25 var(--serif); }
 .pk-domain { font-size: 12px; color: var(--ink-2); padding: 0 6px; border: 1px solid var(--line); }
-.pk-domains { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; padding: 0; border: 0; font-size: 12px; color: var(--ink-2); }
+.pk-domains { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; padding: 0; border: 0; font-size: 12px; color: var(--ink-2); }
+/* QA F4: the highlighted technique's domain choice, under the grid (a hairline above it). */
+.pk-domainrow { padding: 8px 0 0; border-top: 1px solid var(--line); }
+.pk-domainrow legend { float: left; padding: 0; margin-right: 4px; color: var(--ink); }
 /* Plan 6: the technique's glyph, 24 px line art in currentColor (both themes). */
 .pk-icon { display: block; width: 24px; height: 24px; color: var(--ink-2); }
 .pk-icon svg { display: block; width: 24px; height: 24px; }
