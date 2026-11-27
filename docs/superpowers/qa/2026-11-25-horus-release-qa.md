@@ -33,7 +33,7 @@
 
 **Where:** the Inbox, on the picker card. axe-core 4.10.2 (WCAG 2.0/2.1/2.2 A and AA) reports **critical `aria-required-children`** on `.pk-grid`.
 
-**Cause:** `tagging/picker.ts:46` renders `<div class="pk-grid" role="listbox" aria-label="Techniques">`. It stays empty until the user chooses an operation, and a `listbox` with no `option` children is invalid.
+**Cause:** `tagging/picker.ts:46` (with the empty state at :54 and :144–147) renders `<div class="pk-grid" role="listbox" aria-label="Techniques">`. It stays empty until the user chooses an operation, and a `listbox` with no `option` children is invalid.
 
 **Fix:** either set the role only while the grid holds options, or give the empty state an option-free role. A screen reader currently announces an empty "Techniques" list.
 
@@ -42,22 +42,20 @@
 **What axe reports:** **serious `scrollable-region-focusable`** on `.ab-credits`.
 
 **Cause:**
-- `styles.css:705` sets `max-height: 40vh; overflow: auto`.
+- `styles.css:709` sets `max-height: 40vh; overflow: auto` on the list built at `about.ts:55`.
 - The 50 credit lines hold no focusable element, so a keyboard user can't reach the lower credits.
 
 **Fix:** `tabindex="0"` on the list, plus an accessible name, such as `aria-labelledby` pointing at the "Demo set" heading.
 
-### F3 (Judgment, D11, -02's Tree row): Tree labels still overlap at fit
+### F3 (Judgment, D11, -02's Tree row): Tree labels crowd at fit
 
-**Screenshots:** `qa-shots\plan6\tree-light-1280.png` and `tree-dark-1280.png`; the 760 px files show the same problem.
+**Screenshots:** `qa-shots\plan6	ree-light-1280.png` and `tree-dark-1280.png`; the 760 px files show the same problem.
 
-**What overlaps:** at the fit zoom with the demo taxonomy, the domain and technique labels draw on top of each other.
-- "Group" is on "Grouping".
-- "Grouping" is on "Feature".
-- "Semantic" and "Social" collide.
-- "Sequence" and "Space" collide, as do "Space" and "Social".
+**What crowds:** at the fit zoom with the demo taxonomy, the labels nearly touch, though no two labels fully overlap.
+- Operation labels sit tight on the domain label below them: "Group" on "Grouping", "Sequence" on "Space".
+- The orthogonal connector lines run through the domain labels ("Grouping", "Semantic", "Social", "Space"), which reads like strike-through.
 
-The overlap hiding from Task 3b F5 does not catch these pairs; -4a's glyph screenshots show the same thing.
+-4a's glyph screenshots show the same thing. The overlap hiding from Task 3b F5 removes full overlaps only, not near-touches or lines through text. (Corrected after AGY's cross-check: my first draft listed text-on-text pairs that the 1280 screenshot doesn't show.)
 
 This is a design call for -0c and the controller under D11 ("Fix only what the design review calls P1"). I record it as a Tree row and not as a functional failure: names stay readable after zooming in, and the inspector lists every operation.
 
@@ -70,7 +68,7 @@ This is a design call for -0c and the controller under D11 ("Fix only what the d
 | 2 Intro plays once, skips on the first key, replays from Help | **PASS** | It shows about 50 ms after attach. Enter skips it, and the skip never reaches the "Create" button under it (0 dialog calls). `introSeen: true` is saved, and the intro is absent on the next launch. Help > Play intro replays it: the UI half via `menu://action`, and **through the real native menu** with OS keys F10, Right, Down, Enter. A click skips it, and `introSeen` stays. |
 | 3 Library path with spaces and non-ASCII | **PASS** | `…\p6qa\Mara's Références 日本 main` holds `library.json` (50 refs), `taxonomy.json` and `thumbs/256`. The NFD folder is a macOS case, NOT CHECKED. |
 | 4 Demo set + asset-protocol thumbnails | **PASS** | 50 references. Every on-screen thumbnail loads (8 of 8). The off-screen ones are `loading="lazy"`: the first main check counted 19 of 25 because it included those, which is harness drift. About shows 50 demo credits, 2 fonts and Version 0.1.0, and "Third-party notices" opens the file (`plugin:opener|open_path`). |
-| 5 Folder drop, paste from a browser | **PASS** | A 120-image folder drop added 120. A clipboard bitmap pasted with Ctrl+V added 1. |
+| 5 Folder drop, paste from a browser | **PASS** (synthetic) | A 120-image folder drop added 120, through a synthetic `tauri://drag-drop`. A clipboard bitmap (`Clipboard.SetImage`) pasted with Ctrl+V added 1. A copy from a real browser, with HTML and source URL, is NOT CHECKED. |
 | 5a Native drag onto Find similar | PASS at 100% (given) | 125–150% is NOT CHECKED. |
 | 6 60 fps; 2,000 references | Partial | Galaxy pan at Ready with 50 refs, release build: p50 6.1 ms, p95 6.2 ms, max 7.0 ms per frame (Plan 5 baseline). Galaxy, Tree and Radial draw at 171 refs (shots). **2,000 refs: NOT CHECKED.** Linux WebKitGTK: NOT CHECKED. |
 | 7 Lightbox TIFF preview | **PASS** | Plan 4 RF3: "Harbour scan.tif" is never blank and shows its preview note. |
@@ -78,9 +76,9 @@ This is a design call for -0c and the controller under D11 ("Fix only what the d
 | 9 Offline | **PASS** (simulated) | `HTTPS_PROXY` points at a closed port, and the model was moved aside. First run with the demo set completes (50 refs). Find similar goes to `error` with "Couldn't reach the download. Check your connection and try again." in Settings, and the bar says "needs attention". The VM network-off case is NOT CHECKED. |
 | 9a No VC++ / macOS 13 / Gatekeeper | NOT CHECKED | It needs a clean VM or a Mac. |
 | 10 Second launch focuses the existing window | **PASS** | The second `horus.exe` exits with code 0, the process count is unchanged, and the foreground window is the first one's. |
-| 11 Kill during an import | **PASS** | The app was killed with `taskkill /F` at "Importing 31 of 120". On the next start, `library.json` opens, the count is unchanged (51) and no `.tmp` is left. The notice offers the orphans back: "36 image files aren't in the library. Add them to the Inbox". |
+| 11 Kill during an import | **PASS** | The app was killed with `taskkill /F` at "Importing 31 of 120". On the next start, `library.json` opens, the count is unchanged (51) and no `.tmp` is left. The notice offers the orphans back: "36 image files aren't in the library. Add them to the Inbox". Limits: `.tmp` was checked only in `thumbs/256`, and "Add them to the Inbox" was not clicked. |
 | 12 Uninstall | NOT CHECKED (not run here) | Read from the generated `installer.nsi`: the uninstaller's "Delete the application data" checkbox, when ticked, runs `RmDir /r` on `$APPDATA\art.horus.app` and `$LOCALAPPDATA\art.horus.app`. That second folder holds the 213 MB model under `models\` and the WebView2 data. Unticked, both stay. The user's library folder is never touched, because it lives where the user chose. The install dir is `$LOCALAPPDATA\Horus`. `INSTALL-UNSIGNED.md` should say this (C7). |
-| 13 Accessibility | **FAIL** (F1, F2) | **Keyboard-only first run passes**: Create, then the demo checkbox, Turn on now, Not now and Begin. The Settings trap (`holdModal`) holds for Tab and Shift+Tab ×9, and Esc from `<body>` closes it with focus back on the gear. The Details trap holds for Tab ×8. axe has no serious or critical issues on reference, reference-similar, search-dropdown, tree, galaxy, radial, boards, lightbox, compare, details or settings. The **two fails are inbox (F1) and about (F2)**. Focus was visible in every keyboard step checked (screenshots). Keyboard tagging in the Inbox: NOT CHECKED. |
+| 13 Accessibility | **FAIL** (F1, F2) | **Keyboard-only first run passes**: Enter on Create, Space on Turn on now and Enter on Begin. Tab stops: Open, the demo checkbox, Turn on now, Not now and Begin; the checkbox and Not now were passed, not toggled. The Settings trap (`holdModal`) holds for Tab and Shift+Tab ×9, and Esc from `<body>` closes it with focus back on the gear. The Details trap holds for Tab ×8. axe has no serious or critical issues on reference, reference-similar, search-dropdown, tree, galaxy, radial, boards, lightbox, compare, details or settings. The **two fails are inbox (F1) and about (F2)**. Focus was visible in every keyboard step checked (screenshots). Keyboard tagging in the Inbox: NOT CHECKED. |
 | 13a Design-review NOT CHECKED items | Shots delivered | The dark theme on every view, and 1100 and 760 px layouts, are in the set. Judging them, and the `impeccable` detector run, belong to -0c. |
 | 14 D4 hover label | **PASS** | Lightbox, Divan Japonais: hover shows "Stand out › Silhouette" and "Make them think › Crop at the edge", visible and not clipped. |
 | 14 D5 harness relaunch on a pick miss | **PASS** | `mara-plan6.js` relaunches on a fresh config after 2 misses. On the first run of the day it missed 4 of 4 in one launch, the known dying dialog route. Later runs missed 0. |
@@ -143,3 +141,19 @@ These include the WebView2 bootstrapper, ORT and the VC++ DLLs. QA does not writ
 - The real network-off case.
 - Keyboard tagging in the Inbox.
 - The `impeccable` detector (-0c).
+
+## AGY #3 cross-check (conversation 9639ac0d, through `agy-run.sh`)
+
+**Verdict, verbatim:**
+
+> "PASS WITH FIXES"
+>
+> "The report's own verdict (`PASS WITH FIXES`, scoped to Windows 11 release build) is right; tighten F3's pair descriptions, two line numbers, and Row 11's `.tmp` phrasing"
+
+**AGY's points and what changed:**
+
+- **F1 and F2:** "real, `Minor` rating is fair". AGY corrected the line numbers (picker.ts:54 and 144–147, about.ts:55, styles.css:709), and I applied them.
+- **The three baseline fails:** "all confirmed harness drift, not regressions".
+- **F3:** "partly overstated". It saw no text-on-text collisions in the 1280 shot, only labels packed tight and "domain labels crossing the orthogonal connector lines". I checked the screenshot again, agreed, and rewrote F3.
+- **Rows weaker than claimed:** Row 11 (the `.tmp` scope, and the recovery not clicked), Row 5 (a synthetic drop and a plain bitmap paste), Row 13 (checkbox and Not now not toggled). The limits are now written into those rows.
+- **On the verdict:** "`PASS WITH FIXES` scoped to Windows 11 release build is right."
