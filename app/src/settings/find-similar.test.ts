@@ -240,6 +240,49 @@ describe("Settings panel", () => {
     s.close();
   });
 
+  it("focus_trap_and_stray_keys (QA F2): Tab wraps, and a key aimed at <body> never reaches the view", async () => {
+    const api = fakeApi(st({ phase: "ready", diskBytes: 1 }));
+    const s = mountSettings(document.body, api);
+    s.open();
+    await tick();
+    const dlg = $(document, '[role="dialog"]');
+    const f = [...dlg.querySelectorAll<HTMLElement>("button:not([disabled])")];
+    expect(f.length).toBeGreaterThan(1);
+    const [first, last] = [f[0], f[f.length - 1]];
+    const key = (on: EventTarget, k: string, shiftKey = false) => {
+      const e = new KeyboardEvent("keydown", { key: k, shiftKey, bubbles: true, cancelable: true });
+      on.dispatchEvent(e);
+      return e;
+    };
+    last.focus();
+    expect(key(last, "Tab").defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(first);
+    expect(key(first, "Tab", true).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(last);
+    // Focus on the dialog itself (a click on its text): Shift+Tab wraps to the last, Tab goes first.
+    dlg.focus();
+    expect(key(dlg, "Tab", true).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(last);
+    dlg.focus();
+    expect(key(dlg, "Tab").defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(first);
+    // Focus fell to <body> (a control went away under it): Backspace never reaches the view.
+    const behind = vi.fn();
+    document.addEventListener("keydown", behind);
+    (document.activeElement as HTMLElement).blur();
+    expect(key(document.body, "Backspace").defaultPrevented).toBe(true);
+    expect(behind).not.toHaveBeenCalled();
+    key(document.body, "Tab");
+    expect(document.activeElement).toBe(first); // Tab from <body> comes back into the dialog
+    (document.activeElement as HTMLElement).blur();
+    key(document.body, "Escape");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    key(document.body, "Backspace"); // closed: keys reach the page again
+    expect(behind).toHaveBeenCalledTimes(1);
+    document.removeEventListener("keydown", behind);
+    s.close();
+  });
+
   it("a late reply from an earlier open is dropped, and its listener removed", async () => {
     const api = fakeApi();
     const subs: { cb: (s: SimilarStatus) => void; done: (u: () => void) => void }[] = [];

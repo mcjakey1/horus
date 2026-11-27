@@ -3,6 +3,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import html from "../index.html?raw";
 import source from "./similar-ui.ts?raw";
+// @ts-expect-error type error without @types/node package (as inks.test.ts)
+import { readFileSync } from "node:fs";
+// Vite hands tests an empty `?raw` stylesheet, and jsdom's import.meta.url isn't a file URL:
+// read the real file from the app folder (vitest's working directory).
+const css: string = readFileSync("src/styles.css", "utf8");
 import type { Api, LibraryView, Reference, SimilarPhase, SimilarStatus, Taxonomy } from "./api";
 import type { DropWin } from "./intake";
 import { wireIntake } from "./intake";
@@ -58,7 +63,7 @@ type Rig = {
   api: Api;
   store: Store;
   emit(s: SimilarStatus): void;
-  drop(type: "enter" | "over" | "drop" | "leave", paths?: string[]): void;
+  drop(type: "enter" | "over" | "drop" | "leave", paths?: string[], reversed?: boolean): void;
   openSettings: ReturnType<typeof vi.fn>;
   destroy(): void;
 };
@@ -108,10 +113,10 @@ async function rig(phase: SimilarPhase): Promise<Rig> {
     api,
     store,
     emit: (s) => emit(s),
-    drop(type, paths = ["C:\\x\\dropped.png"]) {
+    drop(type, paths = ["C:\\x\\dropped.png"], reversed = false) {
       aim = document.querySelector("[data-similar-drop]");
       const payload = { type, paths, position: { x: 1, y: 1 } };
-      dropCb.forEach((cb) => cb({ payload: payload as never }));
+      (reversed ? [...dropCb].reverse() : dropCb).forEach((cb) => cb({ payload: payload as never }));
     },
     openSettings,
     destroy: () => (sim?.destroy(), intake(), view.destroy()),
@@ -269,6 +274,25 @@ describe("Find similar UI", () => {
       expect(r.api.importPaths).not.toHaveBeenCalled();
       const ids = [...group()!.querySelectorAll<HTMLElement>('[role="option"]')].map((e) => e.dataset.r);
       expect(ids).toEqual(["c"]);
+    });
+
+    it.each([false, true])("drag_only_zone_searches (QA F1; listeners reversed: %s)", async (reversed) => {
+      // The real display rules: with the field empty and the dropdown closed, the zone shows
+      // only during a drag, so the hit-test sees it only while `.is-drag` is still on.
+      const style = document.createElement("style");
+      style.textContent = css;
+      document.head.append(style);
+      const zone = $("[data-similar-drop]")!;
+      expect(getComputedStyle(zone).display).toBe("none");
+      document.elementFromPoint = () => (getComputedStyle(zone).display === "none" ? document.body : zone);
+      r.drop("over", undefined, reversed);
+      expect(getComputedStyle(zone).display).toBe("grid");
+      r.drop("drop", ["C:\\x\\dropped.png"], reversed);
+      await settle(0);
+      style.remove();
+      expect(r.api.importPaths).not.toHaveBeenCalled();
+      expect(r.api.similarByFile).toHaveBeenCalledWith("C:\\x\\dropped.png");
+      expect($(".search")!.classList.contains("is-drag")).toBe(false);
     });
 
     it("first_reference_reaches_tab_without_a_manual_show (review 1)", async () => {
