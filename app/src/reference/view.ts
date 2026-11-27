@@ -9,7 +9,7 @@ import { openLightboxWithPicker } from "../lightbox/dock";
 import { linkedFirst, linkErrorCopy, mountLinkEditor } from "../links/editor";
 import { mountBoardMenu } from "../boards/menu";
 import { opInk, opLabel } from "../ops";
-import { mountSearch } from "../search";
+import { mountSearch, type SearchHandle } from "../search";
 import type { Store, StoreEvent } from "../store";
 import { mountPicker } from "../tagging/picker";
 import { type Filter, matchesFilter, toggle } from "./filter";
@@ -27,9 +27,22 @@ export function mountReference(
   root: HTMLElement,
   api: Api,
   store: Store,
-  /** `openCompare`: boot()'s one Compare opener (Plan 4 Task 7); Shift-click and Shift+Enter call it. */
-  opts: { onNavigate?(): void; openCompare?(a: string, b: string): void } = {},
-): { show(id: string): void; ready: Promise<void>; destroy(): void } {
+  /** `openCompare`: boot()'s one Compare opener (Plan 4 Task 7); Shift-click and Shift+Enter call it.
+   * Plan 5 (R14): `onShow` hears every shown reference; `similar` gives search its option B, or
+   * undefined while Find similar is off. */
+  opts: {
+    onNavigate?(): void;
+    openCompare?(a: string, b: string): void;
+    onShow?(id: string): void;
+    similar?(): ((q: string) => Promise<string[]>) | undefined;
+  } = {},
+): {
+  show(id: string): void;
+  ready: Promise<void>;
+  destroy(): void;
+  /** Plan 5 (R14): Find similar's drop target and scope refresh reach the search through this. */
+  search: SearchHandle;
+} {
   const life = new AbortController();
   const signal = life.signal;
   const $ = <T extends Element = HTMLElement>(s: string) => root.querySelector<T>(s);
@@ -115,6 +128,7 @@ export function mountReference(
     }
     renderBack();
     renderStatus();
+    opts.onShow?.(id);
   }
 
   function paintFocus(ref: Reference) {
@@ -200,7 +214,7 @@ export function mountReference(
     // The library's warning lives in #import-notice only (982f8a6), never here as well.
     $("#data-source")!.textContent = `Library: ${folder}`;
     $("#data-source")!.title = store.root;
-    $("#find-similar")!.textContent = `Find similar: ${S.settings.findSimilar === "on" ? "on" : "off"}`;
+    // #find-similar is Plan 5's live status, kept by wireSimilar (similar-ui.ts).
   }
 
   function renderBoxes(ref: Reference) {
@@ -566,7 +580,7 @@ export function mountReference(
   resize?.observe($(".work")!);
   signal.addEventListener("abort", () => resize?.disconnect());
 
-  mountSearch(root, api, {
+  const search = mountSearch(root, api, {
     techniqueName: techName,
     operationLabel: (id) => ({ ...opLabel(store.tax, id), color: opColor(id) }),
     // Under a board scope, an out-of-board reference hit is dropped (search.ts drops undefined).
@@ -574,6 +588,10 @@ export function mountReference(
     // R5: search works from any view; onNavigate (the shell's select("reference")) runs first.
     onTechnique: (id) => (opts.onNavigate?.(), applyFilter(id)),
     onReference: (id) => (opts.onNavigate?.(), show(id)),
+    // Read on each keystroke: Find similar can turn on or off while the view is up.
+    get similar() {
+      return opts.similar?.();
+    },
   }, signal);
 
   const notify = mountImport(root, api, {
@@ -804,6 +822,7 @@ export function mountReference(
   return {
     show: (id: string) => show(id),
     ready,
+    search,
     destroy: () => {
       life.abort();
       unsubscribe();

@@ -111,6 +111,7 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
     if (p.type !== "drop" || !p.paths.length) return;
     const dpr = window.devicePixelRatio || 1; // Tauri reports physical pixels; hit-testing wants CSS ones
     const hit = doc.elementFromPoint?.(p.position.x / dpr, p.position.y / dpr);
+    if (hit?.closest("[data-similar-drop]")) return; // Plan 5: Find similar's drop target searches, never imports
     const onto = hit?.closest<HTMLElement>("[data-ref-drop]")?.dataset.refDrop;
     const source = onto ? store.refs.get(onto) : undefined;
     void importPaths(p.paths).then((added) => {

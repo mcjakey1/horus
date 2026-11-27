@@ -158,6 +158,18 @@ describe("Reference view", () => {
   });
   afterEach(() => view.destroy());
 
+  // ---------- Plan 5 Task 7: the onShow seam (R14) ----------
+  it("calls onShow with every shown reference", async () => {
+    const onShow = vi.fn();
+    view.destroy();
+    view = mountReference(document.body, api, store, { onShow });
+    await view.ready;
+    view.show("a");
+    expect(onShow).toHaveBeenLastCalledWith("a");
+    view.show("b");
+    expect(onShow).toHaveBeenLastCalledWith("b");
+  });
+
   // ---------- Plan 4 Task 7: Compare from the Reference view (C23, R24) ----------
   async function withCompare() {
     vi.mocked(api.scorePair).mockResolvedValue({ id: "b", score: 0.5, sharedTechniques: [], sharedBranches: [] });
