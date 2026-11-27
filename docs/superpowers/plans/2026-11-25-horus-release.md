@@ -119,7 +119,7 @@
   export function checkNoInlineStyle(files)      // app sources only (same set, minus *.test.ts); no `style="` or `style=${` in TS/JS template strings or HTML; CSS files exempt
   // Both scan our own sources, never dist/ (vendor chunks such as PixiJS carry documentation URLs) and never
   // src-tauri/resources/demo/ (manifest.json legitimately holds ~100 https source URLs). The CSP enforces both at runtime.
-  export function checkGates(markdown, final)    // final: every "- [ ]" in RELEASE-GATES.md is a failure (G1–G8)
+  export function checkGates(markdown, final)    // final: every "- [ ]" in RELEASE-GATES.md is a failure (G1–G9)
   export function checkNotices(noticesMd)        // names google/siglip-base-patch16-224 and "Apache License, Version 2.0", and holds either the upstream
                                                  // NOTICE text or a dated "NOTICE: none" line with its evidence (gate G8, Task 9; R5)
   // CLI: node scripts/release-check.mjs [--final]  → prints problems, exit 1 if any
@@ -196,7 +196,8 @@
   - `app/src-tauri/src/taxonomy.rs`, to put `NAMES_41`, `OBSERVED` and `validate_seed` behind `#[cfg(test)]`;
   - `app/src-tauri/Cargo.toml`, adding `tauri-plugin-single-instance = "2"`;
   - `app/src/api.ts`: `LibraryView.integrity?`, the `IntegrityReport` type, and `onThumbsRebuilt(cb)` (it listens to `library://thumbs-rebuilt`), which goes into `NON_IPC_KEYS` in `api.contract.test.ts`;
-  - the integrity notice and the tile re-render: `app/src/firstrun.ts` (`boot()` wiring) and `app/src/reference/view.ts`, with their tests.
+  - the integrity notice and the tile re-render: `app/src/firstrun.ts` (`boot()` wiring) and `app/src/reference/view.ts`, with their tests;
+  - `app/src-tauri/src/commands/similar.rs`, tests only: `rebuilt_thumb_is_indexed` uses Plan 5's test rig.
 
 **Interfaces:**
 - Consumes:
@@ -225,37 +226,48 @@
   - In TypeScript it is the optional `integrity?: IntegrityReport | null`.
   - Update every existing fake `LibraryView` in the tests to include it, or leave it absent (audit #24).
 - **Spec delta, to record in the release notes:** `rebuild_thumbs` rebuilds a missing thumbnail by decoding the original. This is a maintenance exception to SPEC §9's "Originals are decoded only in the lightbox", not a browsing path (audit #27).
-- **The rebuild runs off-lock (B3).** After `remember()`, with no lock held, a background thread runs `rebuild_thumbs` for `missing_thumbs`, then emits `library://thumbs-rebuilt` with the ids, and the UI re-renders those tiles. It never runs under the state lock.
+- **The rebuild runs off the state lock (B3), and before the start hook.** When an `Ok` switch reports `missing_thumbs`, the command spawns one background thread in place of its direct start-hook call. That thread:
+  1. For each id: takes the import gate (`hold_gate`, so a close that waits on the gate still goes through, I1); checks under the state lock (gate, then state, released before any decoding) that this library is still the open one; skips the id if its thumbnails exist by now; then decodes and writes (`decode_srgb`, `on_white`, `write_thumbs`) under the gate only, and releases the gate. It stops at the first id after a switch.
+  2. Emits `library://thumbs-rebuilt` with the ids, with no lock held. The UI re-renders those tiles.
+  3. Calls Plan 5's `similar::start_hook` with no lock held.
+
+  It never takes `similar_start`, `similar_download`, settings or `similar` itself, and nothing joins it. Edits skip the gate, so they never wait for it; an import waits for one image at most.
+  - **Why the gate:** `write_thumb` writes `thumbs/<size>/<hash>.jpg.tmp`, which `sweep_tmp` removes. A reopen of the same library runs its sweep under the gate, so it can never delete a `.tmp` the rebuild is writing.
+  - **Why before the start hook:** Plan 5's indexer reads `thumbs/1024/<hash>.jpg`. Started first, it would put each hash whose thumbnail is missing into `failed`, which only a library switch clears (`detach_indexer`), so a rebuilt image would stay unindexed until the next open. Meanwhile search uses the stored embeddings, as during any switch.
 - The UI shows one quiet notice for the report:
   - "Recovered N images to the Inbox" offers "Add them", which adds the orphans as references through one `Edit::AddReferences`, so the step can be undone. The image files are already in place, and their hashes come from the file names. Each one's title is "Recovered image <first 8 hex digits of its hash>", editable later like any title (C2). This is the Plan 1 QA M4 item (D14).
   - "M references are missing their image file" offers "Show them", which filters the Ranked list to those references. A missing original is never deleted from `library.json`.
 - Single-instance: a second launch passes its arguments to the first copy, which focuses its window and then exits. That is why the sweep can assume it is the only writer.
 - **Taxonomy validation on open uses `taxonomy.validate()`, never `validate_seed()`** (Plan 3 cross-plan impact item 7). An edited taxonomy fails `validate_seed` by design, and `validate_seed` is `#[cfg(test)]`-only after this task anyway. Test: `edited_taxonomy_opens`, where a library whose taxonomy has an added operation, a renamed label and a new domain opens with no integrity warning.
-- **Order inside `open_library` and `create_library` (B3).** Plan 6 adopts Plan 5's order (P5-B4, landed with its tests) and adds the sweep and the check to it (audit #12). Lock order stays import gate, then settings, then state, then `similar`.
+- **Order inside `open_library` and `create_library` (B3).** Plan 6 adopts Plan 5's order (P5-B4, landed with its tests) and adds the sweep and the check to it (audit #12).
+  - **Lock order is Plan 5's, as merged:** import gate, `similar_start`, `similar_download`, settings, state, then `similar`. The sweep and the check take no lock of their own. In `create_library` they run under the import gate only; in `open_library`, under the gate and the state guard. The rebuild's place is above.
+  - **Nothing Plan 6 adds publishes a Find similar status under the state guard:** Plan 5's `build_status` takes the state lock itself (final review), so a `publish` there would deadlock.
   - **`create_library`:**
     1. Flush the previous library (Plan 2 Task 5). On failure, refuse the switch, before anything is created on disk.
     2. `Library::create`, then the demo seed (no lock held).
-    3. Run `sweep_tmp` and `check` on the new root (no lock held).
+    3. Run `sweep_tmp` and `check` on the new root (only the import gate held; `create_inner` holds it from the flush to the swap).
     4. Under the state guard: Plan 5's `similar::detach_indexer` (takes the old indexer and bumps the generation), then `install()`: the asset scope, the `LibraryView` (with Plan 4's `boards` and this task's `integrity`), the new `Open` state with a fresh history.
-    5. Once the guard drops, join the old indexer (`Indexer::stop`).
+    5. Once the guard drops, join the old indexer (`Indexer::stop`), still under the import gate (the worker never takes it).
     6. `remember()`.
-    7. Plan 5's start hook (on `Ok` and `Err`, for whichever library is open); then, on `Ok` only and when `missing_thumbs` is non-empty, this task's `rebuild_thumbs` in the background.
+    7. Plan 5's start hook, for whichever library is open: directly on `Err`, and on `Ok` with no `missing_thumbs`; at the end of the rebuild thread (above) on `Ok` with `missing_thumbs`.
   - **`open_library`:**
     1. Under the state guard (held from the flush to the swap, on purpose): flush, then `Library::open`.
     2. Still under it: `sweep_tmp` and `check` on the new root (existence checks only, so the lock is held briefly).
     3. `similar::detach_indexer` (takes the indexer and bumps the generation, Plan 5), then `install()`.
-    4. Once the state guard drops, join the old indexer; then `remember()`.
-    5. In the `open_library` wrapper: for `Ok` and `Err` alike, join an indexer a failed install left detached, then Plan 5's start hook. Then, on `Ok` only and when `missing_thumbs` is non-empty, `rebuild_thumbs` in the background.
+    4. Once the state guard drops, join the old indexer, still under the import gate; then `remember()`.
+    5. In the `open_library` wrapper, with no lock held: for `Ok` and `Err` alike, join an indexer a failed install left detached. Then Plan 5's start hook, directly or at the end of the rebuild thread, as in `create_library`.
 
-    This is the order as Plan 5 Task 5 lands it (`p5-t5`: `create_library`, `open_library` and `open_inner`); if Task 5's review moves a step, Plan 6 follows the merged code.
-  - **One rule for `Ok` and `Err` (Plan 5):** once the switch has returned, the start hook runs for whichever library is open. A refused or failed switch leaves the old library open and indexed.
+    This is the order as merged on main at 3e844bd (`create_library` and `create_inner`, `open_library` and `open_inner`). Since `p5-t5`, `create_inner` also detaches under the state guard and joins after it drops.
+  - **One rule for `Ok` and `Err` (Plan 5):** once the switch has returned, the start hook runs for whichever library is open (after the rebuild, when one runs). A refused or failed switch leaves the old library open and indexed.
   - **The asset scope stays per folder (R4):** `install()` allows `images/` and `thumbs/` only, never the root (the window never needs `library.json`, `embeddings.bin` or the backups). Plan 4's lightbox cache directory is allowed once, in `setup`.
 
-  **The invariant:** the sweep never deletes a `.tmp` that a live writer may own. Library writers (the saver, edits, imports) are excluded by the state lock, and the indexer's file, `embeddings.bin.tmp`, is skipped by name. That covers a reopen of the same library too, whose old indexer is joined only after the sweep. A leftover `embeddings.bin.tmp` is harmless, because `write_atomic` deletes its own `.tmp` before writing. Tests:
+  **The invariant:** the sweep never deletes a `.tmp` that a live writer may own. Library writers (the saver, edits, imports) are excluded by the state lock, the thumbnail rebuild by the import gate (per image), and the indexer's file, `embeddings.bin.tmp`, is skipped by name. That covers a reopen of the same library too, whose old indexer is joined only after the sweep. A leftover `embeddings.bin.tmp` is harmless, because `write_atomic` deletes its own `.tmp` before writing. Tests:
   - `open_pipeline_order`: a fake hook records the order of the steps in both commands.
   - A `.tmp` planted by a fake saver or indexer hook after `install()` survives.
   - Plan 5's `failed_open_keeps_old_indexer`, `start_hook_restarts_after_switch` and `switch_library_stops_indexer` stay green.
   - `rebuild_is_off_lock`: while `rebuild_thumbs` runs (slow fake decode), an edit command completes.
+  - `rebuilt_thumb_is_indexed` (Plan 5's rig, fake encoder): with Find similar ready, a library whose one reference lacks `thumbs/1024/<hash>.jpg` opens; after `library://thumbs-rebuilt`, that hash is indexed (`indexed == total`) and is not in `failed`.
+  - `rebuild_tmp_survives_reopen`: a slow fake decode holds a rebuild mid-image while the same library is reopened. The reopen's sweep waits for the gate, the rebuild's thumbnail lands, and the second rebuild skips it.
 
 - [ ] **Step 1: Write the failing tests**
   - `sweep_removes_only_tmp`: plant `images/.tmpAb12`, `images/x.jpg.tmp`, `thumbs/256/.tmpZ` and `library.json.tmp`. All four are removed. `images/<hash>.jpg`, `library.bak.json` and `taxonomy.bak.json` stay.
@@ -310,14 +322,15 @@
 
 The items deferred to Plan 6 that no other task owns (R11). Each is small; group them by file into one or two commits. Each gets a test where one is cheap, otherwise a recorded manual check.
 
-**Files:** the owning modules named per item; `app/src/styles.css` for the CSS items.
+**Files:** the owning modules named per item; `app/src/styles.css` for the CSS items; for D8, `app/src/views/move-tags.ts`, `app/src/settings/panel.ts` and a new `app/src/modal.ts`; for Step 3a, the modules each finding names.
 
 - [ ] **Step 1: Focus and Esc**
   - **D1 (Plan 4 QA F1):** in the lightbox, Esc in the technique picker closes the whole lightbox and loses an unsaved drawn region and the zoom. The picker's Esc branch calls `stopPropagation`. Test: Esc in the picker inside the lightbox closes only the picker.
-  - **D8 (Plan 3 QA F1):** Ctrl+Z with an empty search in the move-tags dialog runs WebView2's native undo, refills `#q` and moves focus out of the `aria-modal` dialog (Esc then dead). The dialog makes the rest of the window `inert` while open, as first run and Settings do. Test: focus stays in the dialog and Esc closes it.
+  - **D8 (Plan 3 QA F1):** Ctrl+Z with an empty search in the move-tags dialog runs WebView2's native undo, refills `#q` and moves focus out of the `aria-modal` dialog (Esc then dead). The fix reuses Settings' pattern from `settings/panel.ts` (Plan 5): the rest of the window goes `inert`, Tab and Shift+Tab wrap inside the dialog, and a capture-phase `document` keydown listener catches a key whose target fell outside (to `<body>`), sending Tab back in and closing on Esc. Move that trap and listener out of `panel.ts` into one helper, `app/src/modal.ts` (`holdModal(sheet, onEscape): () => void`), used by Settings and the move dialog; Settings' tests stay green. The dialog's search field also `preventDefault`s Ctrl/Cmd+Z while it is empty, so native undo never runs. Test (jsdom has no native undo): with focus moved to `<body>`, Tab returns into the dialog and Esc closes it. The real Ctrl+Z is a Task 8 row.
 - [ ] **Step 2: The notice and copy pass** (one pass, with Task 5's notices copy)
   - **D3 (Plan 4 QA J1):** the Boards status text goes stale after undo of a scoped board delete. It re-renders on the undo's change.
   - **D9 (Plan 3 QA F2, Plan 2 N2):** `#import-notice` covers the inspector's "Delete technique…" at 1280×800, and still says "Added 1 to the Inbox" after undo. Move or shrink it clear of the inspector controls, and clear or update it when an undo reverses what it reports.
+  - **`#import-notice` is shared since Plan 5** (applies to D9, D15 and Task 2's integrity notice): its `aria-label` is now "Notice", and it also carries first run's Find similar failure, with an "Open Settings" button (`[data-open-settings]`, handled by a delegated click in `settings/panel.ts`). D9's undo-clear clears only a notice that reports what the undo reversed (mark it, for example `data-kind="import"`), never a Find similar failure. As today, a newer notice replaces an older one; a replaced Find similar failure stays visible in Settings. Keep the `[data-open-settings]` markup working.
   - **D6 (Plan 4 ledger):** remap the raw-ish `UnknownTag` edit error to artist copy.
   - **D13 (Plan 2 QA N1):** the save-failure message shows raw OS text ("Access is denied. (os error 5)"). It gets a plain hint, for example "Check that the library folder is not read-only", and the raw text goes to stderr only.
   - **D15 (Plan 1 QA M3):** the import notice shows "Importing N of M" and a Cancel text button. The same surface serves Task 4's "Verify image files…" (C3).
@@ -326,8 +339,23 @@ The items deferred to Plan 6 that no other task owns (R11). Each is small; group
   - **D12 (Plan 3 T10 M1–M3):** the inline field freezes when `run()` returns false (busy never reset); only op and domain `InUse` refusals get the O3 sentence; the last-link test can no longer pass vacuously.
   - **D18 (Plan 4 ledger):** exports are `0600` on macOS and Linux (NamedTempFile); set `0o644` under `cfg(unix)`.
   - **D19 (Plan 4 fix wave):** a hand-edited board naming an absent id fails reorder and remove with generic copy (`set_board_members` drops absent ids); grid refocus by index uses `preventScroll`.
+- [ ] **Step 3a: Design review fixes (Plans 1–4).** From `plan6-design-review-plans1-4.md` (Claude with the `impeccable` skill, standing in for Kimi; the controller's dispositions are in that file). Line numbers were re-checked on main at 3e844bd. Each P1 gets a jsdom test where the DOM shows it; the rest get a recorded manual check in Task 8.
+  - **P1, fix first:**
+    - **F1:** `.lab-meta` (`styles.css:113-116`) shares its anchor with `.boards-open` (:546), and `.link-handle` (:486) covers its right end, so "Boards…" paints over the readout. Put "Tag…", "Link…", "Boards…" and "Open lightbox" (`reference/view.ts:628, 650, 720, 752`) in one `.lab-actions` row (`position: absolute; top: 14px; left: 16px; display: flex; gap: 6px`).
+    - **F2:** `readout()` (`reference/view.ts:239`) repeats the creator and year inside the credit, so the ellipsis cuts "Grey card N5 · Value view on". Drop the creator and year when the credit already contains them; only the credit span shrinks (`flex: 0 1 auto; min-width: 0; text-overflow: ellipsis`), with the full text in `title`.
+    - **F3:** Compare's value view, swap and lightbox are keyboard-only (v, x, L; `compare/view.ts:202-206`). Add "Value view" (`aria-pressed`), "Swap" and "Lightbox" text buttons to `.cmp-top` (:93).
+    - **F4:** the Galaxy inspector (`views/galaxy.ts:114`) has no breadcrumb (Principle 4). Export `crumbHTML` (`views/inspector.ts:64`) and show it from the selection's first tag path.
+    - **F5:** graph labels are 13 world units (`LABEL_FONT`), hidden only below 8 px on screen (`LABEL_MIN_PX`, `graph/constants.ts:22-23`; `graph/scene.ts:251, 326`), so Radial at fit draws about 9 px text. Counter-scale label text to 12 px on screen (`scale = 1 / cam.scale`), and hide by overlap, not by size.
+  - **P2, small:**
+    - **F6:** Radial centred on an operation shows "—" in all four crumb cells (`views/inspector.ts:124-128`). Fall back to the centred operation.
+    - **F7:** Compare shows "Only here" (`compare/view.ts:86`) and "Same operation × domain" (:103) over empty lists. Show each only when non-empty, as :87 already does; clamp `.cmp-title` (`styles.css:566`) to 2 lines.
+    - **F8:** the Tree's `fitAll` (`views/tree.ts:239`) fits the nodes, not the labels. Widen the bounds by `LABEL_W / 2`.
+    - **F9:** "Import images…" and "Import folder…" (`index.html:75-76`) against "Add images…" and "Add folder…" (`inbox/view.ts:53`). Use "Add" in both.
+    - **F10:** the lightbox hint is about 140 characters and ellipsised (`lightbox/view.ts:54`; `styles.css:362`). Shorten it to "Drag to tag a region · v value · Esc closes", plus a "Keys" disclosure with the rest.
+    - **F11:** the Boards scope button's label changes with its state, and the status bar repeats it; Delete sits next to Export (`boards/view.ts:89-92`). Use a fixed label with a " · on" suffix, like `.tree-all` (`styles.css:383`), and put Delete after a `.sep`.
+    - **F12:** hit targets under WCAG 2.2's 24 px: `.insp-x` about 20 px (`styles.css:417`), `.chip-x` and `.pk-chip button` 22 px (:172, :293). Make each at least 24 × 24.
 - [ ] **Step 4: Plan 1 carries (C8).** Check each against main and close what Plan 3 already did: thin `validate()` negative tests (add table-driven mutations), missing vs `null` optional keys, and a serde default for `BranchTechnique` `source`/`rationale`.
-- [ ] **Step 5: Run and commit.** Run `npm test`, `npm run build`, `cargo test` and `cargo clippy --all-targets -- -D warnings`. Commit message: `fix: deferred fixes from Plans 1-5 (focus, notices, copy, export permissions)`.
+- [ ] **Step 5: Run and commit.** Run `npm test`, `npm run build`, `cargo test` and `cargo clippy --all-targets -- -D warnings`. Commit message: `fix: deferred fixes from Plans 1-5 (focus, notices, copy, export permissions, design review)`.
 
 Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgment row; D14 to Task 2; D17 to Task 4's design pass; D20–D24 to R7, R8/R9, B4, R10 and B3.
 
@@ -368,12 +396,13 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
   - **"Verify image files…"** shows its progress and a Cancel text button in the import notice, the same surface as Task 3b's import progress (D15, C3).
   - On macOS, the standard app menu holds About.
 - **Behaviour:**
-  - The intro plays on first launch, from `boot()`: `boot()` awaits `playIntro` when `shouldPlayIntro(settings)`, **before** the `lastLibrary` branch and before `firstRun()`, so it plays once for everyone, including users who already have a library (R12). It sits above Settings (z 45) and first run (z 50).
+  - The intro plays on first launch, from `boot()`: `boot()` awaits `playIntro` when `shouldPlayIntro(settings)`, **before** the `lastLibrary` branch and before `firstRun()`, so it plays once for everyone, including users who already have a library (R12). It sits above Settings (z 45) and first run (z 50), the merged values: the intro takes z 55.
   - The first `keydown`, `pointerdown` or `wheel` resolves it as `"skipped"`, within one frame.
   - It resolves as `"done"` by `INTRO_MAX_MS` at the latest.
   - When it resolves either way, `set_settings({ introSeen: true })` is called.
   - Under reduced motion it shows a still frame, which stays until any input.
   - "Play intro" replays it and leaves `introSeen` as it is.
+  - "Play intro" and "About Horus" first close an open Settings panel (`mountSettings(...).close()`, wired in `boot()`). Its capture-phase key listener swallows every key outside its sheet, so it would eat the intro's skip key and About's Esc. About uses Task 3b's `holdModal`.
 - **The look is a showcase surface:**
   - It uses the DESIGN.md system: the Conservation Study, the Source Serif 4 wordmark, the Grey Card N5 specimen and the operation inks, used only to name operations.
   - **Its copy never claims there are always four operations** (Plan 3 cross-plan impact item 8). Operations are editable, so the seed's four are described as "a starting set".
@@ -404,6 +433,13 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
 
 - [ ] **Step 3: The design pass (with the user).** Run the `impeccable` skill on the intro surface in its showcase register. Write the result into `intro.ts` and `styles.css`, keeping the Step 1 tests green. Record the approved concept as a short "Intro card" section in `DESIGN.md`.
   - **D17 in the same pass:** light Group Green's `-on` measures 4.37:1, under AA's 4.5:1. The design reviewer picks the smallest seed-ink change that reaches 4.5:1, `DESIGN.md` records it, and `inks.test.ts` asserts it.
+  - **The DESIGN.md drift list in the same pass** (from `plan6-design-review-plans1-4.md`; `styles.css` lines checked on main at 3e844bd). Fix each in the code, or record in `DESIGN.md` why it stays:
+    - the record-key uppercase style reused as section labels: `.insp-plain` :395, `.insp-h` :399, `.tx-h` :432, `.group-head` :505, `.cmp-h` :573 and `.ref-boards .k` :554 (which also reuses `.k`, `reference/view.ts:723`). Use a 12 px sentence-case caption in ink-2;
+    - measurements in the UI font, not mono: `.cmp-score` :564, `.lb-zoom` and `.lb-size` :482;
+    - straight connectors where DESIGN.md calls for curves: the link-drag leader (:489) and the Galaxy edges;
+    - `.plate`'s fallback `#ddd` (:99) is not a token and flashes in dark mode. Use `var(--card)`;
+    - board tile titles are 12 px (`.bd-title` :532); DESIGN.md's Item size is 15 px;
+    - the Library button comes before the wordmark in the top bar (`index.html:11`).
 
 - [ ] **Step 4: Commit.** Commit message: `feat(ui): skippable intro card, native menu and About with licences and credits`.
 
@@ -478,12 +514,12 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
   - on Windows, that the four VC++ DLLs are in `src-tauri/ort/` with a PE file version of at least 14.x. They have no SHA-256 pin, because the build machines' copies change (B4);
   - that each artefact is within its measured size budget (Global Constraints, R9), read from `budgetBytes` (per artefact) in `app/release-check.json`, which this task writes from the measurements. The same file holds `textures` (Task 1).
 - **Find similar on each platform (B1, B4).** These change Plan 5's code, so they sit here with the platform config:
-  - **The macOS 14 guard (B1).** Beside Plan 5's AVX2 guard, at start-up and before any load: on macOS, read `sysinfo::System::os_version()`, parse the major version as a `u32` (so 26 and later work), and if it is below 14, Find similar is unavailable. If `os_version()` returns `None`, the guard fails open. ORT is never `dlopen`ed when the guard fails.
-  - **`SimilarStatus.unsupported: Option<String>`** (Rust; in `api.ts` the optional `unsupported?: string | null`, so the existing test fakes stay valid) is set at start-up when either guard fails (AVX2, or macOS below 14), so Settings and first run can render it before any enable. Its copy is fixed, from `similar/copy.rs`: "Find similar needs macOS 14 or later." (and Plan 5's processor line for AVX2).
-  - **Settings:** one muted line in place of the switch, with no "Try again". **First run:** the same line instead of the choice, and `find_similar` is recorded as `"off"`.
+  - **The macOS 14 guard (B1).** Beside Plan 5's AVX2 guard (in `pipeline()`, before it takes `similar_download`), at start-up and before any load: on macOS, read `sysinfo::System::os_version()`, parse the major version as a `u32` (so 26 and later work), and if it is below 14, Find similar is unavailable. If `os_version()` returns `None`, the guard fails open. ORT is never `dlopen`ed when the guard fails.
+  - **`SimilarStatus.unsupported: Option<String>`** (Rust; in `api.ts` the optional `unsupported?: string | null`, so the existing test fakes stay valid) is set at start-up when either guard fails (AVX2, or macOS below 14), so Settings and first run can render it before any enable. It is computed once in `setup` into an immutable `SimilarEnv` field, so `build_status` reads it with no lock. Its copy is fixed, from `similar/copy.rs`: "Find similar needs macOS 14 or later." (and Plan 5's processor line for AVX2).
+  - **Settings:** one muted line in place of the switch, with no "Try again". **First run:** the same line instead of the choice. The choice counts as answered `"off"`, and Begin saves `"off"`, as it does for any `"off"` answer (since Plan 5, first run saves the choice at Begin, never on a click or at render). `firstRun` reads `unsupported` from the `similarStatus()` call it already makes for the download size.
   - **Windows pre-load (B4).** `ort::init_from` calls `LoadLibraryExW(..., 0)`, which doesn't search `ort/` for dependencies. So before `init_from`, Plan 5's loader pre-loads `onnxruntime.dll` with `LoadLibraryExW(path, NULL, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS)` and keeps the `HMODULE` alive. That way dev runs (all DLLs in `ort/`) work too.
-  - **Sourcing the VC++ DLLs (B4):** `fetch-ort.mjs` on Windows copies `msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll` and `vcruntime140_1.dll` from the build machine's Visual Studio `VC\Redist\MSVC\<ver>\x64\Microsoft.VC14*.CRT\` (found through `vswhere`) into `src-tauri/ort/`. Microsoft's Visual C++ redistributable terms allow app-local copies; `notices/manual.md` records the licence line.
-  - **Tests:** `macos_guard_by_version` with an injected version: 13 is unsupported, 14 and 26 are supported, `None` is supported. `unsupported_is_set_before_enable`: the status carries the line, and enabling never loads the encoder. TS: Settings shows the muted line and no switch; first run shows the line instead of the choice and records `"off"`.
+  - **Sourcing the VC++ DLLs (B4):** `fetch-ort.mjs` on Windows copies `msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll` and `vcruntime140_1.dll` from the build machine's Visual Studio `VC\Redist\MSVC\<ver>\x64\Microsoft.VC14*.CRT\` (found through `vswhere`) into `src-tauri/ort/`. Microsoft's Visual C++ redistributable terms are understood to allow app-local copies. That was ruled from recall, not from the terms, so gate G9 (Task 9) confirms it before release; `notices/manual.md` records the licence line.
+  - **Tests:** the new `SimilarEnv` field also goes into Plan 5's test rig (`rig_full`, beside `agent: download::local_test_agent`). `macos_guard_by_version` with an injected version: 13 is unsupported, 14 and 26 are supported, `None` is supported. `unsupported_is_set_before_enable`: the status carries the line, and enabling never loads the encoder. TS: Settings shows the muted line and no switch; first run shows the line instead of the choice and records `"off"`.
 - `app/THIRD_PARTY_NOTICES.md` is generated from three parts, in this order:
   1. `app/notices/manual.md`;
   2. `cargo about generate about.hbs` (with `app/src-tauri/about.toml` accepting MIT, Apache-2.0, BSD-2/3-Clause, ISC, Zlib, Unicode-3.0 and MPL-2.0);
@@ -594,6 +630,7 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
   3. First run creates a library at a path with non-ASCII characters and spaces. On macOS, use a folder named in NFD, such as `Références` made in Finder.
   4. The demo set opens, and the thumbnails show through the asset protocol.
   5. Folder drag-drop into the Inbox works, and so does pasting an image from a browser (Plan 2).
+  5a. **A native file-manager drag onto Find similar's drop zone** (Plan 5 never tested it; the user is asked to try it on Windows). With Find similar ready, drag one image from Explorer (Finder, or Files on Linux) over the search field so the drop zone shows, and drop it on the zone: "Looks similar" results show and nothing is imported. Dropped off the zone, it imports as usual. Run it at 100% and at 125% or 150% display scaling (`dropHit` divides by the device pixel ratio).
   6. The Tree, Galaxy and Radial views draw at 60 fps with the demo set, and remain usable with 2,000 references, using the Plan 3 stress fixture. Linux WebKitGTK uses WebGL.
   7. The lightbox opens a TIFF preview (Plan 4).
   8. A board export to a folder opens in the system file manager through "Open folder".
@@ -610,11 +647,18 @@ Routed elsewhere: D4, D5, D7, D10 and D16 to Task 8 rows; D11 to a Task 8 judgme
       - the axe-core DevTools scan on each view, with no serious or critical issues;
       - focus is always visible;
       - the full "Op > Technique" hover label is live (D4).
+  13a. **The design review's NOT CHECKED items** (`plan6-design-review-plans1-4.md`, after Task 3b Step 3a):
+      - the Reference view's readout and plate buttons as rendered (F1, F2), and the Inbox, the technique picker and the lightbox as rendered;
+      - the dark theme on every view;
+      - the layouts at 1100 px and 760 px wide;
+      - keyboard flows in the running app, including Task 3b's new Compare buttons (F3);
+      - an `impeccable` detector run over the built app, with no P1 left.
   14. **Deferred checks:**
       - **D5:** the QA harness relaunches the app on a first-run pick miss;
       - **D7:** measure the lightbox's Lanczos3 peak at 20000×6000 (about 780 MB recorded); decide whether to resample differently;
       - **D10:** Galaxy at 2,500 references: record the overlapping pairs after settle (1,255 recorded) and decide;
       - **D16:** on macOS, Cmd+Q while a save is failing still shows the save-failure dialog (`ExitRequested`);
+      - **D8:** a real Ctrl+Z (Cmd+Z on macOS) with an empty search in the move-tags dialog keeps focus in the dialog, and Esc then closes it;
       - **D11 (judgment row):** graph label cosmetics (names at about 8 px, faint outlines at fit, crumb ellipsis, Tree down-connector, the Radial fit hiding names, the label floor, `clipLabel`'s space before "…"). Fix only what the design review calls P1.
 - [ ] **Step 2: Fix and record.** Fix every failure in the owning plan's code, re-run that row, and record it. A platform passes only when every row passes.
 - [ ] **Step 3: Commit.** Commit message: `docs(release): cross-platform QA matrix results`.
@@ -664,7 +708,10 @@ These are checkable sign-offs, not code. A gate closes only with **evidence and 
   - **The automated part, in `release-check`:**
     - `checkGates` treats G8 like every other gate;
     - `checkNotices(noticesMd)` fails unless the notices name `google/siglip-base-patch16-224` and `Apache License, Version 2.0`, and hold either an upstream NOTICE text or a dated `NOTICE: none` line (Task 1, R5).
-- [ ] **Step 1: Write `RELEASE-GATES.md`** with G1–G8 as unticked boxes, each with all the fields above. Run `npm run release-check -- --final`. Expected: it fails and lists 8 open gates.
+- **G9. The Visual C++ runtime may ship app-local** (B4). The owner is the USER, or counsel. The B4 ruling that Microsoft's terms allow app-local copies of `msvcp140.dll`, `msvcp140_1.dll`, `vcruntime140.dll` and `vcruntime140_1.dll` was made from recall, not from the terms.
+  - **Pass criteria:** the Microsoft licence terms for the Visual Studio edition and version the DLLs come from (the build machine's, or the CI runner's, Task 6) are read, and their distributable-code list (the `redist.txt` they point to) names those four files. Any condition they set (for example, distributing the files only with your program) is met and recorded. Evidence: a copy of or link to those terms, the Visual Studio version, and the date.
+  - **If it fails:** the Windows bundle drops the four DLLs (`tauri.windows.conf.json` and `checkBundle`), `INSTALL-UNSIGNED.md` and the release notes tell Windows users that Find similar needs Microsoft's Visual C++ Redistributable, and QA row 9a records what a machine without it shows.
+- [ ] **Step 1: Write `RELEASE-GATES.md`** with G1–G9 as unticked boxes, each with all the fields above. Run `npm run release-check -- --final`. Expected: it fails and lists 9 open gates.
 - [ ] **Step 2: Commit.** Commit message: `docs(release): explicit legal, IP, rights and signing gates`.
 
 ---
@@ -715,7 +762,7 @@ These are checkable sign-offs, not code. A gate closes only with **evidence and 
 3. **Publisher, copyright and authors:** "Jake Manahan", exactly as given, for `bundle.publisher`, `bundle.copyright` ("© 2026 Jake Manahan") and Cargo `authors`. No email or contact field is set anywhere, because none was given.
 4. **Hosting:** GitHub Releases, built by GitHub Actions on Windows, macOS and Linux (Task 6). Each release is a draft prerelease until the user publishes it.
 
-**Preflight rulings (controller, 2026-11-27, delegated by the user and reversible by them):** see `plan6-preflight-rulings.md`. The platform calls: macOS stays 11+ for the app with Find similar on macOS 14+ (B1); the ORT dylib ships as a macOS framework (B2); the VC++ runtime ships app-local (B4); macOS is Apple Silicon only (R7, the user's own ruling in Plan 5).
+**Preflight rulings (controller, 2026-11-27, delegated by the user and reversible by them):** see `plan6-preflight-rulings.md`. The platform calls: macOS stays 11+ for the app with Find similar on macOS 14+ (B1); the ORT dylib ships as a macOS framework (B2); the VC++ runtime ships app-local (B4; its licence terms are gate G9, as the ruling was made from recall); macOS is Apple Silicon only (R7, the user's own ruling in Plan 5).
 
 **Open with the user:** R27, metadata editing (title, creator, year, credit) in v1. Not ruled; it stays out of v1 unless the user says otherwise.
 
