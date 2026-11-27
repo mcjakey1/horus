@@ -92,6 +92,11 @@ Horus is for illustrators, concept artists, photographers, and designers who kee
 - **Region tags.** You can tag one part of an image. The callout box shows the region on the image.
 - **Related references with a score.** Horus compares the tags of two references. Rare techniques count more than common techniques. The score uses cosine similarity with IDF weights.
 - **Search by idea.** Type a plain word, for example "moody" or "backlit". Horus finds the techniques that match, through their names, synonyms, and descriptions.
+- **Find similar (optional).** Horus can also find references that look alike. It uses a local image model, Google SigLIP, on ONNX Runtime. You turn it on in the first run or in Settings. Horus then downloads the 213 MB model one time.
+- **"Looks similar" tab.** In the Reference view, this tab shows the references that look like the current reference. The results are about the look of the image, not about technique.
+- **"Looks similar" in search.** When Find similar is on, the search list has a "Looks similar" group below the technique results. Horus does not show a score for these results.
+- **Drop an image to search.** Drag an image file onto the drop target next to the search box. Horus shows the references that look like it. Horus does not import this image.
+- **Settings.** Select the gear to open Settings. There, you turn Find similar on or off and see the download and index progress. You can also pause the index or remove the model.
 - **Tree view.** The Tree shows the taxonomy in four bands, from top to bottom: operations, domains, techniques, and references. The inspector on the right shows the selected item. A breadcrumb at the top of the inspector shows its path.
 - **Taxonomy editing.** In the Tree inspector, you can rename an item, write its definition, and add or remove synonyms. Each edit is one undo step. Press `Ctrl+Z` to undo it.
 - **Safe delete.** When you delete a technique, Horus shows how many references use it. You move its tags to a different technique, or you keep them as partial tags (operation only).
@@ -113,7 +118,7 @@ Horus is for illustrators, concept artists, photographers, and designers who kee
 - **Correct color and orientation.** Horus converts embedded color profiles to sRGB for thumbnails. It applies the EXIF orientation of phone photos.
 - **Safe saves.** Horus writes each save to a temporary file first. It keeps a backup copy of the last good library file. It can open a library from its backup.
 - **Demo set.** The app includes 50 public-domain works with suggested tags. Use them to learn the app before you add your own images.
-- **Local and offline.** Horus does not use a server or an account. The library is a folder that you own.
+- **Local and offline.** Horus does not use a server or an account. The library is a folder that you own. The only network use is the one model download for Find similar.
 - **Light and dark themes.** The image card stays the same neutral grey in both themes. This keeps the colors of your references accurate.
 
 ## How it works
@@ -135,6 +140,25 @@ flowchart LR
 5. **Index.** Horus counts how often each technique occurs. Rare techniques get a higher weight.
 6. **Relate.** Horus compares the tag sets of two references. It shows the strongest matches first.
 
+### Find similar
+
+```mermaid
+flowchart LR
+  A[Turn on] --> B[Download and verify]
+  B --> C[Load the model]
+  C --> D[Index thumbnails]
+  D --> E[embeddings.bin]
+  E --> F[Looks similar]
+```
+
+1. **Turn on.** You select **Turn on now** in the first run, or you turn on the switch in Settings.
+2. **Download.** Horus downloads the model files from Hugging Face, at one pinned revision. It checks the SHA-256 of each file. If you quit during the download, the download continues from the same point at the next start.
+3. **Load.** Horus loads ONNX Runtime from the app folder, and then the model. The model uses the CPU only.
+4. **Index.** Horus makes a list of 768 numbers (a vector) from the 1024 px thumbnail of each reference. It saves the vectors in `embeddings.bin` in the library folder. New imports go into the index automatically.
+5. **Search.** Horus compares the vectors by cosine similarity. It shows only the results above a minimum value: 0.55 for image to image, and 0.05 for words to image.
+
+The model files are in the app's local data folder, in `models/siglip-b16-224-q8/`, and all libraries use the same files. On Windows, this folder is in `%LOCALAPPDATA%`.
+
 ### The library folder
 
 | Item | Contents |
@@ -144,6 +168,7 @@ flowchart LR
 | `taxonomy.json` | The operations, domains, and techniques for this library |
 | `images/` | Copies of the original images, named by their BLAKE3 hash |
 | `thumbs/256/`, `thumbs/1024/` | Thumbnails in two sizes |
+| `embeddings.bin` | The Find similar index (only when Find similar is on) |
 
 If you select a folder that contains other files, Horus makes the library in a `Horus Library` subfolder. It does not change your other files.
 
@@ -159,6 +184,28 @@ The seed taxonomy has 4 operations, 6 domains, and 48 techniques. The four opera
 | Infer | Make them think |
 
 A technique can occur under more than one operation and domain. The full taxonomy is in [`taxonomy/taxonomy.json`](taxonomy/taxonomy.json), with a description and citation for each technique.
+
+## The Find similar model
+
+| Item | Value |
+|---|---|
+| Model | Google SigLIP base, patch 16, 224 px (Apache-2.0), 8-bit ONNX export `Xenova/siglip-base-patch16-224` |
+| Download | 213,373,093 bytes (213 MB), one time, from Hugging Face |
+| Runtime | Microsoft ONNX Runtime 1.31.1 (CPU), in the installer |
+| Installer size | Windows: about 24.4 MiB (NSIS) and 28.1 MiB (MSI). The model is not in the installer. |
+
+These values come from the Plan 5 checks on a Windows 11 computer with 16 GB of RAM:
+
+| Check | Result |
+|---|---|
+| Index the 50 demo references | About 14 s (release build) |
+| Index 2,500 references | About 12.3 minutes, at 0.295 s for each image (debug build) |
+| Peak memory of `horus.exe` while it indexes | 363 MB |
+| Search with words, when the index is complete | 68–110 ms |
+| Search with words, while the index runs | 313–359 ms |
+| Frame time in the Reference view while the index runs | 18.8 ms or less |
+
+For all the measured values, read [`app/README.md`](app/README.md#find-similar-verification-numbers-plan-5-task-8).
 
 ## Run it locally
 
@@ -180,15 +227,22 @@ A technique can occur under more than one operation and domain. The full taxonom
    npm install
    ```
 
-3. Start the app:
+3. Get ONNX Runtime for Find similar. This command downloads the library one time, checks its SHA-256, and puts it in `src-tauri/ort/`:
+
+   ```bash
+   npm run fetch:ort
+   ```
+
+4. Start the app:
 
    ```bash
    npm run tauri dev
    ```
 
-4. On the first-run screen, select **Create a new library…**.
-5. Keep **Start with the demo set** selected.
-6. Select **Begin**.
+5. On the first-run screen, select **Create a new library…**.
+6. Keep **Start with the demo set** selected.
+7. For Find similar, select **Turn on now** or **Not now**.
+8. Select **Begin**.
 
 ### Run the tests
 
@@ -202,13 +256,14 @@ cargo test
 ### Make the Windows installers
 
 1. Open a terminal in the `app` folder.
-2. Make the release build:
+2. If `src-tauri/ort/` is empty, run `npm run fetch:ort`. The installers include this ONNX Runtime library.
+3. Make the release build:
 
    ```bash
    npm run tauri build
    ```
 
-3. Find the installers in `app/src-tauri/target/release/bundle/`:
+4. Find the installers in `app/src-tauri/target/release/bundle/`:
    - `msi/Horus_0.1.0_x64_en-US.msi`
    - `nsis/Horus_0.1.0_x64-setup.exe`
 
@@ -224,7 +279,7 @@ Horus is an early beta. The project has six plans in [`docs/superpowers/plans/`]
 | 2 | Tagging, Inbox, undo and redo, drag and drop, library menu | Done |
 | 3 | Tree, Galaxy, and Radial views; taxonomy editing | Done |
 | 4 | Boards, Lightbox, Compare, and links between references | Done |
-| 5 | Find similar (local SigLIP image model) and Settings | Planned |
+| 5 | Find similar (local SigLIP image model) and Settings | Done |
 | 6 | Intro card, macOS and Linux builds, release checks | Planned |
 
 ## Architecture
@@ -241,6 +296,9 @@ Horus is an early beta. The project has six plans in [`docs/superpowers/plans/`]
 | `app/src-tauri/src/commands/taxonomy_edit.rs` | Tauri commands for taxonomy edits |
 | `app/src-tauri/src/export.rs` | Board export to a folder, with `credits.txt` |
 | `app/src-tauri/src/demo.rs` | Demo set seed |
+| `app/src-tauri/src/similar/` | Find similar: the model table, the download, the SigLIP encoder, the index store, the indexer, and the error text |
+| `app/src-tauri/src/commands/similar.rs` | Tauri commands and status events for Find similar, and the index start and stop around a library change |
+| `app/scripts/fetch-ort.mjs` | Downloads and checks the pinned ONNX Runtime library (`npm run fetch:ort`) |
 | `app/src/` | TypeScript UI: Reference view, first run, and import |
 | `app/src/graph/` | Graph engine: camera, culling, level of detail, texture cache, layouts, PixiJS scene, and the force-layout worker |
 | `app/src/views/` | Tree, Galaxy, and Radial views, the inspector, the move-tags dialogs, and the technique form |
@@ -248,6 +306,7 @@ Horus is an early beta. The project has six plans in [`docs/superpowers/plans/`]
 | `app/src/links/` | Link editor |
 | `app/src/compare/` | Compare view |
 | `app/src/lightbox/` | Lightbox: zoom and pan (`zoom.ts`), and the tag picker docked in the lightbox (`dock.ts`) |
+| `app/src/similar-ui.ts`, `app/src/settings/` | The "Looks similar" tab, the drop target, the status line, and the Settings panel |
 | `taxonomy/` | Seed taxonomy and its check script |
 | `demo/` | Demo images, manifest, and rights record |
 | `prototype/` | HTML prototype of the Reference view |
@@ -264,13 +323,19 @@ For the product design, read [`SPEC.md`](SPEC.md), [`PRODUCT.md`](PRODUCT.md), a
 - At the zoom that fits the full graph, the Tree and the Radial hide the names of items. Zoom in to read them. Plan 6 adds a minimum name size.
 - In the Tree, **Show all references** draws the references of each technique as one thin column.
 - A long import shows "Importing…" only. It does not show a count or a Cancel button yet.
-- Only Windows builds are available. Plan 6 adds macOS and Linux builds.
+- Only Windows builds are available. Plan 6 adds macOS and Linux builds. On macOS, Horus supports Apple Silicon only. There is no build for Intel Macs.
+- On x86 computers, Find similar needs a processor with AVX2. Without AVX2, Settings tells you that the processor cannot run Find similar.
+- Find similar search with words works best in English.
+- While the index runs, a search with words can be slower (about 0.3 s).
+- The first search with words after a start takes up to 0.9 s, because Horus loads the text part of the model at that time.
 - Nobody has tested the installers on a computer without a network connection yet.
 - The security policy (CSP) still allows inline styles. Plan 6 removes this permission.
 
 ## Data and privacy
 
-- Horus does not send data over the network.
+- Horus does not send your data over the network.
+- Find similar downloads its model one time, from Hugging Face. It does not send your images or your search words. The model runs on your computer.
+- Find similar is off until you turn it on. When you turn it off, the model stays on disk. **Remove model** in Settings deletes it.
 - Horus does not change your original image files. It copies them into the library folder.
 - All library data stays in the library folder on your computer.
 - Horus uses `tauri-plugin-opener` only to show an export folder in the file manager.
