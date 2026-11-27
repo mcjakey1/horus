@@ -76,7 +76,7 @@ function fakeApi(): Api {
     graphEdges: vi.fn(),
     importPaths: vi.fn(async () => imported([])),
     search: vi.fn(async () => []),
-    getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "unset" as const })),
+    getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "unset" as const, introSeen: true })),
     setSettings: vi.fn(async () => {}),
     systemRamGb: vi.fn(async () => 16),
     pickFolder: vi.fn(async () => null),
@@ -132,6 +132,13 @@ function fakeApi(): Api {
     onSimilarStatus: vi.fn(async () => () => {}),
     recoverOrphans: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     onThumbsRebuilt: vi.fn(async () => () => {}),
+    onMenu: vi.fn(async () => () => {}),
+    appVersion: vi.fn(async () => "1.0.0"),
+    noticesPath: vi.fn(async () => "C:/Horus/THIRD_PARTY_NOTICES.md"),
+    openPath: vi.fn(async () => {}),
+    verifyImageFiles: vi.fn(async () => []),
+    cancelVerify: vi.fn(async () => {}),
+    onVerifyProgress: vi.fn(async () => () => {}),
   };
 }
 

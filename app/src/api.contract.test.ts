@@ -12,7 +12,7 @@ vi.mock("@tauri-apps/api/core", async (orig) => {
 });
 
 /** Not commands of ours: the asset URL, event listeners, the raw-body paste and the plugin pickers. */
-const NON_IPC_KEYS = ["assetUrl", "onSaveStatus", "onSaveFailed", "onCloseWaiting", "onSimilarStatus", "onThumbsRebuilt", "importBytes", "pickFolder", "pickImages", "revealFolder"];
+const NON_IPC_KEYS = ["assetUrl", "onSaveStatus", "onSaveFailed", "onCloseWaiting", "onSimilarStatus", "onThumbsRebuilt", "onMenu", "appVersion", "noticesPath", "openPath", "onVerifyProgress", "importBytes", "pickFolder", "pickImages", "revealFolder"];
 
 const tag = { operationId: "op" };
 const rows: [keyof Api, string, string[], (a: Api) => Promise<unknown>][] = [
@@ -79,6 +79,9 @@ const rows: [keyof Api, string, string[], (a: Api) => Promise<unknown>][] = [
   ["similarByFile", "similar_by_file", ["path"], (a) => a.similarByFile("p")],
   // Plan 6 Task 2
   ["recoverOrphans", "recover_orphans", [], (a) => a.recoverOrphans()],
+  // Plan 6 Task 4
+  ["verifyImageFiles", "verify_image_files", [], (a) => a.verifyImageFiles()],
+  ["cancelVerify", "cancel_verify", [], (a) => a.cancelVerify()],
 ];
 
 describe("IPC contract", () => {

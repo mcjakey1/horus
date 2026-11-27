@@ -22,6 +22,10 @@ import { mountScopeStatus } from "./boards/status";
 import { wireSimilar } from "./similar-ui";
 import { CATCH_ALL, FIND_SIMILAR_COPY, fmtBytes } from "./settings/find-similar";
 import { mountSettings } from "./settings/panel";
+import { playIntro, shouldPlayIntro } from "./intro/intro";
+
+const reducedMotion = () =>
+  typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export { FIND_SIMILAR_COPY };
 
@@ -41,6 +45,11 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   const dark = settings?.theme === "dark" ||
     (settings?.theme !== "light" && typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme = dark ? "dark" : "light";
+  // Plan 6 Task 4 (R12): once for everyone, before the last library opens and before first run.
+  if (shouldPlayIntro(settings)) {
+    await playIntro(root, { reducedMotion: reducedMotion() });
+    void api.setSettings({ introSeen: true }).catch(() => {});
+  }
   let lib: LibraryView | undefined;
   let error: string | undefined;
   if (settings?.lastLibrary) {

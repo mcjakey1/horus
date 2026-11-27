@@ -67,7 +67,7 @@ const status = (extra: Partial<SimilarStatus> = {}): SimilarStatus => ({
 let dropCb: ((e: { payload: never }) => void)[] = [];
 function fakeApi(): Api {
   const base: Partial<Api> = {
-    getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "on" as const })),
+    getSettings: vi.fn(async () => ({ lastLibrary: "C:\\lib", theme: "light" as const, findSimilar: "on" as const, introSeen: true })),
     getTaxonomy: vi.fn(async () => taxonomy),
     related: vi.fn(async (id: string) => [{ id: id === "x1" ? "x2" : "x1", score: 0.5, sharedTechniques: ["halo"], sharedBranches: [branch.id] }]),
     search: vi.fn(async () => [{ kind: "technique" as const, id: "halo", operationId: branch.operationId, count: 2 }, { kind: "reference" as const, id: "x1" }]),

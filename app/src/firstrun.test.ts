@@ -42,7 +42,7 @@ function fakeApi(lastLibrary: string | null): Api {
       change: { references: [], removed: [], canUndo: false, canRedo: false },
     })),
     search: vi.fn(async () => []),
-    getSettings: vi.fn(async () => ({ lastLibrary, theme: "light" as const, findSimilar: "unset" as const })),
+    getSettings: vi.fn(async () => ({ lastLibrary, theme: "light" as const, findSimilar: "unset" as const, introSeen: true })),
     setSettings: vi.fn(async () => {}),
     systemRamGb: vi.fn(async () => 16),
     pickFolder: vi.fn(async () => "C:\\Références"),
@@ -98,6 +98,13 @@ function fakeApi(lastLibrary: string | null): Api {
     onSimilarStatus: vi.fn(async () => () => {}),
     recoverOrphans: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     onThumbsRebuilt: vi.fn(async () => () => {}),
+    onMenu: vi.fn(async () => () => {}),
+    appVersion: vi.fn(async () => "1.0.0"),
+    noticesPath: vi.fn(async () => "C:/Horus/THIRD_PARTY_NOTICES.md"),
+    openPath: vi.fn(async () => {}),
+    verifyImageFiles: vi.fn(async () => []),
+    cancelVerify: vi.fn(async () => {}),
+    onVerifyProgress: vi.fn(async () => () => {}),
   };
 }
 
@@ -429,3 +436,47 @@ describe("rebuilt thumbnails (Plan 6 Task 2)", () => {
     expect(set.sort()).toEqual(["asset://C:/t/1024/a.jpg", "asset://C:/t/256/a.jpg"]);
   });
 });
+
+describe("the intro in boot (Plan 6 Task 4, R12)", () => {
+  beforeEach(() => {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+  });
+  const unseen = (lastLibrary: string | null) => async () =>
+    ({ lastLibrary, theme: "light" as const, findSimilar: "unset" as const, introSeen: false });
+
+  it("plays before first run, then records introSeen", async () => {
+    const api = fakeApi(null);
+    vi.mocked(api.getSettings).mockImplementation(unseen(null));
+    const booting = boot(document.body, api);
+    await vi.waitFor(() => expect(document.querySelector(".intro")).not.toBeNull());
+    expect(document.querySelector(".firstrun")).toBeNull(); // first run waits for the intro
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    await vi.waitFor(() => expect(document.querySelector(".firstrun")).not.toBeNull());
+    expect(api.setSettings).toHaveBeenCalledWith({ introSeen: true });
+    void booting;
+  });
+
+  it("never plays once seen", async () => {
+    const api = fakeApi(null);
+    const booting = boot(document.body, api);
+    await vi.waitFor(() => expect(document.querySelector(".firstrun")).not.toBeNull());
+    expect(document.querySelector(".intro")).toBeNull();
+    expect(api.setSettings).not.toHaveBeenCalledWith({ introSeen: true });
+    void booting;
+  });
+
+  it("plays once for a returning artist too, then opens their library", async () => {
+    const library: LibraryView = { root: "C:/lib", references: [], links: [], boards: [], warning: null, taxonomyReadOnly: false };
+    const api: Api = { ...fakeApi("C:/lib"), openLibrary: vi.fn(async () => library), getTaxonomy: vi.fn(async () => seedJson as unknown as Taxonomy) };
+    vi.mocked(api.getSettings).mockImplementation(unseen("C:/lib"));
+    const booting = boot(document.body, api);
+    await vi.waitFor(() => expect(document.querySelector(".intro")).not.toBeNull());
+    expect(api.openLibrary).not.toHaveBeenCalled();
+    document.dispatchEvent(new PointerEvent("pointerdown"));
+    const view = await booting;
+    expect(api.openLibrary).toHaveBeenCalledWith("C:/lib");
+    expect(api.setSettings).toHaveBeenCalledWith({ introSeen: true });
+    view.destroy();
+  });
+});
+

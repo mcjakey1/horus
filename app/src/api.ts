@@ -2,7 +2,9 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { getVersion } from "@tauri-apps/api/app";
+import { resolveResource } from "@tauri-apps/api/path";
 
 export type Region = { x: number; y: number; w: number; h: number };
 
@@ -55,6 +57,9 @@ export type LibraryView = {
   /** Plan 6 Task 2: what the open found on disk; absent or null when nothing. */
   integrity?: IntegrityReport | null;
 };
+
+/** Plan 6 Task 4: the Help menu's items, as Rust emits them on `menu://action`. */
+export type MenuId = "play-intro" | "about" | "verify";
 
 /** Plan 6 Task 2. Paths are absolute; ids are reference ids. */
 export type IntegrityReport = {
@@ -159,6 +164,8 @@ export type Settings = {
   lastLibrary: string | null;
   theme: "system" | "light" | "dark";
   findSimilar: "unset" | "on" | "off";
+  /** Plan 6 Task 4: the intro played once (or was skipped); "Play intro" never changes it. */
+  introSeen: boolean;
 };
 
 /** Plan 5 Find similar. `error` is artist copy from Rust's one copy table, never raw error text. */
@@ -189,6 +196,18 @@ export interface Api {
   recoverOrphans(): Promise<Change>;
   /** Plan 6 Task 2: the reference ids whose thumbnails were rebuilt after an open. */
   onThumbsRebuilt(cb: (ids: string[]) => void): Promise<() => void>;
+  // Plan 6 Task 4: the native menu, About and "Verify image files…".
+  /** A Help menu item was chosen (File > Open library folder is handled in Rust). */
+  onMenu(cb: (id: MenuId) => void): Promise<() => void>;
+  appVersion(): Promise<string>;
+  /** Absolute path of the bundled THIRD_PARTY_NOTICES.md ($RESOURCE). */
+  noticesPath(): Promise<string>;
+  /** The capability allows exactly one path: the notices (R10). */
+  openPath(path: string): Promise<void>;
+  /** Ids whose original no longer matches its hash; [] when cancelled early. */
+  verifyImageFiles(): Promise<string[]>;
+  cancelVerify(): Promise<void>;
+  onVerifyProgress(cb: (p: { done: number; total: number }) => void): Promise<() => void>;
   importPaths(paths: string[], meta?: IntakeMeta): Promise<ImportResult>;
   /** A pasted image: `name` is a file name (only its last part is kept). */
   importBytes(name: string, bytes: ArrayBuffer | Uint8Array, meta?: IntakeMeta): Promise<ImportResult>;
@@ -362,4 +381,11 @@ export const tauriApi: Api = {
   onSimilarStatus: (cb) => listen<SimilarStatus>("similar://status", (e) => cb(e.payload)),
   recoverOrphans: () => invoke("recover_orphans"),
   onThumbsRebuilt: (cb) => listen<string[]>("library://thumbs-rebuilt", (e) => cb(e.payload)),
+  onMenu: (cb) => listen<MenuId>("menu://action", (e) => cb(e.payload)),
+  appVersion: () => getVersion(),
+  noticesPath: () => resolveResource("THIRD_PARTY_NOTICES.md"),
+  openPath: (path) => openPath(path),
+  verifyImageFiles: () => invoke("verify_image_files"),
+  cancelVerify: () => invoke("cancel_verify"),
+  onVerifyProgress: (cb) => listen<{ done: number; total: number }>("verify://progress", (e) => cb(e.payload)),
 };
