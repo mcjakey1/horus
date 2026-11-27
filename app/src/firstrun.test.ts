@@ -190,6 +190,20 @@ describe("first run", () => {
     view.destroy();
   });
 
+  it("a failed save of Not now says so in artist copy, never the raw error (N1)", async () => {
+    const api = fakeApi(null);
+    vi.mocked(api.setSettings).mockRejectedValueOnce("Could not save settings: Access is denied. (os error 5)");
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { done } = await begin(api, "off");
+    $<HTMLButtonElement>("#fr-go").click();
+    const view = await done;
+    await vi.waitFor(() => expect(document.querySelector("#import-notice")!.textContent).toContain("Horus couldn't save that choice."));
+    expect(document.querySelector("#import-notice")!.textContent).not.toContain("os error");
+    expect(err).toHaveBeenCalled(); // the raw text goes to the console only
+    err.mockRestore();
+    view.destroy();
+  });
+
   it("Not now never enables", async () => {
     const api = fakeApi(null);
     const { done } = await begin(api, "off");
