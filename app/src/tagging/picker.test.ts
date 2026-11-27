@@ -4,6 +4,8 @@ import type { Api, Change, DemoExample, NewTag, Reference, Tag, Taxonomy } from 
 import seedJson from "../../src-tauri/resources/taxonomy.json";
 import { createStore } from "../store";
 import { techniquesFor } from "./model";
+// @ts-expect-error type error without @types/node package (as vite.config.ts)
+import { readFileSync } from "node:fs";
 import axe from "axe-core";
 import { mountPicker, type PickerOpts } from "./picker";
 
@@ -432,6 +434,7 @@ describe("technique picker", () => {
     expect(rowEl.hidden).toBe(false);
     expect(hi(el)!.querySelector("input, fieldset")).toBeNull();
     expect(rowEl.querySelector("legend")!.textContent).toBe("Domain for Chiaroscuro");
+    expect(rowEl.querySelector("legend")!.title).toBe("Domain for Chiaroscuro"); // the full name when it is cut
     // Tab order: the grid's roving stop, then the domain row, then Apply.
     const grid = el.querySelector(".pk-grid")!, apply = el.querySelector(".pk-apply")!;
     expect(grid.compareDocumentPosition(rowEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -445,6 +448,23 @@ describe("technique picker", () => {
     expect((document.activeElement as HTMLInputElement).value).toBe(second.value);
     type(el, "");
     expect(domainRow(el).hidden).toBe(true); // a highlight that does not ask clears it
+  });
+
+  it("the domain row's legend is a caption line of its own, cut with an ellipsis; its hairline matches the chips' (polish)", () => {
+    const css = readFileSync("src/styles.css", "utf8");
+    const rule = (sel: string) => css.split("\n").find((l: string) => l.startsWith(`${sel} {`)) ?? "";
+    const legend = rule(".pk-domainrow legend");
+    expect(legend).not.toMatch(/float/);
+    expect(legend).toMatch(/display: block/);
+    expect(legend).toMatch(/font-size: 12px/);
+    expect(legend).toMatch(/color: var\(--ink-2\)/);
+    expect(legend).toMatch(/text-overflow: ellipsis/);
+    expect(legend).toMatch(/white-space: nowrap/);
+    expect(rule(".pk-domains label")).toMatch(/white-space: nowrap/); // a radio and its name never part
+    const chips = rule(".pk-chips"), row = rule(".pk-domainrow");
+    expect(row).toMatch(/border-top: 1px solid var\(--line\)/);
+    expect(row.match(/padding[^;]*/)?.[0]).toBe("padding: 12px 0 0");
+    expect(chips).toMatch(/padding-top: 12px; border-top: 1px solid var\(--line\)/);
   });
 
   it("tick_box_on_an_ask_card_shows_its_radios_and_stays_unticked", () => {
