@@ -439,6 +439,8 @@ fn write_thumb(dst: &Path, thumb: &RgbImage) -> io::Result<()> {
         drop(w);
         file.sync_all()?;
         drop(file);
+        #[cfg(test)]
+        crate::integrity::tests::slow(dst); // with the .tmp on disk, before the rename
         fs::rename(&tmp, dst)
     })();
     if result.is_err() {
@@ -448,7 +450,7 @@ fn write_thumb(dst: &Path, thumb: &RgbImage) -> io::Result<()> {
 }
 
 /// `YYYY-MM-DDTHH:MM:SSZ` from Unix seconds (Howard Hinnant's civil-from-days).
-fn iso_utc(secs: u64) -> String {
+pub(crate) fn iso_utc(secs: u64) -> String {
     let (days, rem) = ((secs / 86_400) as i64, secs % 86_400);
     let z = days + 719_468;
     let era = z / 146_097;

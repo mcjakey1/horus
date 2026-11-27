@@ -4,7 +4,7 @@
 import type { Api, Reference, Scored, Settings, Tag } from "../api";
 import { applyCss } from "../css";
 import { esc } from "../esc";
-import { mountImport, warningHTML } from "../importer";
+import { integrityHTML, mountImport, warningHTML } from "../importer";
 import { digitOf, letterOf } from "../keys";
 import { openLightboxWithPicker } from "../lightbox/dock";
 import { linkedFirst, linkErrorCopy, mountLinkEditor } from "../links/editor";
@@ -293,7 +293,7 @@ export function mountReference(
     const byScore = new Map(S.related.map((x) => [x.id, x]));
     const blank = (id: string): Scored => ({ id, score: 0, sharedTechniques: [], sharedBranches: [] });
     const f = S.filter;
-    const filtering = f.techniques.length > 0;
+    const filtering = f.techniques.length > 0 || !!f.refs;
     const list = (filtering
       ? allRefs()
           .filter((r) => matchesFilter(r, f))
@@ -306,7 +306,7 @@ export function mountReference(
       `<button class="text-btn" data-mode="${m}" aria-pressed="${f.mode === m}">${label}</button>`;
     const head = filtering
       ? `<div class="filter"><div class="filter-mode" role="group" aria-label="Match">${mode("or", "Any of")}${mode("and", "All of")}</div>
-        <ul class="chips">${f.techniques
+        <ul class="chips">${f.refs ? `<li class="chip"><span>Missing their image file</span><button class="chip-x" data-unrefs aria-label="Show all references again">×</button></li>` : ""}${f.techniques
           .map((id) => `<li class="chip" data-t="${esc(id)}"><span>${esc(techName(id))}</span><button class="chip-x" data-untoggle="${esc(id)}" aria-label="Remove ${esc(techName(id))} from the filter">×</button></li>`)
           .join("")}</ul>
         <p class="pane-note">${list.length} references · <button class="settings" id="clear-filter">Clear</button></p></div>`
@@ -339,11 +339,13 @@ export function mountReference(
         return `<button class="row${prev.size && !prev.has(r.id) ? " is-new" : ""}" data-go="${esc(r.id)}" data-ref-id="${esc(r.id)}"><span class="t">${img(r)}</span><span><b>${esc(r.title)}</b><small>${esc(why)}</small></span><span class="sc">${r.id === ref.id ? "this" : fmt(x.score)}</span></button>`;
       })
       .join("");
-    const empty = filtering
+    const empty = f.refs
+      ? "These references aren't in this view."
+      : filtering
       ? `No reference has ${f.mode === "and" ? "all" : "any"} of these yet.`
       : "Nothing shares a technique with this reference yet.";
     pane.innerHTML = head + mine + (list.length ? rows : `<p class="none">${empty}</p>`);
-    pane.querySelectorAll<HTMLElement>(".chip").forEach((c) => c.style.setProperty("--c", opColor(techOp(c.dataset.t!))));
+    pane.querySelectorAll<HTMLElement>(".chip[data-t]").forEach((c) => c.style.setProperty("--c", opColor(techOp(c.dataset.t!))));
     setTimeout(() => pane.querySelectorAll(".is-new").forEach((el) => el.classList.remove("is-new")), 2400);
   }
 
@@ -504,6 +506,29 @@ export function mountReference(
       return rerank({ ...S.filter, mode: m }, () => $(`#pane-ranked [data-mode="${m}"]`));
     }
     if (target.id === "clear-filter") return rerank(noFilter(), () => null);
+    if (target.closest("[data-unrefs]")) return rerank({ ...S.filter, refs: undefined }, () => null);
+    // Plan 6 Task 2: the integrity notice's two actions.
+    if (target.closest("[data-show-missing]")) {
+      const ids = (store.integrity?.missingOriginals ?? []).filter((id) => store.refs.has(id));
+      selectPane("ranked");
+      return rerank({ ...noFilter(), refs: ids }, () => $('.m-tab[data-pane="ranked"]'));
+    }
+    const recover = target.closest<HTMLButtonElement>("[data-recover]");
+    if (recover) {
+      recover.disabled = true;
+      api.recoverOrphans().then(
+        (c) => {
+          store.apply(c);
+          notify(
+            c.references.length
+              ? `<p>Added ${c.references.length} to the Inbox.</p>`
+              : `<p>Horus couldn't read those image files, so nothing was added.</p>`,
+          );
+        },
+        (err) => notify(`<p>Couldn't add them: ${esc(String(err))}</p>`),
+      );
+      return;
+    }
     const tab = target.closest<HTMLElement>(".m-tab");
     if (tab) selectPane(tab.dataset.pane!);
   }, { signal });
@@ -792,7 +817,8 @@ export function mountReference(
     // A library switch starts a fresh history; Rust clears the undo trail, the Store its flags.
     S.trail = c.reset ? [] : S.trail.filter((id) => store.refs.has(id));
     if (c.reset) {
-      if (store.warning) notify(warningHTML(store.warning));
+      const html = warningHTML(store.warning) + integrityHTML(store.integrity);
+      if (html) notify(html);
       else $<HTMLElement>("#import-notice")!.hidden = true; // the old library's notice is stale
     }
     if (S.focus && store.refs.has(S.focus)) {
@@ -810,7 +836,8 @@ export function mountReference(
   });
 
   renderStatus();
-  if (store.warning) notify(warningHTML(store.warning));
+  const opened = warningHTML(store.warning) + integrityHTML(store.integrity);
+  if (opened) notify(opened);
   const first = start();
   if (first) show(first.id, { push: false });
   else renderEmpty();

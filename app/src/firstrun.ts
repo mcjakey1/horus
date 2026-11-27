@@ -12,7 +12,7 @@ import { mountLibraryMenu } from "./library-menu";
 import { mountReference } from "./reference/view";
 import { mountSaveDialog, wireSaveStatus } from "./save-dialog";
 import { storeSource } from "./data";
-import { createStore } from "./store";
+import { createStore, type Store } from "./store";
 import { mountViews } from "./views";
 import { mountTree } from "./views/tree";
 import { mountRadial } from "./views/radial";
@@ -30,6 +30,13 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
   // A reload mid-queue leaves Rust's intake flag set, so every close would wait: clear it first,
   // before first run can wait on the artist. It also takes a close owed before the reload.
   void api.intakeBusy(false).catch(() => {});
+  // Plan 6 Task 2: subscribed before any open (its rebuild can end before the views exist);
+  // ids heard that early wait in `early` until the views are up.
+  let early: string[] | null = [];
+  let onRebuilt: (ids: string[]) => void = (ids) => void early?.push(...ids);
+  let destroyed = false;
+  let unThumbs: (() => void) | null = null;
+  void api.onThumbsRebuilt((ids) => onRebuilt(ids)).then((u) => (destroyed ? u() : (unThumbs = u)));
   const settings = await api.getSettings().catch(() => null);
   const dark = settings?.theme === "dark" ||
     (settings?.theme !== "light" && typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches);
@@ -119,13 +126,31 @@ export async function boot(root: HTMLElement, api: Api, win?: DropWin) {
     openSettings: () => settingsPanel.open("find-similar"),
   });
   if (lastShown) similar.show(lastShown);
+  // Plan 6 Task 2: a rebuilt thumbnail replaces the broken image wherever it shows.
+  onRebuilt = (ids) => reloadThumbs(root, api, store, ids);
+  if (early?.length) reloadThumbs(root, api, store, early);
+  early = null;
   return {
     ...view,
     store,
     source,
     destroy: () =>
-      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), settingsPanel.close(), similar?.destroy(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
+      (unwire(), unScope(), unIntake(), menu.destroy(), unmountSaveDialog(), unwireSaveStatus(), settingsPanel.close(), similar?.destroy(), (destroyed = true), unThumbs?.(), dock?.close(), inbox.destroy(), shell.destroy(), view.destroy()),
   };
+}
+
+/** Re-requests every `<img>` showing one of these references' thumbnails (they 404ed before). */
+export function reloadThumbs(root: ParentNode, api: Api, store: Store, ids: string[]) {
+  const urls = new Set(
+    ids.flatMap((id) => {
+      const r = store.refs.get(id);
+      return r ? [api.assetUrl(r.thumb256), api.assetUrl(r.thumb1024)] : [];
+    }),
+  );
+  root.querySelectorAll<HTMLImageElement>("img").forEach((img) => {
+    const src = img.getAttribute("src");
+    if (src && urls.has(src)) img.src = src;
+  });
 }
 
 /** Resolves once a library is created or opened. */

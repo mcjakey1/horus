@@ -1,6 +1,6 @@
 // The UI's one copy of the open library. Rust owns the data; every command that changes it
 // returns a `Change`, which `apply` merges here and then announces to the views.
-import type { Board, Change, LibraryView, Link, Reference, Taxonomy } from "./api";
+import type { Board, Change, IntegrityReport, LibraryView, Link, Reference, Taxonomy } from "./api";
 
 /** `scope`: the board scope changed (`setScope`). `scopeCleared`: a change removed the scoped
  * board, so the scope went back to everything (the status line says so). */
@@ -9,6 +9,8 @@ export type StoreEvent = Change & { reset?: boolean; scope?: true; scopeCleared?
 export type Store = {
   root: string;
   warning?: string | null;
+  /** Plan 6 Task 2: what the open found on disk, for the notice. */
+  integrity?: IntegrityReport | null;
   /** In library order; a changed reference keeps its place, a new one goes last. */
   refs: Map<string, Reference>;
   tax: Taxonomy;
@@ -41,6 +43,7 @@ export function createStore(view: LibraryView, tax: Taxonomy): Store {
     Object.assign(store, {
       root: v.root,
       warning: v.warning ?? null,
+      integrity: v.integrity ?? null,
       refs: new Map(v.references.map((r) => [r.id, r])),
       links: v.links,
       boards: v.boards,

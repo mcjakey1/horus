@@ -171,6 +171,8 @@ fn read_taxonomy(path: &Path) -> Result<Option<Taxonomy>, String> {
 }
 
 // Seed-pinned constants, mirrored verbatim from check_taxonomy.py; used only by `validate_seed`.
+// Test-only since Plan 6 Task 2: an opened taxonomy is checked with `validate()`.
+#[cfg(test)]
 const NAMES_41: [&str; 41] = [
     "Chiaroscuro",
     "Pop-out",
@@ -214,16 +216,20 @@ const NAMES_41: [&str; 41] = [
     "Genre quotation",
     "Form substitution",
 ];
+#[cfg(test)]
 const OP_NAMES: [&str; 4] = ["Differentiate", "Group", "Sequence", "Infer"];
+#[cfg(test)]
 const OP_LABELS: [&str; 4] = [
     "Stand out",
     "Hold together",
     "Lead the eye",
     "Make them think",
 ];
+#[cfg(test)]
 const DOMAIN_NAMES: [&str; 6] = [
     "Feature", "Grouping", "Space", "Social", "Semantic", "Cultural",
 ];
+#[cfg(test)]
 const ALLOWED: [(&str, &[&str]); 4] = [
     (
         "differentiate",
@@ -239,6 +245,7 @@ const ALLOWED: [(&str, &[&str]); 4] = [
         &["grouping", "space", "social", "semantic", "cultural"],
     ),
 ];
+#[cfg(test)]
 const OBSERVED: [(&str, &str, &str); 4] = [
     ("Differentiate", "Feature", "Complementary pairing"),
     ("Differentiate", "Semantic", "Semantic contrast"),
@@ -246,6 +253,7 @@ const OBSERVED: [(&str, &str, &str); 4] = [
     ("Infer", "Cultural", "Genre quotation"),
 ];
 
+#[cfg(test)]
 fn blank(s: &str) -> bool {
     s.trim().is_empty()
 }
@@ -457,6 +465,7 @@ impl Taxonomy {
 
     /// `validate` plus the seed-pinned rules of `taxonomy/check_taxonomy.py`. Only for the
     /// shipped seed; a user's taxonomy may legitimately break these.
+    #[cfg(test)]
     pub fn validate_seed(&self) -> Result<(), Vec<String>> {
         let mut errs = self.validate().err().unwrap_or_default();
         let ops: HashMap<&str, &Operation> =
