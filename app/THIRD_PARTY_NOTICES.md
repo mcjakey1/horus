@@ -6643,6 +6643,10 @@ SOFTWARE.
 
 The Find similar download checks Hugging Face's TLS certificate against Mozilla's root certificates, bundled by the `webpki-roots` crate (through `rustls`, in `ureq`). That certificate data is under the Community Data License Agreement – Permissive, Version 2.0 (CDLA-Permissive-2.0); the crate's licence text is listed with the Rust crates below. Accepting this data licence was a controller ruling, flagged to the user under release gate G8.
 
+## Apache-2.0 WITH LLVM-exception (target-lexicon)
+
+The `target-lexicon` crate, which the Tauri toolchain uses, is licensed under the Apache License, Version 2.0, with the LLVM exception. The exception only adds rights to Apache-2.0. Accepting it was a controller ruling, flagged to the user under release gates G5 and G8; the crate's licence text is listed with the Rust crates below.
+
 ## tokenizers
 
 `tokenizers` (Hugging Face), https://github.com/huggingface/tokenizers . Licensed under the Apache License, Version 2.0 (full text above, under SigLIP base).
