@@ -357,6 +357,24 @@ describe("Find similar UI", () => {
       expect($("#q-results")!.hidden).toBe(true); // it held only the drop's group
     });
 
+    it("a pending option B never returns after Find similar turns off (AGY #2)", async () => {
+      let reject!: (e: unknown) => void;
+      vi.mocked(r.api.similarByText).mockImplementation(() => new Promise((_res, rej) => (reject = rej)));
+      type("backlit");
+      await settle(200); // past the debounce: the call is out
+      r.emit(status("off"));
+      reject("FindSimilarOff");
+      await settle(0);
+      expect(group()).toBeNull();
+      r.emit(status("ready"));
+      await settle(0);
+      type("moody");
+      await settle(20); // inside the debounce
+      r.emit(status("off"));
+      await settle(300);
+      expect(group()).toBeNull();
+    });
+
     it("no_tagging_path", () => {
       expect(source).not.toMatch(/\baddTags\b|\bupdateTag\b/);
     });

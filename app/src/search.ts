@@ -131,8 +131,9 @@ export function mountSearch(root: HTMLElement, api: Api, hooks: SearchHooks, sig
     if (findSimilar) {
       timer = setTimeout(() => {
         findSimilar(q).then(
-          (ids) => mine === seq && ((similar = { ids }), paint()),
-          () => mine === seq && ((similar = { note: FAILED }), paint()),
+          // Not once Find similar turned off meanwhile (off means absent).
+          (ids) => mine === seq && hooks.similar && ((similar = { ids }), paint()),
+          () => mine === seq && hooks.similar && ((similar = { note: FAILED }), paint()),
         );
       }, SIMILAR_DEBOUNCE_MS);
     }
@@ -203,6 +204,7 @@ export function mountSearch(root: HTMLElement, api: Api, hooks: SearchHooks, sig
   }, { signal });
   /** Scope changed, or Find similar turned off: an open list drops option B (off means absent). */
   function refresh() {
+    if (!hooks.similar) clearTimeout(timer); // a debounced option B never starts
     if (ul.hidden) return;
     if (!hooks.similar && similar) {
       similar = null;
