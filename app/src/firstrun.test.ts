@@ -123,9 +123,10 @@ describe("first run", () => {
     await tick();
     expect($<HTMLButtonElement>("#fr-go").disabled).toBe(true); // Find similar not answered yet
     $<HTMLButtonElement>('[data-fs="off"]').click();
-    expect(api.setSettings).toHaveBeenCalledWith({ findSimilar: "off" });
+    expect(api.setSettings).not.toHaveBeenCalled(); // a click only records the choice in memory
     $<HTMLButtonElement>("#fr-go").click();
     const view = await done;
+    expect(api.setSettings).toHaveBeenCalledWith({ findSimilar: "off" }); // Begin saves it
     expect(api.createLibrary).toHaveBeenCalledWith("C:\\Références", true);
     expect(document.querySelector(".firstrun")).toBeNull();
     // The view runs on the root Rust returned, not the picked folder; Rust saves lastLibrary.
@@ -171,8 +172,9 @@ describe("first run", () => {
     let release!: () => void;
     vi.mocked(api.createLibrary).mockImplementationOnce(() => new Promise((r) => (release = () => r(lib))));
     const { done } = await begin(api, "on");
-    expect(api.setSettings).toHaveBeenCalledWith({ findSimilar: "on" });
-    expect(api.similarEnable).not.toHaveBeenCalled(); // the choice can still change before Begin
+    // Quitting now saves and downloads nothing: the choice can still change before Begin.
+    expect(api.setSettings).not.toHaveBeenCalled();
+    expect(api.similarEnable).not.toHaveBeenCalled();
     $<HTMLButtonElement>("#fr-go").click();
     await tick();
     expect(api.similarEnable).not.toHaveBeenCalled(); // not before the library exists

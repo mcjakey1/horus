@@ -112,7 +112,7 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   - **Load rules (Task 0):**
     - `init_from` gets an absolute path to the bundled library only, never a bare name. (Windows' `System32` holds its own ORT 1.17.1.)
     - No `ort` API call is made before `init_from` has succeeded. Any earlier call falls back to loading `onnxruntime.dll` by name and panics, or silently loads the wrong one. So `LoadDynamicError` maps to a `String` or our own error, never to `ort::Error`.
-    - One environment per process: check `ENV.get()` first, and serialize the lazy init, so `build()` runs at most once. A failed init leaves Find similar in `Error` until the app restarts.
+    - One environment per process: check `ENV.get()` first, and serialize the lazy init, so `build()` succeeds at most once. A failed init can be retried with Try again.
   - **CPU guard (R1, required):** on x86_64 only (`#[cfg(target_arch = "x86_64")]`; macOS arm64 has no such check), before load, `if !is_x86_feature_detected!("avx2")`, phase `Error` with "This computer's processor can't run Find similar.", and `find_similar` set to `"off"`.
 - **Error copy (R11):** every error the artist sees comes from one copy table, `similar/copy.rs`. Raw error text (network, I/O, ORT, HTTP codes) goes to stderr only, never into `SimilarStatus`.
 - **Integrity:**
@@ -131,8 +131,8 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
 - **Scoring:**
   - L2-normalised 768-d embeddings, scored by dot product (cosine). SigLIP's sigmoid training loss doesn't change cosine ranking.
   - Its score **scale** differs by mode, though: text-to-image cosines run much lower than image-to-image ones. So the cut-off is set per model **and** per mode, in `ModelSpec`:
-    - `sim_min_image`, provisionally `0.5`;
-    - `sim_min_text`, provisionally `0.03`.
+    - `sim_min_image`, `0.55` (calibrated in Task 8);
+    - `sim_min_text`, `0.05` (calibrated in Task 8).
 
     Task 8 calibrates both on the demo set and records the values.
   - At most `SIM_K = 24` results are kept, highest first, excluding the query reference itself.
@@ -282,7 +282,7 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   pub fn l2(v: &mut [f32]);
   ```
 - **Loading:**
-  - **The environment, once (R2):** before the first session, `ort::init_from(path)?.with_telemetry(false).build()?`, where `path` is `ort_lib`, the absolute path to the bundled ORT library (Task 0). The returned `Environment` is kept in a process-wide `OnceLock<Environment>` (`ENV`), so it is never dropped. `load` checks `ENV.get()` first and serializes the init, so `build()` runs at most once per process. A failure here is `Err(LoadError::Lib(_))`, with the `LoadDynamicError` text as a `String`, never an `ort::Error` and never a panic (Global Constraints, load rules). Every later failure (sessions, tokenizer, layout) is `Err(LoadError::Model(_))`.
+  - **The environment, once (R2):** before the first session, `ort::init_from(path)?.with_telemetry(false).build()?`, where `path` is `ort_lib`, the absolute path to the bundled ORT library (Task 0). The returned `Environment` is kept in a process-wide `OnceLock<Environment>` (`ENV`), so it is never dropped. `load` checks `ENV.get()` first and serializes the init, so `build()` succeeds at most once per process; a failed init can be retried with Try again. A failure here is `Err(LoadError::Lib(_))`, with the `LoadDynamicError` text as a `String`, never an `ort::Error` and never a panic (Global Constraints, load rules). Every later failure (sessions, tokenizer, layout) is `Err(LoadError::Model(_))`.
   - `load` opens the vision session with `intra_threads`. The text session loads lazily, on the first `text()` call (R18), since only typed queries need it.
   - Tensors are built with `Tensor::from_array((shape, Vec))`, with no `ndarray` (R4).
   - It reads the input and output names from the sessions instead of hard-coding them. It expects:
@@ -403,7 +403,7 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   - `app/src-tauri/src/commands/similar.rs`, holding the `similar_*` commands and their tests, following the Plan 4 Task 0 split;
   - `app/src-tauri/src/similar/copy.rs`, the one error-copy table.
 - Modify:
-  - `app/src-tauri/src/commands.rs`: the `similar` state, `ReferenceView::hash()` and `thumb1024()` (R9), and the B4 hooks in `create_library` and `open_library`;
+  - `app/src-tauri/src/commands.rs`: the `similar` state, `ReferenceView::hash()` (R9), and the B4 hooks in `create_library` and `open_library`;
   - `app/src-tauri/src/lib.rs`, registering the commands, the index hook, and the start-up load (B4);
   - `app/src-tauri/src/settings.rs`;
   - `app/src/api.ts`;
@@ -466,7 +466,7 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   - **Start-up, in `setup`:** on a background thread, when `find_similar == "on"`: if `!is_installed`, resume the `.part` download; then load the model, then run the start hook.
   - **CPU guard (R1, required by Task 0):** on x86_64 only (`#[cfg(target_arch = "x86_64")]`), before any load, `if !is_x86_feature_detected!("avx2")`, phase `Error` with "This computer's processor can't run Find similar.", and `find_similar` set to `"off"`. The detector is injectable for tests.
   - **Any load error** (including a missing ORT library or VC++ runtime, Task 0) sets phase `Error`, with the copy "Find similar couldn't start on this computer.", and sets `find_similar` back to `"off"` (Review Focus 3). It drops `similar` before calling `update_settings`.
-- **Indexing trigger (Cross-plan audit row 11):** this triggers on the result, not on the command. The hook is registered with `hooks::register`, and reads `Change.references` through `ReferenceView::hash()` and `thumb1024()` (R9).
+- **Indexing trigger (Cross-plan audit row 11):** this triggers on the result, not on the command. The hook is registered with `hooks::register`, and reads `Change.references` through `ReferenceView::hash()` (R9).
   - After any command whose `Change.references` include hashes that `EmbStore` lacks, and while the phase is `Ready`, `Indexing` or `Paused`, an index pass is queued for those hashes.
   - It covers `import_paths`, `import_bytes`, redo of an import, and Plan 6's orphan recovery.
   - The hook only queues: it takes no encoder lock and does no I/O. `Change.references` also holds tag edits, so it runs on every edit.
@@ -535,10 +535,10 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   5. The credit line, as text only: "SigLIP base (Google, Apache-2.0) · ONNX export by Xenova". There is no link (R13): Plan 6 Task 4 adds the "About the model" link with About and the scoped `open-path` grant.
 - **The first-run step (Plan 1 Task 9).** It is one sheet with a Begin button, so there is no "next step" (R12).
   - The copy stays verbatim. The existing `systemRamGb()` line gains the download size: "Download: 213 MB · This computer: <N> GB of RAM".
-  - A click on "Turn on now" or "Not now" records the choice, as now. The artist can still change it before Begin.
+  - A click on "Turn on now" or "Not now" records the choice in memory only. The artist can still change it before Begin, and quitting before Begin saves and downloads nothing. Begin saves it.
   - After Begin's create or open resolves, when the choice is "on", the first-run calls `similarEnable()` without awaiting it; the download continues in the background.
   - If that enable later fails, the mapped error copy is shown once, as a one-line status notice outside Settings. The failure arrives as an `onSimilarStatus` event with `phase: "error"` and the copy in `error`; a rejected `similarEnable()` call shows the same notice.
-  - "Not now" records `"off"` with `setSettings({ findSimilar: "off" })`. This uses the `setSettings(p: Partial<Settings>)` signature from Plan 1 Task 9 (Cross-plan audit row 13).
+  - After Begin's create or open resolves, "Not now" saves `"off"` with `setSettings({ findSimilar: "off" })`; "on" is saved by `similarEnable()` itself. This uses the `setSettings(p: Partial<Settings>)` signature from Plan 1 Task 9 (Cross-plan audit row 13).
 
 - [ ] **Step 1: Write the failing tests**
   - `switch_calls_enable_disable`: toggling the switch calls `similarEnable` and then `similarDisable`, and `aria-checked` follows.
