@@ -8,7 +8,9 @@ import type { FromWorker, ToWorker, XY } from "../graph/force";
 import { mountCanvasOrFallback, type Scene, type SceneEdge, type SceneNode } from "../graph/frame";
 import { createScene } from "../graph/scene";
 import { isTextEntry } from "../keys";
+import { opLabel } from "../ops";
 import type { ViewHandle } from "../views";
+import { crumbHTML } from "./inspector";
 
 const SEED = 7;
 const ARROWS: Record<string, XY> = { ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 } };
@@ -111,7 +113,16 @@ export function mountGalaxy(
     const techName = (id: string) => s.tax.techniques.find((t) => t.id === id)?.name ?? id;
     // Only neighbours inside the board scope are listed (Plan 4 T7 M10).
     const rows = (related?.id === sel.id ? related.rows : []).filter((r) => s.inScope(r.id));
-    insp.innerHTML = `<h2 class="gx-title">${esc(sel.title)}</h2>
+    // Design review F4: the path of the selection's first tag, as in the Tree and the Radial.
+    const t = sel.tags.find((x) => x.techniqueId) ?? sel.tags[0];
+    const br = t?.branchId ? s.tax.branches.find((b) => b.id === t.branchId) : undefined;
+    const crumb = crumbHTML([
+      t ? opLabel(s.tax, t.operationId).name : undefined,
+      br ? s.tax.domains.find((d) => d.id === br.domainId)?.name : undefined,
+      t?.techniqueId ? techName(t.techniqueId) : undefined,
+      sel.title,
+    ]);
+    insp.innerHTML = `${crumb}<h2 class="gx-title">${esc(sel.title)}</h2>
       <button class="gx-open" data-open-ref>Open in Reference view</button>
       ${rows.length ? `<ol class="gx-neighbours">${rows.map((r) => `<li><button data-ref="${esc(r.id)}">
         <span class="gx-name">${esc(s.refs.get(r.id)?.title ?? r.id)}</span>

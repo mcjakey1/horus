@@ -203,6 +203,11 @@ describe("Galaxy", () => {
     const names = [...row.querySelectorAll(".gx-shares i")].map((i) => i.textContent);
     expect(names).toEqual(["Chiaroscuro", seed.techniques.find((x) => x.id === "rim-light")!.name]);
     expect(row.querySelector(".mono")!.textContent).toBe("0.80");
+    // Design review F4: the selection's first tag path, as the Tree and Radial show it.
+    const cell = (l: string) => t.host.querySelector(`.insp-crumb .cell[data-level="${l}"] .v`)?.textContent;
+    expect(cell("tech")).toBe("Chiaroscuro");
+    expect(cell("ref")).toBe("Plate a");
+    expect(cell("op")).not.toBe("");
     t.host.querySelector<HTMLButtonElement>("[data-open-ref]")!.click();
     expect(t.openReference).toHaveBeenCalledWith("a");
   });

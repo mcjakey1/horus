@@ -174,6 +174,7 @@ export function mountRadial(
       openReference: deps.openReference,
       select: (x) => select(x?.id ?? null),
       assetUrl: (p) => deps.api.assetUrl(p),
+      centreOp: op,
     });
     if (!scene) return;
     const ink = opInk(s.tax, op).base;
