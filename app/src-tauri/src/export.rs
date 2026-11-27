@@ -101,6 +101,14 @@ fn write_new(
     fill(tmp.as_file_mut())
         .and_then(|()| tmp.as_file().sync_all())
         .map_err(|e| format!("Could not write {name}: {e}"))?;
+    // D18: a temp file is 0600 on macOS and Linux; an export is for sharing, so 0644.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tmp.as_file()
+            .set_permissions(std::fs::Permissions::from_mode(0o644))
+            .map_err(|e| format!("Could not write {name}: {e}"))?;
+    }
     tmp.persist_noclobber(dir.join(name))
         .map(drop)
         .map_err(|e| format!("Could not save {name}: {}", e.error))
@@ -177,6 +185,20 @@ pub fn credits_text(board: &Board, entries: &[(String, &Reference)]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    #[test]
+    fn exports_are_readable_by_others_on_unix() {
+        // D18: not the temp file's 0600.
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        write_new(dir.path(), "a.txt", |f| f.write_all(b"x")).unwrap();
+        let mode = std::fs::metadata(dir.path().join("a.txt"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o644);
+    }
+
     use super::*;
     use crate::import::import_paths;
     use crate::library::image_path_in;

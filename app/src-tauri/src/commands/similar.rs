@@ -122,7 +122,7 @@ pub struct SimilarState {
     download_done: u64,
     indexed: usize,
     total: usize,
-    encoder: Option<Shared<Box<dyn Embedder>>>,
+    encoder: Option<Arc<dyn Embedder>>,
     store: Option<Shared<EmbStore>>,
     /// The library `store` (and the last pass) belongs to.
     root: Option<PathBuf>,
@@ -375,11 +375,14 @@ fn pipeline<R: Runtime>(app: &AppHandle<R>, run: u64, cancel: &AtomicBool) {
         if s.run != run {
             return; // disabled meanwhile: the encoder drops here
         }
-        s.encoder = Some(Arc::new(Mutex::new(encoder)));
+        s.encoder = Some(Arc::from(encoder));
         s.phase = Phase::Ready;
     }
-    publish(app, true);
-    start_hook(app);
+    // N5: the start hook publishes Indexing (or Ready) itself; Ready goes out here only when it
+    // did not, so the status bar never flashes "ready" before "indexing 0 of N".
+    if !start_hook(app) {
+        publish(app, true);
+    }
 }
 
 /// The indexer's events. Takes `similar`, and the state lock in `publish`; never joins (the
@@ -387,13 +390,13 @@ fn pipeline<R: Runtime>(app: &AppHandle<R>, run: u64, cancel: &AtomicBool) {
 fn on_index<R: Runtime>(app: &AppHandle<R>, run: u64, base: usize) -> Box<dyn Fn(IdxEvent) + Send> {
     let app = app.clone();
     Box::new(move |e| match e {
-        IdxEvent::Progress { done, .. } => {
+        IdxEvent::Progress { embedded, .. } => {
             {
                 let mut s = similar_of(&app);
                 if s.indexer_run != run {
                     return;
                 }
-                s.indexed = base + done;
+                s.indexed = base + embedded; // only what is in the store (3b (b))
             }
             publish(&app, false);
         }
@@ -458,10 +461,11 @@ fn reap<R: Runtime>(app: &AppHandle<R>, run: u64) {
 /// B4: the start pass, with no lock held by the caller. Starts an indexer only when Find
 /// similar is ready and none runs, for whichever library is open. Single-flight. It prunes
 /// hashes no longer in the library (R7) and saves that before the indexer starts, so the
-/// indexer stays the only writer of `embeddings.bin` while it runs.
-pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
+/// indexer stays the only writer of `embeddings.bin` while it runs. `true` when it published a
+/// status (Ready or Indexing), so the caller need not (N5: no Ready flash before Indexing).
+pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) -> bool {
     let Some(env) = app.try_state::<SimilarEnv>() else {
-        return;
+        return false;
     };
     let st = app.state::<AppState>();
     let _one = lock(&st.similar_start);
@@ -483,7 +487,7 @@ pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
         })
     };
     let Some((root, items)) = snapshot else {
-        return;
+        return false;
     };
     let (gen_arc, encoder, store, failed) = {
         let mut s = lock(&st.similar);
@@ -491,10 +495,10 @@ pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
             || !s.phase.searchable()
             || s.indexer.is_some()
         {
-            return;
+            return false;
         }
         let Some(encoder) = s.encoder.clone() else {
-            return;
+            return false;
         };
         let same = s.root.as_deref() == Some(root.as_path());
         if !same {
@@ -518,7 +522,7 @@ pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
     };
     // Not after a switch or a disable (AGY #2): that library's pass is no longer ours to save.
     if gen_arc.load(Ordering::SeqCst) != generation {
-        return;
+        return false;
     }
     if let Some(bytes) = save
         && let Err(e) = crate::library::write_atomic(&embeddings_path(&root), &bytes)
@@ -530,7 +534,7 @@ pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
         || !s.phase.searchable()
         || s.indexer.is_some()
     {
-        return; // switched, disabled or started meanwhile: that path runs its own pass
+        return false; // switched, disabled or started meanwhile: that path runs its own pass
     }
     s.store = Some(store.clone());
     s.root = Some(root.clone());
@@ -541,7 +545,7 @@ pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
         s.phase = Phase::Ready;
         drop(s);
         publish(app, true);
-        return;
+        return true;
     }
     s.indexer_run += 1;
     let run = s.indexer_run;
@@ -567,6 +571,7 @@ pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
     s.indexer = Some(indexer);
     drop(s);
     publish(app, true);
+    true
 }
 
 /// Plan 6 Task 2: these hashes' thumbnails were just rebuilt, so the next pass indexes them.
@@ -656,7 +661,7 @@ pub fn resume_on_start<R: Runtime>(app: &AppHandle<R>) {
 
 /// Stops everything: the pipeline goes stale, the download cancels, the indexer and the
 /// encoder come out. The caller joins and drops them with no state or `similar` lock held.
-fn shut_down(st: &AppState) -> (Option<Indexer>, Option<Shared<Box<dyn Embedder>>>) {
+fn shut_down(st: &AppState) -> (Option<Indexer>, Option<Arc<dyn Embedder>>) {
     let mut s = lock(&st.similar);
     s.run += 1;
     s.download_cancel.store(true, Ordering::SeqCst);
@@ -673,11 +678,7 @@ fn shut_down(st: &AppState) -> (Option<Indexer>, Option<Shared<Box<dyn Embedder>
 }
 
 /// The encoder, the store and the spec a search needs.
-type QueryParts = (
-    Shared<Box<dyn Embedder>>,
-    Shared<EmbStore>,
-    &'static ModelSpec,
-);
+type QueryParts = (Arc<dyn Embedder>, Shared<EmbStore>, &'static ModelSpec);
 
 /// The model's query parts, or `FindSimilarOff` unless the phase is Ready, Indexing or Paused.
 fn ready<R: Runtime>(app: &AppHandle<R>) -> Result<QueryParts, String> {
@@ -727,12 +728,12 @@ fn hits<R: Runtime>(
 }
 
 /// A file outside the library, decoded once in memory (R8): never copied or imported.
-fn file_vector(enc: &Shared<Box<dyn Embedder>>, path: &Path) -> Result<Vec<f32>, String> {
+fn file_vector(enc: &Arc<dyn Embedder>, path: &Path) -> Result<Vec<f32>, String> {
     let d = decode_srgb(path).map_err(|e| match e {
         Skip::TooLarge(_) => "TooLarge".to_string(),
         _ => "Unreadable".to_string(),
     })?;
-    lock(enc).image(&on_white(&d.rgba)).map_err(|e| {
+    enc.image(&on_white(&d.rgba)).map_err(|e| {
         eprintln!("Find similar: couldn't embed the dropped image: {e}");
         copy::UNKNOWN.to_string()
     })
@@ -851,7 +852,7 @@ pub fn similar_by_ref<R: Runtime>(app: AppHandle<R>, id: String) -> Result<Vec<S
 #[tauri::command(async)]
 pub fn similar_by_text<R: Runtime>(app: AppHandle<R>, q: String) -> Result<Vec<SimHit>, String> {
     let (encoder, store, spec) = ready(&app)?;
-    let v = lock(&encoder).text(&q).map_err(|e| {
+    let v = encoder.text(&q).map_err(|e| {
         eprintln!("Find similar: the text query failed: {e}");
         copy::UNKNOWN.to_string()
     })?;
@@ -917,7 +918,7 @@ mod tests {
     }
 
     impl Embedder for Fake {
-        fn image(&mut self, rgb: &image::RgbImage) -> Result<Vec<f32>, String> {
+        fn image(&self, rgb: &image::RgbImage) -> Result<Vec<f32>, String> {
             self.calls.fetch_add(1, Ordering::SeqCst);
             std::thread::sleep(self.sleep);
             let (w, h) = rgb.dimensions();
@@ -934,7 +935,7 @@ mod tests {
             crate::similar::encoder::l2(&mut v);
             Ok(v)
         }
-        fn text(&mut self, _q: &str) -> Result<Vec<f32>, String> {
+        fn text(&self, _q: &str) -> Result<Vec<f32>, String> {
             Ok(at_cos(1.0, 1))
         }
         fn dim(&self) -> usize {
@@ -1121,10 +1122,10 @@ mod tests {
         s.phase = Phase::Ready;
         s.root = Some(r.root());
         s.store = Some(Arc::new(Mutex::new(store)));
-        s.encoder = Some(Arc::new(Mutex::new(Box::new(Fake {
+        s.encoder = Some(Arc::new(Fake {
             calls: r.calls.clone(),
             sleep: Duration::ZERO,
-        }) as Box<dyn Embedder>)));
+        }));
     }
 
     fn refs(r: &Rig) -> Vec<Reference> {
@@ -1209,6 +1210,70 @@ mod tests {
         assert_eq!(s.error.as_deref(), Some(copy::NO_AVX2));
         assert_eq!(r.loads.load(Ordering::SeqCst), 0);
         assert_eq!(r.e.settings().find_similar, FindSimilar::Off);
+    }
+
+    /// Every status the app emits from now on, as JSON.
+    fn statuses(r: &Rig) -> Arc<Mutex<Vec<serde_json::Value>>> {
+        use tauri::Listener;
+        let log = Arc::new(Mutex::new(vec![]));
+        let l = log.clone();
+        r.h().listen_any(STATUS_EVENT, move |e| {
+            lock(&l).push(serde_json::from_str(e.payload()).unwrap())
+        });
+        log
+    }
+
+    #[test]
+    fn text_search_never_waits_for_an_image_encode() {
+        // Plan 6 3b, the encoder lock split: a text query answers while the indexer is mid-encode.
+        let r = rig_with(Duration::from_millis(1500), || true, true);
+        r.import(&["small.jpg", "p3_red.png"]);
+        similar_enable(r.h()).unwrap();
+        r.wait("indexing", |s| s.phase == Phase::Indexing);
+        while r.calls.load(Ordering::SeqCst) == 0 {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let t0 = Instant::now();
+        similar_by_text(r.h(), "a poster".into()).unwrap();
+        let took = t0.elapsed();
+        assert!(
+            took < Duration::from_millis(700),
+            "text search waited {took:?} on an image encode"
+        );
+    }
+
+    #[test]
+    fn loading_goes_straight_to_indexing() {
+        // N5: no "ready" flash between Loading and Indexing when the library needs indexing.
+        let r = rig();
+        r.import(&["small.jpg", "p3_red.png"]);
+        let log = statuses(&r);
+        similar_enable(r.h()).unwrap();
+        r.wait("indexed", |s| s.phase == Phase::Ready && s.indexed == 2);
+        let phases: Vec<String> = lock(&log)
+            .iter()
+            .map(|s| s["phase"].as_str().unwrap().to_string())
+            .collect();
+        let at = phases.iter().rposition(|p| p == "loading").unwrap();
+        assert_eq!(
+            phases.get(at + 1).map(String::as_str),
+            Some("indexing"),
+            "{phases:?}"
+        );
+    }
+
+    #[test]
+    fn a_remove_never_publishes_the_old_size() {
+        // N2: every status a successful remove publishes reports no disk use.
+        let r = rig();
+        r.import(&["small.jpg"]);
+        enable_ready(&r);
+        r.wait("indexed", |s| s.indexed == 1);
+        let log = statuses(&r);
+        similar_remove_model(r.h()).unwrap();
+        let seen = lock(&log).clone();
+        assert!(!seen.is_empty());
+        assert!(seen.iter().all(|s| s["diskBytes"] == 0), "{seen:?}");
     }
 
     #[test]

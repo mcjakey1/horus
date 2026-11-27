@@ -377,7 +377,11 @@ pub(crate) fn library_error(e: LibraryError) -> String {
         LibraryError::Corrupt { .. } => {
             "The library file is damaged and its backup could not be read either.".into()
         }
-        LibraryError::Io(e) => format!("Could not read or write the library: {e}"),
+        // Plan 6 D13: a plain hint for the artist; the OS text goes to stderr only.
+        LibraryError::Io(e) => {
+            eprintln!("Library I/O error: {e}");
+            "Could not read or write the library. Check that the library folder isn't read-only and that the disk has space.".into()
+        }
         LibraryError::InvalidFile(_) => "That image file name is not valid.".into(),
     }
 }
@@ -1734,6 +1738,15 @@ mod tests {
     use std::time::Duration;
     use tauri::Listener;
     use tauri::test::{MockRuntime, mock_builder, mock_context, noop_assets};
+
+    #[test]
+    fn a_library_write_failure_gives_a_hint_not_the_os_text() {
+        // Plan 6 D13: "Access is denied. (os error 5)" goes to stderr only.
+        let s = library_error(LibraryError::Io(std::io::Error::from_raw_os_error(5)));
+        assert!(s.starts_with("Could not read or write the library"), "{s}");
+        assert!(s.contains("read-only"), "{s}");
+        assert!(!s.contains("os error"), "{s}");
+    }
 
     pub(super) struct Env {
         _dir: tempfile::TempDir,
