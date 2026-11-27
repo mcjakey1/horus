@@ -118,7 +118,10 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
 .lab-meta .lab-credit { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .lab-meta span + span::before { content: " · "; white-space: pre; }
 /* Design review F1: the plate's actions in one row at the top left, clear of the readout. */
-.lab-actions { position: absolute; top: 14px; left: 16px; display: flex; gap: 6px; }
+/* The plate sits 48 px down and a number badge reaches 13 px above it, so the row ends by 31 px
+   (6 + 25): it never covers a badge. Buttons stay at least 24 px tall (F12). */
+.lab-actions { position: absolute; top: 6px; left: 16px; display: flex; gap: 6px; }
+.lab-actions > button { padding-top: 4px; padding-bottom: 4px; }
 .leaders { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .leaders path { fill: none; stroke: var(--card-ink); stroke-width: 1; opacity: 0; transition: opacity .2s; } /* at rest: no lines over the art */
 .leaders path.is-hot { stroke: var(--hot); stroke-width: 1.75; opacity: 1; stroke-dasharray: var(--len); stroke-dashoffset: var(--len); animation: draw .55s var(--ease) forwards; }
@@ -206,6 +209,7 @@ body.value .plate, body.value .t img, body.value .t svg { filter: grayscale(1); 
   .specimen { width: min(100%, calc(58vh * var(--ar, .75))); max-width: calc(100% - 40px); height: auto; max-height: none; }
   .lab-meta { position: static; align-self: stretch; display: flex; flex-wrap: wrap; max-width: none; }
   .lab-actions { position: static; order: -1; align-self: stretch; flex-wrap: wrap; }
+  .lab-actions > button { padding-top: 5px; padding-bottom: 5px; }
   .off-board { position: static; order: -1; align-self: flex-start; }
   .lab-meta span + span::before { content: none; }
   .lab-meta span:not(:last-child)::after { content: " · "; white-space: pre; }
