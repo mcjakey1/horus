@@ -1978,7 +1978,7 @@ mod tests {
                     cmd: "create_library".into(),
                     callback: tauri::ipc::CallbackFn(0),
                     error: tauri::ipc::CallbackFn(1),
-                    url: "http://tauri.localhost".parse().unwrap(),
+                    url: webview.url().unwrap(), // the app's own origin on every platform (Linux CI)
                     body: args.into(),
                     headers: Default::default(),
                     invoke_key: tauri::test::INVOKE_KEY.to_string(),
@@ -2225,7 +2225,7 @@ mod tests {
                 cmd: "import_bytes".into(),
                 callback: tauri::ipc::CallbackFn(0),
                 error: tauri::ipc::CallbackFn(1),
-                url: "http://tauri.localhost".parse().unwrap(),
+                url: webview.url().unwrap(), // the app's own origin on every platform (Linux CI)
                 body: tauri::ipc::InvokeBody::Raw(bytes),
                 headers,
                 invoke_key: tauri::test::INVOKE_KEY.to_string(),
@@ -2274,7 +2274,7 @@ mod tests {
                 cmd: "graph_edges".into(),
                 callback: tauri::ipc::CallbackFn(0),
                 error: tauri::ipc::CallbackFn(1),
-                url: "http://tauri.localhost".parse().unwrap(),
+                url: webview.url().unwrap(), // the app's own origin on every platform (Linux CI)
                 body: serde_json::json!({ "k": 8 }).into(),
                 headers: Default::default(),
                 invoke_key: tauri::test::INVOKE_KEY.to_string(),

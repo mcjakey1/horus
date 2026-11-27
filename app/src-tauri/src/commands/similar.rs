@@ -112,10 +112,18 @@ pub fn unsupported_here() -> Option<&'static str> {
         return Some(copy::NO_AVX2);
     }
     #[cfg(target_os = "macos")]
-    if !macos_supported(sysinfo::System::os_version().as_deref()) {
+    if !macos_supported(os_version().as_deref()) {
         return Some(copy::MACOS_14);
     }
     None
+}
+
+/// The OS version, or None when it can't be read. sysinfo 0.40 returns a Result here; compiled on
+/// every platform so the Windows build type-checks what the macOS guard calls (Linux CI and the
+/// macOS build found the mismatch first).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn os_version() -> Option<String> {
+    sysinfo::System::os_version().ok()
 }
 
 /// B1: the pinned ORT dylib needs macOS 14. The major version is parsed as a number, so 26 and
