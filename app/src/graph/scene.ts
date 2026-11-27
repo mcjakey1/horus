@@ -254,7 +254,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
         body.addChild(g);
         const t = new PIXI.Text({ text: n.label, style: { fontFamily: "Source Serif 4, Georgia, serif", fontSize: LABEL_FONT, fill: resolveColor("var(--ink)"),
           // A shell-coloured halo: hierarchy lines pass behind a name, never through it (F3).
-          stroke: { color: resolveColor("var(--shell)"), width: 4, join: "round" } } });
+          stroke: { color: resolveColor("var(--shell)"), width: 4, join: "round" }, padding: 4 } }); // padding: the halo never crops a last glyph
         t.anchor.set(0.5, 0);
         // Placed per frame in update(): the offset is screen px (design review F5).
         body.addChild(t);
@@ -393,7 +393,11 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   app.ticker.add(tick);
   const perf = import.meta.env.DEV || import.meta.env.VITE_PERF ? perfOverlay(app, host, () => tex.size()) : null;
 
+  // The pad of the last fitAll while the camera still sits at it; any other move clears it. A resize
+  // (a narrower window, a hidden view shown) then fits again (design judgement P1-1: fit at 760).
+  let fitPad: number | null = null;
   function setCamera(c: Camera, animate = false) {
+    fitPad = null;
     if (animate && !reducedMotion()) tween = { from: cam, to: c, t0: performance.now() };
     else {
       tween = null;
@@ -402,7 +406,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
     dirty = true;
   }
 
-  function fitAll(padPx = 0) {
+  function fitAll(padPx = 0, animate = true) {
     if (!nodes.size) return; // empty bounds are Infinity: keep the camera
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const n of nodes.values()) {
@@ -411,7 +415,8 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
       x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h);
     }
     const b: Rect = { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
-    setCamera(fit(b, view(), 40 + padPx), true); // 40: fit's own padding
+    setCamera(fit(b, view(), 40 + padPx), animate); // 40: fit's own padding
+    fitPad = padPx;
   }
 
   /** Topmost pickable node under a world point, skipping `except` (the node being dragged). */
@@ -545,6 +550,7 @@ function buildScene(PIXI: Pixi, app: PixiNS.Application, host: HTMLElement, api:
   const resize = typeof ResizeObserver === "function"
     ? new ResizeObserver(() => {
       app.resize();
+      if (fitPad !== null && host.clientWidth && host.clientHeight) fitAll(fitPad, false); // hidden (0 × 0) keeps the pad for its show
       dirty = true;
     })
     : null;
