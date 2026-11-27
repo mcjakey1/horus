@@ -5,6 +5,7 @@
 import type { Api, Change, ImportReport, ImportResult, IntegrityReport, Skip } from "./api";
 import { esc } from "./esc";
 import type { DupRow } from "./intake";
+import type { Store } from "./store";
 
 export type ImportHooks = {
   libraryRoot(): string | null;
@@ -97,7 +98,32 @@ export function noticeIn(root: ParentNode): (html: string) => void {
   return (html) => {
     body.innerHTML = html;
     notice.hidden = false;
+    delete notice.dataset.kind; // a newer notice is no import summary until markImport says so (D9)
+    delete notice.dataset.added;
   };
+}
+
+/** D9: the notice now shows an import's summary of `added`, so an undo that takes those back
+ * can clear it. Call right after writing the summary. */
+export function markImport(root: ParentNode, added: string[]): void {
+  const notice = root.querySelector<HTMLElement>("#import-notice");
+  if (!notice) return;
+  notice.dataset.kind = "import";
+  notice.dataset.added = added.join(" ");
+}
+
+/** D9: an undo (any change) that removes a reference the shown import summary reported hides
+ * that summary. Never any other notice: a Find similar failure stays. Returns the unsubscribe. */
+export function clearOnUndo(root: ParentNode, store: Store): () => void {
+  return store.subscribe((c) => {
+    const notice = root.querySelector<HTMLElement>("#import-notice");
+    if (!notice || notice.hidden || notice.dataset.kind !== "import" || !c.removed?.length) return;
+    const added = new Set((notice.dataset.added ?? "").split(" ").filter(Boolean));
+    if (!c.removed.some((id) => added.has(id))) return;
+    notice.hidden = true;
+    delete notice.dataset.kind;
+    delete notice.dataset.added;
+  });
 }
 
 /** Plan 6 D15: "<verb> N of M" with a Cancel text button in `#import-notice`, until `stop()`.
@@ -150,6 +176,7 @@ export function mountImport(root: HTMLElement, api: Api, hooks: ImportHooks, sig
       const result: ImportResult = await api.importPaths(paths);
       hooks.onChange(result.change);
       say(summaryHTML(result.report));
+      markImport(root, result.report.added);
       root.ownerDocument.dispatchEvent(new CustomEvent<ImportResult>(IMPORTED, { detail: result }));
     } catch (err) {
       say(`<p>The import did not finish: ${esc(String(err))}</p>`);

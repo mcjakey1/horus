@@ -2,7 +2,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import html from "../index.html?raw";
 import type { Api, Change, ImportResult } from "./api";
-import { integrityHTML, mountImport, summaryHTML } from "./importer";
+import { clearOnUndo, integrityHTML, markImport, mountImport, noticeIn, summaryHTML } from "./importer";
+import { createStore } from "./store";
 
 const text = (h: string) => {
   const d = document.createElement("div");
@@ -76,6 +77,32 @@ describe("importer", () => {
     expect(notice.textContent).toContain("Cancelled: the rest was not imported");
     expect(notice.querySelector("[data-cancel]")).toBeNull();
     expect(unlisten).toHaveBeenCalled();
+  });
+});
+
+describe("an import notice after an undo (D9)", () => {
+  beforeEach(() => {
+    document.body.innerHTML = new DOMParser().parseFromString(html, "text/html").body.innerHTML;
+  });
+  const tax = { operations: [], domains: [], branches: [], techniques: [], branchTechniques: [] };
+  const lib = { root: "C:\lib", references: [], links: [], boards: [], warning: null, taxonomyReadOnly: false };
+  const undo = (removed: string[]) => ({ references: [], removed, canUndo: false, canRedo: true });
+
+  it("goes when an undo removes what it reported, and stays for anything else", () => {
+    const store = createStore(lib, tax);
+    const off = clearOnUndo(document, store);
+    const notice = document.querySelector<HTMLElement>("#import-notice")!;
+    noticeIn(document)("<p>Added 2 to the Inbox</p>");
+    markImport(document, ["a", "b"]);
+    store.apply(undo(["z"])); // something else
+    expect(notice.hidden).toBe(false);
+    store.apply(undo(["b"]));
+    expect(notice.hidden).toBe(true);
+    // A Find similar failure is not an import's: an undo never clears it.
+    noticeIn(document)("<p>Find similar couldn't start.</p><button data-open-settings>Open Settings</button>");
+    store.apply(undo(["a"]));
+    expect(notice.hidden).toBe(false);
+    off();
   });
 });
 

@@ -5,7 +5,7 @@
 import type { DragDropEvent } from "@tauri-apps/api/webview";
 import type { Api, FieldPatch, IntakeMeta, ImportReport, ImportResult } from "./api";
 import { esc } from "./esc";
-import { IMPORTED, importProgress, intakeHTML } from "./importer";
+import { clearOnUndo, IMPORTED, importProgress, intakeHTML, markImport } from "./importer";
 import { isTextEntry } from "./keys";
 import type { Store } from "./store";
 import { presetFrom } from "./tagging/model";
@@ -75,7 +75,11 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
   let queue: Promise<unknown> = Promise.resolve();
   let pending = 0; // intakes queued or running; while any, a close waits for them (R2)
 
-  const render = () => last && deps.notice(intakeHTML(last.report, dupRows(last.report, store, last.meta), last.saved));
+  const render = () => {
+    if (!last) return;
+    deps.notice(intakeHTML(last.report, dupRows(last.report, store, last.meta), last.saved));
+    markImport(doc, last.report.added); // an undo of this import clears it (D9)
+  };
   const failed = (what: string) => (err: unknown) => deps.notice(`<p>${esc(what)}: ${esc(String(err))}</p>`);
   function shown(report: ImportReport, meta: IntakeMeta) {
     last = { report, meta };
@@ -218,7 +222,9 @@ export function wireIntake(win: DropWin | null, doc: Document, deps: IntakeDeps)
   doc.addEventListener("submit", onSubmit);
   doc.addEventListener("click", onClick);
   doc.addEventListener(IMPORTED, onImported);
+  const offUndo = clearOnUndo(doc, store);
   const off = () => {
+    offUndo();
     void unlisten?.then((f) => f());
     unsubscribe();
     doc.removeEventListener("paste", onPaste);
