@@ -181,7 +181,7 @@ impl Worker {
         }
     }
 
-    /// One thumbnail, holding the encoder's lock for this image only.
+    /// One thumbnail, holding the vision session's lock for this image only.
     fn embed(&self, thumb: &Path) -> Result<Vec<f32>, String> {
         let rgb = image::open(thumb)
             .map_err(|e| format!("Couldn't read the thumbnail: {e}"))?

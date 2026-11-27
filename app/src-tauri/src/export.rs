@@ -96,18 +96,27 @@ fn write_new(
     name: &str,
     fill: impl FnOnce(&mut File) -> io::Result<()>,
 ) -> Result<(), String> {
-    let mut tmp =
-        NamedTempFile::new_in(dir).map_err(|e| format!("That folder can't be written: {e}"))?;
+    let mut tmp = NamedTempFile::new_in(dir).map_err(|e| {
+        eprintln!("Export: could not create a file in {}: {e}", dir.display());
+        "That folder can't be written. Choose another folder.".to_string()
+    })?;
+    // Artist copy; the OS text goes to stderr only (3b review, as D13).
+    let write_failed = |e: io::Error| {
+        eprintln!("Export: could not write {name}: {e}");
+        format!(
+            "Could not write {name}. Check that the folder isn't read-only and that the disk has space."
+        )
+    };
     fill(tmp.as_file_mut())
         .and_then(|()| tmp.as_file().sync_all())
-        .map_err(|e| format!("Could not write {name}: {e}"))?;
+        .map_err(write_failed)?;
     // D18: a temp file is 0600 on macOS and Linux; an export is for sharing, so 0644.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         tmp.as_file()
             .set_permissions(std::fs::Permissions::from_mode(0o644))
-            .map_err(|e| format!("Could not write {name}: {e}"))?;
+            .map_err(write_failed)?;
     }
     tmp.persist_noclobber(dir.join(name))
         .map(drop)
@@ -570,7 +579,12 @@ mod tests {
     fn write_failure_leaves_nothing() {
         let dir = tempfile::tempdir().unwrap();
         let err = write_new(dir.path(), "a.jpg", |_| Err(io::Error::other("disk full")));
-        assert!(err.unwrap_err().contains("disk full"));
+        let err = err.unwrap_err();
+        assert!(err.starts_with("Could not write a.jpg. Check"), "{err}");
+        assert!(
+            !err.contains("disk full"),
+            "the OS text goes to stderr only: {err}"
+        );
         assert!(names_in(dir.path()).is_empty(), "the temp file is gone");
     }
 

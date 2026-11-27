@@ -780,7 +780,17 @@ pub fn similar_remove_model<R: Runtime>(app: AppHandle<R>) -> Result<SimilarStat
     if let Some(i) = indexer {
         i.stop();
     }
-    drop(encoder); // the model files are closed before they are deleted
+    // The model files are closed before they are deleted: a search (or a lazy text load) that
+    // cloned the encoder before shut_down still holds it, and Windows refuses to delete an open
+    // file. Wait for those to finish.
+    // ponytail: polls every 10 ms, capped at 2 s; a search takes well under that.
+    if let Some(enc) = encoder {
+        let until = Instant::now() + Duration::from_secs(2);
+        while Arc::strong_count(&enc) > 1 && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        drop(enc);
+    }
     if let Err(e) = set_find_similar(&st, FindSimilar::Off) {
         publish(&app, true); // the phase is Off already
         return Err(e);
@@ -1260,6 +1270,30 @@ mod tests {
             Some("indexing"),
             "{phases:?}"
         );
+    }
+
+    #[test]
+    fn remove_waits_for_a_search_still_holding_the_encoder() {
+        // 3b review: a search (or a lazy text load) can hold the encoder while Remove runs; the
+        // delete waits for it, so Windows never refuses an open model file.
+        let r = rig();
+        r.import(&["small.jpg"]);
+        enable_ready(&r);
+        let held = r.similar().encoder.clone().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            tx.send(Instant::now()).unwrap();
+            drop(held);
+        });
+        similar_remove_model(r.h()).unwrap();
+        let done = Instant::now();
+        let released = rx.recv().unwrap();
+        assert!(
+            done >= released,
+            "the delete ran while a search still held the encoder"
+        );
+        assert!(!r.model.path().exists());
     }
 
     #[test]

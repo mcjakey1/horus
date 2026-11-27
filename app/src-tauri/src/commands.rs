@@ -421,7 +421,8 @@ fn flush_open(o: &mut Open) -> Result<(), String> {
 /// Before another library replaces the open one. On `Err` the open one stays.
 fn flush_for_switch(open: &mut Option<Open>) -> Result<(), String> {
     match open.as_mut() {
-        Some(o) => flush_open(o).map_err(|e| format!("Couldn't save the current library: {e}")),
+        // The flush's own copy already says what failed and what to check (3b review).
+        Some(o) => flush_open(o),
         None => Ok(()),
     }
 }
@@ -3400,7 +3401,7 @@ mod tests {
         let err = open_library(e.handle(), b).unwrap_err();
         eprintln!("switch refusal: {err}");
         assert!(
-            err.starts_with("Couldn't save the current library: "),
+            err.starts_with("Could not read or write the library. Check"),
             "{err}"
         );
         let state = st(&e);
