@@ -197,7 +197,7 @@
   - `app/src-tauri/Cargo.toml`, adding `tauri-plugin-single-instance = "2"`;
   - `app/src/api.ts`: `LibraryView.integrity?`, the `IntegrityReport` type, and `onThumbsRebuilt(cb)` (it listens to `library://thumbs-rebuilt`), which goes into `NON_IPC_KEYS` in `api.contract.test.ts`;
   - the integrity notice and the tile re-render: `app/src/firstrun.ts` (`boot()` wiring) and `app/src/reference/view.ts`, with their tests;
-  - `app/src-tauri/src/commands/similar.rs`, tests only: `rebuilt_thumb_is_indexed` uses Plan 5's test rig.
+  - `app/src-tauri/src/commands/similar.rs`: `similar::retry` and its `retry` field (below), and the test `rebuilt_thumb_is_indexed`, which uses Plan 5's test rig.
 
 **Interfaces:**
 - Consumes:
@@ -226,14 +226,14 @@
   - In TypeScript it is the optional `integrity?: IntegrityReport | null`.
   - Update every existing fake `LibraryView` in the tests to include it, or leave it absent (audit #24).
 - **Spec delta, to record in the release notes:** `rebuild_thumbs` rebuilds a missing thumbnail by decoding the original. This is a maintenance exception to SPEC §9's "Originals are decoded only in the lightbox", not a browsing path (audit #27).
-- **The rebuild runs off the state lock (B3), and before the start hook.** When an `Ok` switch reports `missing_thumbs`, the command spawns one background thread in place of its direct start-hook call. That thread:
+- **The rebuild runs off the state lock (B3), then asks Find similar to retry.** When an `Ok` switch reports `missing_thumbs`, the command spawns one background thread after its start-hook call. That thread:
   1. For each id: takes the import gate (`hold_gate`, so a close that waits on the gate still goes through, I1); checks under the state lock (gate, then state, released before any decoding) that this library is still the open one; skips the id if its thumbnails exist by now; then decodes and writes (`decode_srgb`, `on_white`, `write_thumbs`) under the gate only, and releases the gate. It stops at the first id after a switch.
   2. Emits `library://thumbs-rebuilt` with the ids, with no lock held. The UI re-renders those tiles.
-  3. Calls Plan 5's `similar::start_hook` with no lock held.
+  3. Calls `similar::retry(app, &hashes)` for the rebuilt ones, then Plan 5's `similar::start_hook`, both with no lock held.
 
   It never takes `similar_start`, `similar_download`, settings or `similar` itself, and nothing joins it. Edits skip the gate, so they never wait for it; an import waits for one image at most.
   - **Why the gate:** `write_thumb` writes `thumbs/<size>/<hash>.jpg.tmp`, which `sweep_tmp` removes. A reopen of the same library runs its sweep under the gate, so it can never delete a `.tmp` the rebuild is writing.
-  - **Why before the start hook:** Plan 5's indexer reads `thumbs/1024/<hash>.jpg`. Started first, it would put each hash whose thumbnail is missing into `failed`, which only a library switch clears (`detach_indexer`), so a rebuilt image would stay unindexed until the next open. Meanwhile search uses the stored embeddings, as during any switch.
+  - **Why the retry:** Plan 5's indexer reads `thumbs/1024/<hash>.jpg`. Any pass that reaches a hash before its thumbnail is rebuilt puts it into `failed`, which only a library switch clears (`detach_indexer`), and later passes skip it. Several callers can start that pass mid-rebuild: the switch's own start hook, `resume_on_start`, `similar_enable` and `on_change` after an edit or import (AGY review). `similar::retry`, under `similar` only, removes the hashes from `failed`. If an indexer is running, it also adds them to a new `retry` set, and the `Finished` handler drops any hash in `retry` from what it records as failed, then clears `retry`. `detach_indexer` clears `retry` with `failed`. The start hook then indexes them, or the running pass's reap does.
 - The UI shows one quiet notice for the report:
   - "Recovered N images to the Inbox" offers "Add them", which adds the orphans as references through one `Edit::AddReferences`, so the step can be undone. The image files are already in place, and their hashes come from the file names. Each one's title is "Recovered image <first 8 hex digits of its hash>", editable later like any title (C2). This is the Plan 1 QA M4 item (D14).
   - "M references are missing their image file" offers "Show them", which filters the Ranked list to those references. A missing original is never deleted from `library.json`.
@@ -244,21 +244,21 @@
   - **Nothing Plan 6 adds publishes a Find similar status under the state guard:** Plan 5's `build_status` takes the state lock itself (final review), so a `publish` there would deadlock.
   - **`create_library`:**
     1. Flush the previous library (Plan 2 Task 5). On failure, refuse the switch, before anything is created on disk.
-    2. `Library::create`, then the demo seed (no lock held).
+    2. `Library::create`, then the demo seed (the import gate held, no state lock).
     3. Run `sweep_tmp` and `check` on the new root (only the import gate held; `create_inner` holds it from the flush to the swap).
     4. Under the state guard: Plan 5's `similar::detach_indexer` (takes the old indexer and bumps the generation), then `install()`: the asset scope, the `LibraryView` (with Plan 4's `boards` and this task's `integrity`), the new `Open` state with a fresh history.
     5. Once the guard drops, join the old indexer (`Indexer::stop`), still under the import gate (the worker never takes it).
     6. `remember()`.
-    7. Plan 5's start hook, for whichever library is open: directly on `Err`, and on `Ok` with no `missing_thumbs`; at the end of the rebuild thread (above) on `Ok` with `missing_thumbs`.
+    7. Plan 5's start hook (on `Ok` and `Err`, for whichever library is open); then, on `Ok` only and when `missing_thumbs` is non-empty, the rebuild thread (above).
   - **`open_library`:**
     1. Under the state guard (held from the flush to the swap, on purpose): flush, then `Library::open`.
     2. Still under it: `sweep_tmp` and `check` on the new root (existence checks only, so the lock is held briefly).
     3. `similar::detach_indexer` (takes the indexer and bumps the generation, Plan 5), then `install()`.
     4. Once the state guard drops, join the old indexer, still under the import gate; then `remember()`.
-    5. In the `open_library` wrapper, with no lock held: for `Ok` and `Err` alike, join an indexer a failed install left detached. Then Plan 5's start hook, directly or at the end of the rebuild thread, as in `create_library`.
+    5. In the `open_library` wrapper, with no lock held: for `Ok` and `Err` alike, join an indexer a failed install left detached, then Plan 5's start hook. Then, on `Ok` only and when `missing_thumbs` is non-empty, the rebuild thread.
 
     This is the order as merged on main at 3e844bd (`create_library` and `create_inner`, `open_library` and `open_inner`). Since `p5-t5`, `create_inner` also detaches under the state guard and joins after it drops.
-  - **One rule for `Ok` and `Err` (Plan 5):** once the switch has returned, the start hook runs for whichever library is open (after the rebuild, when one runs). A refused or failed switch leaves the old library open and indexed.
+  - **One rule for `Ok` and `Err` (Plan 5):** once the switch has returned, the start hook runs for whichever library is open. A refused or failed switch leaves the old library open and indexed.
   - **The asset scope stays per folder (R4):** `install()` allows `images/` and `thumbs/` only, never the root (the window never needs `library.json`, `embeddings.bin` or the backups). Plan 4's lightbox cache directory is allowed once, in `setup`.
 
   **The invariant:** the sweep never deletes a `.tmp` that a live writer may own. Library writers (the saver, edits, imports) are excluded by the state lock, the thumbnail rebuild by the import gate (per image), and the indexer's file, `embeddings.bin.tmp`, is skipped by name. That covers a reopen of the same library too, whose old indexer is joined only after the sweep. A leftover `embeddings.bin.tmp` is harmless, because `write_atomic` deletes its own `.tmp` before writing. Tests:
@@ -266,7 +266,7 @@
   - A `.tmp` planted by a fake saver or indexer hook after `install()` survives.
   - Plan 5's `failed_open_keeps_old_indexer`, `start_hook_restarts_after_switch` and `switch_library_stops_indexer` stay green.
   - `rebuild_is_off_lock`: while `rebuild_thumbs` runs (slow fake decode), an edit command completes.
-  - `rebuilt_thumb_is_indexed` (Plan 5's rig, fake encoder): with Find similar ready, a library whose one reference lacks `thumbs/1024/<hash>.jpg` opens; after `library://thumbs-rebuilt`, that hash is indexed (`indexed == total`) and is not in `failed`.
+  - `rebuilt_thumb_is_indexed` (Plan 5's rig, fake encoder): with Find similar ready, a library whose one reference lacks `thumbs/1024/<hash>.jpg` opens; after `library://thumbs-rebuilt`, that hash is indexed (`indexed == total`) and is not in `failed`. A second case, with a slow fake encoder, lets the rebuild finish while a pass that already failed the hash is still running; it is indexed after that pass's reap.
   - `rebuild_tmp_survives_reopen`: a slow fake decode holds a rebuild mid-image while the same library is reopened. The reopen's sweep waits for the gate, the rebuild's thumbnail lands, and the second rebuild skips it.
 
 - [ ] **Step 1: Write the failing tests**
@@ -349,7 +349,7 @@ The items deferred to Plan 6 that no other task owns (R11). Each is small; group
   - **P2, small:**
     - **F6:** Radial centred on an operation shows "—" in all four crumb cells (`views/inspector.ts:124-128`). Fall back to the centred operation.
     - **F7:** Compare shows "Only here" (`compare/view.ts:86`) and "Same operation × domain" (:103) over empty lists. Show each only when non-empty, as :87 already does; clamp `.cmp-title` (`styles.css:566`) to 2 lines.
-    - **F8:** the Tree's `fitAll` (`views/tree.ts:239`) fits the nodes, not the labels. Widen the bounds by `LABEL_W / 2`.
+    - **F8:** the Tree's fit (`views/tree.ts:239` calls `fitAll`) fits the nodes, not the labels. The bounds loop is shared by Tree, Radial and Galaxy (`graph/scene.ts:378-388`, with `nodeRect` in `graph/frame.ts:65-68`), so the Tree passes a `LABEL_W / 2` margin rather than changing it for every view.
     - **F9:** "Import images…" and "Import folder…" (`index.html:75-76`) against "Add images…" and "Add folder…" (`inbox/view.ts:53`). Use "Add" in both.
     - **F10:** the lightbox hint is about 140 characters and ellipsised (`lightbox/view.ts:54`; `styles.css:362`). Shorten it to "Drag to tag a region · v value · Esc closes", plus a "Keys" disclosure with the rest.
     - **F11:** the Boards scope button's label changes with its state, and the status bar repeats it; Delete sits next to Export (`boards/view.ts:89-92`). Use a fixed label with a " · on" suffix, like `.tree-all` (`styles.css:383`), and put Delete after a `.sep`.
