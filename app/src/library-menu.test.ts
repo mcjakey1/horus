@@ -115,6 +115,8 @@ describe("Library menu", () => {
       createLibrary: vi.fn(async (p: string) => (order.push("create"), view(p))),
       getTaxonomy: vi.fn(async () => tax),
       intakeBusy: vi.fn(async () => {}),
+      onImportProgress: vi.fn(async () => () => {}),
+      cancelImport: vi.fn(async () => {}),
     } as unknown as Api;
     const store = createStore(view("D:/A"), tax);
     const notice = noticeIn(document.body);

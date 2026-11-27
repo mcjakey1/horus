@@ -98,6 +98,8 @@ function fakeApi(lastLibrary: string | null): Api {
     onSimilarStatus: vi.fn(async () => () => {}),
     recoverOrphans: vi.fn(async () => ({ references: [], removed: [], canUndo: true, canRedo: false })),
     onThumbsRebuilt: vi.fn(async () => () => {}),
+    onImportProgress: vi.fn(async () => () => {}),
+    cancelImport: vi.fn(async () => {}),
   };
 }
 
