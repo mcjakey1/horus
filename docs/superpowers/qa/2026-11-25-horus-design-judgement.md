@@ -331,3 +331,25 @@ One short pass.
 **Noted, no change needed:**
 - **Radial at 760:** labels sit close to spokes and reference dots, but the halo keeps every name readable. That is expected at this size.
 - **Ranked sublines:** a subline wraps to 2 lines when a pair shares two techniques ("shares Crop at the edge, Occlusion"). Fine.
+
+## 9. Quick look 3 (579cf07, before the build)
+
+One short pass.
+- **Shots:** `qa-shots\plan6-tree760b\` (tree light 760, light 760 after a late font load, light 1280, dark 760) and `plan6-tree760\`.
+- **Code checked:** the diff from 4459883 to 579cf07 in `styles.css`, `tagging/picker.ts`, `graph/scene.ts` and `graph/frame.ts`.
+
+**Verdict: 1 small must-fix item**; the rest is BUILD OK.
+
+**Quick look 2's three items: resolved.**
+1. **Tree at 760:** no label sits on a connector bar any more, in light or dark. The bars are name obstacles (`scene.ts:371`, `barBoxes`).
+2. **The clear "×":** `.pk-search` and `.tx-search` now share the main search's ink-2 masked cross (`styles.css:63`).
+3. **"+ New technique":** it is hidden on an exact name match. `picker.ts` uses the backend's `name_key` rule (case and spacing). A name that exists only under another operation still offers New, and its NameTaken answer offers "use it", which is the right call.
+
+**-bb's font fix: confirmed.** `tree-light-760` and `tree-late-light-760` are identical. Every name is set in Source Serif 4 at full ink, with no cut final glyphs and no lighter fallback face.
+
+**Must-fix before the build:**
+1. **"Sequence", an operation name, is hidden in the Tree at fit at 760** (`tree-light-760`, `tree-dark-760`; Differentiate, Group and Infer show). At 1280 it shows, but one row lower than its peers (y 414 against 382).
+   - **Cause:** `labelRows` staggers every band over 3 rows (`graph/layout-tree.ts:42`, `k % 3`), operations included. Sequence gets row 2, which at 760 crosses the operation-to-domain bar, so the new bar obstacle hides it. An operation name is the top of the path (Principle 4), and the band holds at most 9 widely spaced operations, so it never needs a stagger.
+   - **Fix:** `layout-tree.ts:42` becomes `band.forEach((id, k) => rows.set(id, kind === "op" ? 0 : k % 3));`. Update any `layout-tree` test that pins operation rows. Then all four operation names sit on one line at every width.
+
+**Noted, no change needed:** at 760, some domain and technique names hide by rank at fit. That is expected at this size, and zoom recovers them.
