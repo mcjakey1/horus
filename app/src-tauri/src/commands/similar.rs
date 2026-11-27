@@ -482,6 +482,10 @@ pub(crate) fn start_hook<R: Runtime>(app: &AppHandle<R>) {
         let present = keep.iter().filter(|h| g.has(h)).count();
         ((pruned > 0).then(|| g.encode()), missing, present)
     };
+    // Not after a switch or a disable (AGY #2): that library's pass is no longer ours to save.
+    if gen_arc.load(Ordering::SeqCst) != generation {
+        return;
+    }
     if let Some(bytes) = save
         && let Err(e) = crate::library::write_atomic(&embeddings_path(&root), &bytes)
     {
@@ -719,6 +723,8 @@ pub fn similar_disable<R: Runtime>(app: AppHandle<R>) -> Result<SimilarStatus, S
 #[tauri::command(async)]
 pub fn similar_remove_model<R: Runtime>(app: AppHandle<R>) -> Result<SimilarStatus, String> {
     let st = app.state::<AppState>();
+    // Serialized with the start hook, so a pass can't re-save embeddings.bin after the delete.
+    let _one = lock(&st.similar_start);
     let (indexer, encoder) = shut_down(&st);
     if let Some(i) = indexer {
         i.stop();
