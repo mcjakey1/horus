@@ -28,11 +28,11 @@
     - `ureq = "3"`, with rustls on ring and no tokio in the client (R3). Task 1 confirms that `cargo tree` shows no `aws-lc-sys` and no `cmake`.
     - `sha2 = "0.11"`.
   - **Task 2 adds these two:**
-    - `ort = { version = "=2.0.0-rc.15", default-features = false, features = ["load-dynamic", "std", "api-NN"] }`. This is the newest release on crates.io as of 25 Nov 2026. There is no stable 2.x, so pin it exactly. `api-NN` is the Task 0 spike's output: it must be <= the pinned Microsoft ORT minor version (R2). If the spike rules out `load-dynamic`, the Task 0 fallback applies instead (B1).
+    - `ort = { version = "=2.0.0-rc.15", default-features = false, features = ["load-dynamic", "api-31"] }`, as the Task 0 spike ran it. This is the newest release on crates.io as of 25 Nov 2026. There is no stable 2.x, so pin it exactly. `api-31` matches the pinned Microsoft ORT 1.31.1 (R2: `api-NN` <= the pinned ORT minor version).
     - `tokenizers = { version = "0.23", default-features = false, features = ["fancy-regex"] }`: pure Rust, no Oniguruma C build.
   - **No `ndarray` (R4):** tensors are built with `Tensor::from_array((shape, Vec))`.
   - **No new RAM crate:** `sysinfo` is already a dependency (`0.40.4`), behind the existing `system_ram_gb` command.
-- **ONNX Runtime itself** is not a crate build. It is the pinned Microsoft ONNX Runtime CPU release binary for each OS (SHA-256 pinned), shipped in `bundle.resources` and loaded at run time (Task 0, B1). macOS ships arm64 only (B2).
+- **ONNX Runtime itself** is not a crate build. It is Microsoft ONNX Runtime 1.31.1, from the NuGet package `Microsoft.ML.OnnxRuntime`, one CPU binary per OS (size and SHA-256 pinned, Task 0), shipped in `bundle.resources` and loaded at run time (B1). macOS ships arm64 only (B2).
 - No new npm packages.
 
 **Spec:** `SPEC.md` (draft 5, approved 24 Nov 2026), §5a (decided in round 3) and §11 (auto-tagging is a v2 non-goal).
@@ -55,6 +55,7 @@
   - **Plan 6 deferrals from this plan:**
     - Plan 6's macOS target changes from universal (arm64 and x86_64) to `aarch64-apple-darwin` only (B2, user ruling 27 Nov 2026: "Do the silicon version only").
     - The "About the model" link, with its scoped `opener` `open-path` grant, moves to Plan 6 Task 4 (R13).
+    - Shipping the VC++ runtime (`MSVCP140_1`, `VCRUNTIME140_1`, which `onnxruntime.dll` imports) with the installer moves to Plan 6 (Task 0). Until then, a missing runtime is a caught load error.
 - **Plan 3:** none. Plan 3 Task 11's synthetic-library script is reused if present, for the speed check in Task 8; otherwise Task 8 makes its own.
 
 ## The model artifact (research, checked on 25 Nov 2026)
@@ -83,7 +84,7 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
 
 **Cost compared with CLIP ViT-B/32.** Patch 16 at 224 px gives 196 image tokens against 49, so encoding an image is roughly four times the work. Task 2 records peak RSS and seconds per image before Task 4 starts, and Task 8 measures indexing at scale.
 
-**ONNX Runtime linking** is decided by Task 0's spike (B1), before any other task.
+**ONNX Runtime linking** was decided by Task 0's spike (B1, done): `load-dynamic` with Microsoft ORT 1.31.1.
 
 ## Global Constraints
 
@@ -106,7 +107,12 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
   - It is loaded with `ort::init_from(path)` only when Find similar is enabled. With the feature off, ORT is never loaded, so nothing else in the app depends on it.
   - A load failure is a caught `Err`: phase `Error`, and `find_similar` set to `"off"`.
   - **Telemetry off:** `ort::init_from(path)?.with_telemetry(false).build()?` runs once, before any session. The returned `Environment` is held alive in a process-wide `OnceLock<Environment>`. (ort keeps only a `Weak`; if it were dropped, a later session would recreate a default environment with telemetry on.) Task 2 has one source-check test for this.
-  - `api-NN` <= the pinned Microsoft ORT minor version.
+  - `api-31`, matching the pinned ORT 1.31.1 (`api-NN` <= the pinned minor version).
+  - **Load rules (Task 0):**
+    - `init_from` gets an absolute path to the bundled library only, never a bare name. (Windows' `System32` holds its own ORT 1.17.1.)
+    - No `ort` API call is made before `init_from` has succeeded. Any earlier call falls back to loading `onnxruntime.dll` by name and panics, or silently loads the wrong one. So `LoadDynamicError` maps to a `String` or our own error, never to `ort::Error`.
+    - One environment per process: check `ENV.get()` first, and serialize the lazy init, so `build()` runs at most once. A failed init leaves Find similar in `Error` until the app restarts.
+  - **CPU guard (R1, required):** before load, `if !is_x86_feature_detected!("avx2")`, phase `Error` with "This computer's processor can't run Find similar.", and `find_similar` set to `"off"`.
 - **Error copy (R11):** every error the artist sees comes from one copy table, `similar/copy.rs`. Raw error text (network, I/O, ORT, HTTP codes) goes to stderr only, never into `SimilarStatus`.
 - **Integrity:**
   - Each file downloads to `<name>.part`, resuming with `Range:`.
@@ -147,38 +153,31 @@ There is no fp32 parity fixture (R18, user confirmed 27 Nov 2026). The model fil
 
 ---
 
-### Task 0: Spike: ONNX Runtime linking and packaging (B1, B2, R1)
+### Task 0: Spike: ONNX Runtime linking and packaging (B1, B2, R1) — DONE
 
-A throwaway spike before Task 1. It decides how ONNX Runtime reaches the app. Nothing in it is kept except the record file and the pins it produces.
+**Status: done on 27 Nov 2026** (spike by -4a, AGY #4 PASS). The full record is `.superpowers/sdd/2026-11-25-horus-find-similar/t0-spike.md` (local, gitignored); the pins below are copied from it. The controller's rulings on it are in the "Task 0 spike rulings" section of `preflight-rulings.md`. Nothing here is still to run.
 
-**Files:**
-- Create: `.superpowers/sdd/2026-11-25-horus-find-similar/t0-spike.md`, the record.
-- The spike code lives on a scratch branch or in a scratch crate, and is not merged.
+**Results, as ruled:**
+- **Source:** NuGet `Microsoft.ML.OnnxRuntime` **1.31.1** (Microsoft's official package, MIT). GitHub release zips are not used: the repo returned 404 to every fetch. `ort` features: `load-dynamic` + `api-31`.
+- **Pins:** the nupkg SHA-256, plus each extracted file's size and SHA-256 (from `t0-spike.md`):
 
-**Preferred design, to confirm:**
-- `ort` with `load-dynamic` and `api-NN`, and `default-features = false`.
-- The pinned **Microsoft** ONNX Runtime CPU release binaries, SHA-256 pinned per OS, shipped in `tauri.conf.json` `bundle.resources`.
-- Loaded with `ort::init_from(path)` only when Find similar is enabled. A load failure is a caught `Err`, which means phase `Error` and `find_similar = "off"`.
-- macOS: the arm64 (Apple Silicon) archive only (B2, user ruling 27 Nov 2026: "Do the silicon version only").
+  | File | Bytes | SHA-256 |
+  |---|---|---|
+  | `microsoft.ml.onnxruntime.1.31.1.nupkg` | 159,626,394 | `6871ccbc97f3d5bdb4095a1dcec33aa78d56f6ed8de5980ef5fa1d9f2e7c679a` |
+  | `runtimes/win-x64/native/onnxruntime.dll` | 17,253,728 | `cb2fa518b18356617f6f9f460c012501da2819ec7e5c1d80bd8f5de20492db0c` |
+  | `runtimes/osx-arm64/native/libonnxruntime.dylib` | 44,830,288 | `2685dc296147c47b0dbd8e0615547b12fc0c445d158d1f374cbd0705d9626fdc` |
+  | `runtimes/linux-x64/native/libonnxruntime.so` | 29,345,384 | `a96f132e5eb5ca04e23a7d2fc1078fb95aa591e8d71d0f237702ece3a1e0f4ea` |
+  | `ThirdPartyNotices.txt` | 344,457 | `c53a76501ef60db6f865f20599f220761201ac4057683acefdab37d861b86622` |
+  | `LICENSE` (MIT) | 1,094 | `c250d6278f0b47a6439fb7592b08b58a55eb9f535aa49a1db63211c3f982b674` |
 
-- [ ] **Step 1: Pick the pins.** Record:
-  - the pinned Microsoft ORT version, and the matching `api-NN` feature (`api-NN` <= that release's minor version);
-  - that release's asset list: the Windows x64, Linux x64 and macOS arm64 archives, with each archive's SHA-256;
-  - its documented CPU floor (R1): does the CPU build need AVX or AVX2?
-
-- [ ] **Step 2: Build a one-session hello.** It runs inside the Tauri app, behind a scratch command. Record:
-  - `dumpbin /dependents horus.exe` shows no `onnxruntime`, `DirectML`, `D3D12` or `DXCORE` import;
-  - the app starts with ORT never called;
-  - the one-session hello runs (`init_from` with telemetry off, then one session);
-  - the ORT DLL size, and the dylib and `.so` sizes;
-  - ORT's `ThirdPartyNotices.txt` is present in the archive (it feeds C9).
-
-- [ ] **Step 3: Decide.** Write the outcome at the top of `t0-spike.md`:
-  - **`load-dynamic` holds:** Tasks 1–8 run as written.
-  - **The spike rules out `load-dynamic`:** fall back to static pyke binaries. Then R1's guard is required, and Task 2's Files and Cargo line change to match.
-  - **R1 (the CPU floor):** the guard is required if static pyke stays, or if the pinned Microsoft build needs AVX2. It is dropped only if the spike shows the Microsoft build has no AVX2 floor, because an illegal-instruction crash is uncatchable under `load-dynamic` too. When it is required, Task 5 adds it: before load, `if !is_x86_feature_detected!("avx2")`, phase `Error` with "This computer's processor can't run Find similar.", and `find_similar` set to `"off"`, with a test that uses an injected detector.
-
-- [ ] **Step 4: Report.** Send the controller the record. There is no commit on `plan5-similar` except `t0-spike.md`, if the controller asks for it.
+  The CPU path needs only `onnxruntime.dll` on Windows; `onnxruntime_providers_shared.dll` isn't shipped. The nupkg has no osx-x64 and no universal2 build, which matches B2 (arm64-only macOS).
+- **Imports:** the scratch exe, with `ort` linked and never called, has no `onnxruntime`, `DirectML`, `D3D12` or `DXCORE` load-time import, and starts with no ORT library present. Task 2 Step 3 repeats this check on the real `horus.exe`.
+- **Hello:** a one-session hello (`init_from` with telemetry off, `Tensor::from_array`, one `run`) passes. A bad path and a wrong-version DLL each give a caught `Err`.
+- **R1 is REQUIRED.** No documented CPU floor was found, so the AVX2 guard stays (Task 5).
+- **Load rules (the spike's surprises; Global Constraints):** absolute path only; no `ort` call before a successful init; `LoadDynamicError` maps to our own error; one environment per process.
+- **VC++ runtime:** `onnxruntime.dll` imports `MSVCP140_1` and `VCRUNTIME140_1`. A missing runtime gives a caught load `Err`, mapped to "Find similar couldn't start on this computer." Shipping the runtime is deferred to Plan 6 (the installer).
+- **C9:** the notices are the nupkg's `ThirdPartyNotices.txt` and `LICENSE` for 1.31.1.
+- **Size:** about 16.5 MiB on Windows x64, 42.8 MiB on macOS arm64 and 28 MiB on Linux x64.
 
 ---
 
@@ -222,7 +221,7 @@ A throwaway spike before Task 1. It decides how ONNX Runtime reaches the app. No
   - After every file passes, it writes the `.ok` marker last.
 - **`app/notices/manual.md`** holds three entries, each with its URL, for Plan 6's generator:
   - **SigLIP:** "SigLIP base (google/siglip-base-patch16-224), Copyright Google LLC", the full Apache-2.0 licence text, and the upstream `NOTICE` reproduced if `google-research/big_vision` ships one. (None was found on 25 Nov 2026; this is unverified, so the implementer re-checks it.) Plus the ONNX export's origin, `Xenova/siglip-base-patch16-224` at the pinned revision.
-  - **ONNX Runtime:** MIT, plus ORT's own `ThirdPartyNotices.txt` for the pinned version, reproduced in full (C9). Task 0 confirms the archive ships it.
+  - **ONNX Runtime 1.31.1:** the nupkg's `LICENSE` (MIT) and its `ThirdPartyNotices.txt`, reproduced in full (C9, Task 0).
   - **`tokenizers`:** Apache-2.0.
 
 - [ ] **Step 1: Write the failing tests.** Serve the files with a tiny `std::net::TcpListener` server in the test module. It serves fixture bytes, honours `Range:`, and can be told to cut off, ignore Range, or serve wrong bytes. A test `ModelSpec` uses small files whose hashes are computed in the test. It is built with `Box::leak`, with `base` set to the local server's `http://127.0.0.1:<port>` (B3). The test agent uses no proxy.
@@ -248,7 +247,7 @@ A throwaway spike before Task 1. It decides how ONNX Runtime reaches the app. No
   - `app/src-tauri/tests/fixtures/similar/`, holding a 2-colour 300×200 PNG for the resize test, and the cat and dog images with their `README.md`.
 - Modify (C2):
   - `app/src-tauri/Cargo.toml`, adding `ort` and `tokenizers` (R5), with the features from Task 0;
-  - `app/src-tauri/tauri.conf.json`, adding the pinned ORT library per OS to `bundle.resources` (B1);
+  - `app/src-tauri/tauri.conf.json`, adding the pinned ORT 1.31.1 library per OS to `bundle.resources` (B1);
   - `app/src-tauri/src/lib.rs`, resolving the bundled ORT library's path for `ort::init_from`;
   - `app/README.md`, recording the ORT pins, the library sizes and the installer growth from Task 0.
 
@@ -258,15 +257,16 @@ A throwaway spike before Task 1. It decides how ONNX Runtime reaches the app. No
   ```rust
   pub trait Embedder: Send { fn image(&mut self, rgb: &image::RgbImage) -> Result<Vec<f32>, String>;
                              fn text(&mut self, q: &str) -> Result<Vec<f32>, String>; fn dim(&self) -> usize; }
-  pub struct SiglipEncoder { /* vision + text ort::Session, Tokenizer, &'static ModelSpec */ }
-  impl SiglipEncoder { pub fn load(dir: &Path, spec: &'static ModelSpec, intra_threads: usize) -> Result<Self, String>; }
+  pub struct SiglipEncoder { /* vision ort::Session, text Option<ort::Session> (lazy), Tokenizer, &'static ModelSpec */ }
+  impl SiglipEncoder { pub fn load(ort_lib: &Path, dir: &Path, spec: &'static ModelSpec, intra_threads: usize) -> Result<Self, String>; }
+  // ort_lib: absolute path to the bundled ORT library; load() inits the environment first if ENV is empty
   impl Embedder for SiglipEncoder { … }
   pub fn preprocess(img: &image::RgbImage) -> Vec<f32>;            // 1×3×224×224, NCHW: squash-resize to 224×224 (bicubic), x/255, (x−0.5)/0.5 (C5)
   pub fn tokenize(tok: &tokenizers::Tokenizer, spec: &ModelSpec, q: &str) -> Vec<i64>;   // lowercased; padded/truncated to spec.text_len with spec.pad_id
   pub fn l2(v: &mut [f32]);
   ```
 - **Loading:**
-  - **The environment, once (R2):** before the first session, `ort::init_from(path)?.with_telemetry(false).build()?`, where `path` is the bundled ORT library (Task 0). The returned `Environment` is kept in a process-wide `OnceLock<Environment>`, so it is never dropped. A failure here is an `Err`, never a panic.
+  - **The environment, once (R2):** before the first session, `ort::init_from(path)?.with_telemetry(false).build()?`, where `path` is `ort_lib`, the absolute path to the bundled ORT library (Task 0). The returned `Environment` is kept in a process-wide `OnceLock<Environment>` (`ENV`), so it is never dropped. `load` checks `ENV.get()` first and serializes the init, so `build()` runs at most once per process. A failure here is an `Err` mapped to a `String`, never an `ort::Error` and never a panic (Global Constraints, load rules).
   - `load` opens the vision session with `intra_threads`. The text session loads lazily, on the first `text()` call (R18), since only typed queries need it.
   - Tensors are built with `Tensor::from_array((shape, Vec))`, with no `ndarray` (R4).
   - It reads the input and output names from the sessions instead of hard-coding them. It expects:
@@ -286,13 +286,14 @@ A throwaway spike before Task 1. It decides how ONNX Runtime reaches the app. No
   - **Ignored tests, which need the model.** They run when `HORUS_SIGLIP_DIR` points at a hand-downloaded model. CI never runs `--ignored`.
     - `real_model_semantics`: using two public-domain fixture images, a cat and a dog, with their sources and rights recorded in `tests/fixtures/similar/README.md`, `text("a photo of a cat")` scores higher against the cat embedding than against the dog's.
   - `load_rejects_garbage`: `load` on a directory whose `.onnx` files are random bytes returns `Err`, and doesn't panic (Review Focus 3).
-  - `telemetry_off_source_check`: a source check on `encoder.rs` finds `.with_telemetry(false)` and the `OnceLock<Environment>` (R2).
+  - `telemetry_off_source_check`: a source check on `encoder.rs` finds `.with_telemetry(false)` and the `OnceLock<Environment>` (R2), and finds no `ort::Error::new` in the load path (Task 0).
 
 - [ ] **Step 2: Run, then implement, then run again.** Run `cargo test similar::encoder`. It should FAIL, then PASS. Then run the ignored tests with the hand-downloaded model (`cargo test similar::encoder -- --ignored`).
 
-- [ ] **Step 3: Record the costs (R18).** With `CARGO_BUILD_JOBS=2`, and before Task 4 starts, record in `app/README.md`:
-  - the peak RSS with the vision session loaded, and with both sessions loaded;
-  - the seconds per image at `intra_threads = 2`.
+- [ ] **Step 3: Record the checks and costs.** With `CARGO_BUILD_JOBS=2`, and before Task 4 starts, record in `app/README.md`:
+  - **Imports (Task 0):** `dumpbin /dependents horus.exe` on the real app shows no `onnxruntime`, `DirectML`, `D3D12` or `DXCORE` load-time import, and the app starts with ORT never called;
+  - the peak RSS with the vision session loaded, and with both sessions loaded (R18);
+  - the seconds per image at `intra_threads = 2` (R18).
 
 - [ ] **Step 4: Commit.** Commit message: `feat(similar): SigLIP encoder on ONNX Runtime with SigLIP preprocessing`.
 
@@ -424,7 +425,8 @@ A throwaway spike before Task 1. It decides how ONNX Runtime reaches the app. No
   | `DlError::Http` | "The download server didn't answer. Try again later." |
   | `DlError::Checksum` | "The download didn't finish correctly. Try again." |
   | `DlError::Io` | "Couldn't save the model. Check free disk space." |
-  | Load error (ORT or model) | "Find similar couldn't start on this computer." |
+  | Load error (ORT, VC++ runtime or model) | "Find similar couldn't start on this computer." |
+  | No AVX2 (R1) | "This computer's processor can't run Find similar." |
   | Any unmapped error | "Find similar ran into a problem. Try again." |
 - **The search commands:**
   - Each returns `Err("FindSimilarOff")` unless the phase is `Ready`, `Indexing` or `Paused`.
@@ -442,7 +444,8 @@ A throwaway spike before Task 1. It decides how ONNX Runtime reaches the app. No
   - **Start:** once the switch has returned, `Ok` or `Err`, the start hook runs with no lock held, for whichever library is open at that point. It starts an indexer only when Find similar is ready and there is no indexer. On success it runs after `remember()`, for the new library. On `Err` it restarts the old library's indexer. There is no separate restart-on-`Err` code.
   - **The start pass:** it indexes every reference whose hash `EmbStore` lacks, so it also covers the demo seed (whose references bypass `hooks::after_change`). It then calls `prune(current hashes)` (R7).
   - **Start-up, in `setup`:** on a background thread, when `find_similar == "on"`: if `!is_installed`, resume the `.part` download; then load the model, then run the start hook.
-  - **Any load error** sets phase `Error`, with the copy "Find similar couldn't start on this computer.", and sets `find_similar` back to `"off"` (Review Focus 3). It drops `similar` before calling `update_settings`.
+  - **CPU guard (R1, required by Task 0):** before any load, `if !is_x86_feature_detected!("avx2")`, phase `Error` with "This computer's processor can't run Find similar.", and `find_similar` set to `"off"`. The detector is injectable for tests.
+  - **Any load error** (including a missing ORT library or VC++ runtime, Task 0) sets phase `Error`, with the copy "Find similar couldn't start on this computer.", and sets `find_similar` back to `"off"` (Review Focus 3). It drops `similar` before calling `update_settings`.
 - **Indexing trigger (Cross-plan audit row 11):** this triggers on the result, not on the command. The hook is registered with `hooks::register`, and reads `Change.references` through `ReferenceView::hash()` and `thumb1024()` (R9).
   - After any command whose `Change.references` include hashes that `EmbStore` lacks, and while the phase is `Ready`, `Indexing` or `Paused`, an index pass is queued for those hashes.
   - It covers `import_paths`, `import_bytes`, redo of an import, and Plan 6's orphan recovery.
@@ -454,6 +457,7 @@ A throwaway spike before Task 1. It decides how ONNX Runtime reaches the app. No
   - `enable_with_installed_model_skips_download`: enabling reaches `Ready` after indexing 3 references, with no HTTP request made.
   - `by_ref_excludes_self_and_maps_hashes`: two references with the same image hash both appear for a third reference's query. Querying one of the pair returns the other at score ≈ 1.0, and never itself. The test builds that state directly, with a comment saying why: import never makes two references with one hash (a same-hash file becomes `report.duplicates`), so only a hand-edited `library.json` reaches it (C4).
   - `load_failure_turns_off`: an encoder that fails to load leaves `phase == Error`, settings `find_similar == "off"`, and `similar_by_text` refused.
+  - `no_avx2_turns_off`: with the injected detector reporting no AVX2, enabling never loads the encoder, and leaves `phase == Error` with the processor copy and `find_similar == "off"` (R1).
   - `remove_deletes_model_and_embeddings`: afterwards, neither the model directory nor `<root>/embeddings.bin` exists, and the status shows `disk_bytes == 0`.
   - `download_total_in_every_phase`: `similar_status().download_total == SIGLIP_B16_Q8.total_bytes()` while `Off`, and in every other phase.
   - `by_file_guards`: a sparse file larger than `MAX_BYTES` returns `Err("TooLarge")` without being read, and an unreadable file returns `Err("Unreadable")` (R8). A rotated EXIF fixture embeds the same as its upright copy, within 1e-4 per component, using the fake embedder over the decoded pixels.
@@ -512,7 +516,7 @@ A throwaway spike before Task 1. It decides how ONNX Runtime reaches the app. No
   - The copy stays verbatim. The existing `systemRamGb()` line gains the download size: "Download: 213 MB · This computer: <N> GB of RAM".
   - A click on "Turn on now" or "Not now" records the choice, as now. The artist can still change it before Begin.
   - After Begin's create or open resolves, when the choice is "on", the first-run calls `similarEnable()` without awaiting it; the download continues in the background.
-  - If that un-awaited `similarEnable()` later fails, the mapped error copy is shown once, as a one-line status notice outside Settings.
+  - If that enable later fails, the mapped error copy is shown once, as a one-line status notice outside Settings. The failure arrives as an `onSimilarStatus` event with `phase: "error"` and the copy in `error`; a rejected `similarEnable()` call shows the same notice.
   - "Not now" records `"off"` with `setSettings({ findSimilar: "off" })`. This uses the `setSettings(p: Partial<Settings>)` signature from Plan 1 Task 9 (Cross-plan audit row 13).
 
 - [ ] **Step 1: Write the failing tests**
@@ -522,7 +526,7 @@ A throwaway spike before Task 1. It decides how ONNX Runtime reaches the app. No
   - `error_try_again`: the `error` phase renders the message and a "Try again" button that calls `similarEnable`.
   - `firstrun_copy_and_no_default`: the step contains the exact SPEC sentence and the line "Download: 213 MB · This computer: <N> GB of RAM". Neither button has `aria-pressed="true"` or focus on load.
   - `firstrun_enables_after_begin`: clicking "Turn on now" calls no `similarEnable`. After Begin's create resolves with the choice "on", `similarEnable` is called once; with "Not now", it is never called.
-  - `firstrun_enable_failure_notice`: when that `similarEnable` rejects, the mapped copy appears once as a one-line status notice.
+  - `firstrun_enable_failure_notice`: after that enable, an `onSimilarStatus` event with `phase: "error"` shows its `error` copy once as a one-line status notice, and a second error event doesn't show it again. A rejected `similarEnable` shows the same notice.
 
 - [ ] **Step 2: Run, then implement, then run again.** Run `npm test -- settings firstrun`. It should FAIL, then PASS.
 
@@ -675,7 +679,8 @@ A throwaway spike before Task 1. It decides how ONNX Runtime reaches the app. No
 - The argument names are `{ id }`, `{ q }`, `{ path }` and `{ paused }`.
 
 **4. Review Focus.** Every item has a test in its owning task:
-- items 1 and 2: Task 1;
+- item 1: Task 1;
+- item 2: Tasks 1 and 5;
 - item 3: Tasks 0, 2 and 5;
 - item 4: Task 3;
 - item 5: Tasks 4 and 5.
